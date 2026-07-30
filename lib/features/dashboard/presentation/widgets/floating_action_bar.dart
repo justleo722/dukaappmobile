@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/features/dashboard/presentation/constants/dashboard_constants.dart';
@@ -36,7 +37,7 @@ class FloatingActionBar extends StatelessWidget {
               icon: Icons.inventory_2_rounded,
               label: 'Re-Stock',
               color: AppColors.secondary,
-              onTap: () {},
+              onTap: () => context.push('/purchase'),
             ),
           ),
           Container(

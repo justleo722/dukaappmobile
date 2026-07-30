@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
-import 'package:dukaapp/app/constants.dart';
 
 class StockSummaryCard extends StatelessWidget {
   final String totalStockValue;
@@ -18,11 +17,11 @@ class StockSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-      padding: const EdgeInsets.all(AppConstants.paddingLG),
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppConstants.cardRadius),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -41,7 +40,7 @@ class StockSummaryCard extends StatelessWidget {
           ),
           Container(
             width: 1,
-            height: 40,
+            height: 36,
             color: AppColors.divider,
           ),
           Expanded(
@@ -52,7 +51,7 @@ class StockSummaryCard extends StatelessWidget {
           ),
           Container(
             width: 1,
-            height: 40,
+            height: 36,
             color: AppColors.divider,
           ),
           Expanded(
@@ -66,17 +65,32 @@ class StockSummaryCard extends StatelessWidget {
     );
   }
 
+  double _getFontSize(String value) {
+    final length = value.length;
+    if (length <= 10) return 18;
+    if (length <= 13) return 16;
+    if (length <= 16) return 14;
+    return 12;
+  }
+
   Widget _buildStatItem({required String label, required String value}) {
+    final fontSize = _getFontSize(value);
+
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           value,
           style: AppTypography.h5.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
+            fontSize: fontSize.toDouble(),
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Text(
           label,
           style: AppTypography.caption.copyWith(
@@ -84,6 +98,8 @@ class StockSummaryCard extends StatelessWidget {
             fontSize: 10,
           ),
           textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ],
     );

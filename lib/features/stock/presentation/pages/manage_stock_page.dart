@@ -1,3 +1,4 @@
+// features/stock/presentation/pages/manage_stock_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
@@ -10,6 +11,9 @@ import 'package:dukaapp/features/stock/presentation/widgets/stock_search_field.d
 import 'package:dukaapp/features/stock/presentation/widgets/stock_category_switch.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/stock_select_bar.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/stock_product_card.dart';
+import 'package:dukaapp/features/stock/presentation/widgets/stock_categories_grid.dart';
+import 'package:dukaapp/features/stock/presentation/pages/import_stock_page.dart';
+import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class ManageStockPage extends StatefulWidget {
   const ManageStockPage({super.key});
@@ -20,8 +24,9 @@ class ManageStockPage extends StatefulWidget {
 
 class _ManageStockPageState extends State<ManageStockPage> {
   bool _categoryMode = false;
-  bool _allSelected = false;
   final TextEditingController _searchController = TextEditingController();
+  final Set<int> _selectedProducts = {};
+  int? _expandedProductIndex;
 
   final List<Map<String, dynamic>> _products = const [
     {
@@ -68,10 +73,95 @@ class _ManageStockPageState extends State<ManageStockPage> {
     },
   ];
 
+  bool get _allSelected =>
+      _selectedProducts.length == _products.length && _products.isNotEmpty;
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _toggleProductSelection(int index) {
+    setState(() {
+      if (_selectedProducts.contains(index)) {
+        _selectedProducts.remove(index);
+      } else {
+        _selectedProducts.add(index);
+      }
+    });
+  }
+
+  void _toggleAllSelection() {
+    setState(() {
+      if (_allSelected) {
+        _selectedProducts.clear();
+      } else {
+        _selectedProducts.addAll(List.generate(_products.length, (i) => i));
+      }
+    });
+  }
+
+  void _toggleProductExpansion(int index) {
+    setState(() {
+      _expandedProductIndex = _expandedProductIndex == index ? null : index;
+    });
+  }
+
+  void _deleteSelected() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Delete Products',
+          style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
+        ),
+        content: Text(
+          'Are you sure you want to delete ${_selectedProducts.length} product(s)?',
+          style: AppTypography.bodyMedium.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() => _selectedProducts.clear());
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Products deleted')),
+              );
+            },
+            child: Text(
+              'Delete',
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.danger,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _navigateToCategory(String categoryName) {
+    context.push(
+      '/stock/manage/category',
+      extra: {
+        'categoryName': categoryName,
+        'products': _products,
+      },
+    );
   }
 
   @override
@@ -81,59 +171,66 @@ class _ManageStockPageState extends State<ManageStockPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 12),
-                  _buildStatusChips(),
-                  const SizedBox(height: 16),
-                  const StockSummaryCard(
-                    totalStockValue: 'Tsh 0',
-                    profitEstimate: 'Tsh 0',
-                    allProducts: 0,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildActionButtons(),
-                  const SizedBox(height: 16),
-                  StockSearchField(
-                    controller: _searchController,
-                    onChanged: (value) {
-                      setState(() {});
-                    },
-                    onClear: () {
-                      setState(() {});
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  StockCategorySwitch(
-                    value: _categoryMode,
-                    onChanged: (value) {
-                      setState(() {
-                        _categoryMode = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  StockSelectBar(
-                    isAllSelected: _allSelected,
-                    onToggleAll: (value) {
-                      setState(() {
-                        _allSelected = value ?? false;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _buildProductList(),
-                  SizedBox(height: 100 + bottomPadding),
-                ],
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 12),
+                    _buildStatusChips(),
+                    const SizedBox(height: 16),
+                    const StockSummaryCard(
+                      totalStockValue: 'Tsh 0',
+                      profitEstimate: 'Tsh 0',
+                      allProducts: 6,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildActionButtons(),
+                    const SizedBox(height: 16),
+                    StockSearchField(
+                      controller: _searchController,
+                      onChanged: (value) => setState(() {}),
+                      onClear: () => setState(() {}),
+                    ),
+                    const SizedBox(height: 12),
+                    StockCategorySwitch(
+                      value: _categoryMode,
+                      onChanged: (value) {
+                        setState(() {
+                          _categoryMode = value;
+                          _selectedProducts.clear();
+                          _expandedProductIndex = null;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    if (!_categoryMode) ...[
+                      StockSelectBar(
+                        isAllSelected: _allSelected,
+                        onToggleAll: (_) => _toggleAllSelection(),
+                        selectedCount: _selectedProducts.length,
+                        onDeleteAll: _deleteSelected,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (_categoryMode)
+                      StockCategoriesGrid(
+                        products: _products,
+                        onCategoryTap: _navigateToCategory,
+                      )
+                    else
+                      _buildProductList(),
+                    SizedBox(height: 24 + bottomPadding),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -229,45 +326,60 @@ class _ManageStockPageState extends State<ManageStockPage> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
         children: [
-          const StockActionButton(
+          StockActionButton(
             icon: Icons.file_download_rounded,
             label: 'Import',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  fullscreenDialog: true,
+                  builder: (_) => const ImportStockPage(),
+                ),
+              );
+            },
           ),
           const SizedBox(width: 10),
-          const StockActionButton(
+          StockActionButton(
             icon: Icons.transfer_within_a_station_rounded,
             label: 'Import From Shop',
+            onTap: () => context.push('/stock/manage/import-from-shop'),
           ),
           const SizedBox(width: 10),
-          const StockActionButton(
+          StockActionButton(
             icon: Icons.shopping_cart_rounded,
             label: 'Purchase',
+            onTap: () => context.push('/stock/manage/purchase'),
           ),
           const SizedBox(width: 10),
-          const StockActionButton(
+          StockActionButton(
             icon: Icons.swap_horiz_rounded,
             label: 'Transfer',
+            onTap: () => context.push('/transfer'),
           ),
           const SizedBox(width: 10),
-          const StockActionButton(
+          StockActionButton(
             icon: Icons.tune_rounded,
             label: 'Adjust',
+            onTap: () => context.push('/adjust'),
           ),
           const SizedBox(width: 10),
-          const StockActionButton(
+          StockActionButton(
             icon: Icons.filter_list_rounded,
             label: 'Filter',
+            onTap: () => AppFilterDialog.show(context),
           ),
           const SizedBox(width: 10),
-          const StockActionButton(
+          StockActionButton(
             icon: Icons.file_download_done_rounded,
             label: 'Download',
+            onTap: () => context.push('/stock-reports'),
           ),
           const SizedBox(width: 10),
-          const StockActionButton(
+          StockActionButton(
             icon: Icons.add_rounded,
             label: 'Add Product',
             isHighlighted: true,
+            onTap: () => context.push('/stock/manage/add'),
           ),
         ],
       ),
@@ -276,15 +388,28 @@ class _ManageStockPageState extends State<ManageStockPage> {
 
   Widget _buildProductList() {
     return Column(
-      children: _products.map((product) {
+      children: List.generate(_products.length, (index) {
+        final product = _products[index];
         return StockProductCard(
           productName: product['name'],
           category: product['category'],
           buyingPrice: product['buyingPrice'],
           sellingPrice: product['sellingPrice'],
           currentStock: product['stock'],
+          isSelected: _selectedProducts.contains(index),
+          onSelectionChanged: (_) => _toggleProductSelection(index),
+          isExpanded: _expandedProductIndex == index,
+          onExpandToggle: () => _toggleProductExpansion(index),
+          onEdit: () {},
+          onHistory: () {},
+          onStockPdf: () {},
+          onSalesPdf: () {},
+          onPhotos: () {},
+          onRestock: () {},
+          onAdjust: () {},
+          onDelete: () {},
         );
-      }).toList(),
+      }),
     );
   }
 }

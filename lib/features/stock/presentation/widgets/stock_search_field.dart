@@ -35,7 +35,7 @@ class StockSearchField extends StatelessWidget {
             color: AppColors.textHint,
             size: 20,
           ),
-          suffixIcon: controller?.text.isNotEmpty == true
+          suffixIcon: controller != null && controller!.text.isNotEmpty
               ? IconButton(
                   onPressed: () {
                     controller?.clear();

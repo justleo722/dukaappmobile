@@ -12,15 +12,17 @@ class SummaryCarousel extends StatefulWidget {
 
 class _SummaryCarouselState extends State<SummaryCarousel> {
   late final PageController _pageController;
-  int _currentPage = 0;
   late final List<Map<String, dynamic>> _cards;
   Timer? _autoScrollTimer;
+
+  static const int _infiniteMultiplier = 10000;
 
   @override
   void initState() {
     super.initState();
     _cards = DashboardConstants.summaryCards;
-    _pageController = PageController(viewportFraction: 0.48, initialPage: 0);
+    final initialPage = (_cards.length * (_infiniteMultiplier ~/ 2));
+    _pageController = PageController(viewportFraction: 0.48, initialPage: initialPage);
     _startAutoScroll();
   }
 
@@ -28,9 +30,9 @@ class _SummaryCarouselState extends State<SummaryCarousel> {
     _autoScrollTimer?.cancel();
     _autoScrollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!mounted || !_pageController.hasClients) return;
-      final nextPage = (_currentPage + 1) % _cards.length;
+      final currentPage = _pageController.page?.round() ?? 0;
       _pageController.animateToPage(
-        nextPage,
+        currentPage + 1,
         duration: const Duration(milliseconds: 500),
         curve: Curves.easeInOut,
       );
@@ -50,10 +52,9 @@ class _SummaryCarouselState extends State<SummaryCarousel> {
       height: DashboardConstants.summaryCardHeight + 20,
       child: PageView.builder(
         controller: _pageController,
-        itemCount: _cards.length,
-        onPageChanged: (index) => _currentPage = index,
+        itemCount: _cards.length * _infiniteMultiplier,
         itemBuilder: (context, index) {
-          final card = _cards[index];
+          final card = _cards[index % _cards.length];
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6),
             child: SummaryCard(

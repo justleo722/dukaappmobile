@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:dukaapp/app/typography.dart';
+import 'package:dukaapp/app/constants.dart';
 
 class StockStatusChip extends StatelessWidget {
   final IconData icon;
@@ -24,11 +25,12 @@ class StockStatusChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        duration: AppConstants.shortAnimation,
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: backgroundColor,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppConstants.radiusFull),
           border: Border.all(
             color: color.withValues(alpha: 0.2),
             width: 1,
@@ -37,20 +39,17 @@ class StockStatusChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: color,
-              size: 14,
-            ),
-            const SizedBox(width: 6),
+            Icon(icon, color: color, size: 13),
+            const SizedBox(width: 5),
             Text(
               '$count',
               style: AppTypography.bodySmall.copyWith(
                 color: color,
                 fontWeight: FontWeight.w700,
+                fontSize: 12,
               ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 3),
             Text(
               label,
               style: AppTypography.caption.copyWith(

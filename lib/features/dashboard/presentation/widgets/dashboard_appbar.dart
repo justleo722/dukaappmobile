@@ -4,7 +4,14 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/features/dashboard/presentation/widgets/language_selector.dart';
 
 class DashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const DashboardAppBar({super.key});
+  final VoidCallback? onRefresh;
+  final bool isRefreshing;
+
+  const DashboardAppBar({
+    super.key,
+    this.onRefresh,
+    this.isRefreshing = false,
+  });
 
   @override
   Size get preferredSize => const Size.fromHeight(60);
@@ -39,12 +46,21 @@ class DashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
       actions: [
         const SizedBox(width: 8),
         IconButton(
-          onPressed: () {},
-          icon: const Icon(
-            Icons.refresh_rounded,
-            color: AppColors.textPrimary,
-            size: 22,
-          ),
+          onPressed: isRefreshing ? null : onRefresh,
+          icon: isRefreshing
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: AppColors.primary,
+                  ),
+                )
+              : const Icon(
+                  Icons.refresh_rounded,
+                  color: AppColors.textPrimary,
+                  size: 22,
+                ),
         ),
         const SizedBox(width: 8),
         IconButton(
