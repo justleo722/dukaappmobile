@@ -10,7 +10,9 @@ import 'package:dukaapp/features/stock/presentation/widgets/add_supplier_bottom_
 import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 
 class AddProductPage extends StatefulWidget {
-  const AddProductPage({super.key});
+  final Map<String, dynamic>? product;
+
+  const AddProductPage({super.key, this.product});
 
   @override
   State<AddProductPage> createState() => _AddProductPageState();
@@ -70,6 +72,19 @@ class _AddProductPageState extends State<AddProductPage> {
   static const String _addNewSupplierValue = '__add_new_supplier__';
 
   bool get _isService => _selectedType == 'Service';
+  bool get _isEditing => widget.product != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditing) {
+      final p = widget.product!;
+      _nameController.text = p['name'] ?? '';
+      _buyingPriceController.text = (p['buyingPrice'] ?? 0).toString();
+      _sellingPriceController.text = (p['sellingPrice'] ?? 0).toString();
+      _selectedCategory = p['category'];
+    }
+  }
 
   @override
   void dispose() {
@@ -368,7 +383,9 @@ class _AddProductPageState extends State<AddProductPage> {
       ),
       leadingWidth: 56,
       title: Text(
-        _isService ? 'Add Service' : 'Add Product',
+        _isEditing
+            ? (_isService ? 'Edit Service' : 'Edit Product')
+            : (_isService ? 'Add Service' : 'Add Product'),
         style: AppTypography.h6.copyWith(
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w700,
@@ -1623,7 +1640,9 @@ class _AddProductPageState extends State<AddProductPage> {
           ),
         ),
         child: Text(
-          'Save ${_isService ? 'Service' : 'Product'}',
+          _isEditing
+              ? 'Update ${_isService ? 'Service' : 'Product'}'
+              : 'Save ${_isService ? 'Service' : 'Product'}',
           style: AppTypography.buttonLarge,
         ),
       ),

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/adjust_product_card.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/adjustment_status_dropdown.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/adjustment_summary_card.dart';
@@ -297,17 +298,32 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
                       size: 18,
                     ),
                   )
-                : Container(
-                    margin: const EdgeInsets.all(6),
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.barcode_reader,
-                      color: AppColors.primary,
-                      size: 18,
+                : InkWell(
+                    onTap: () async {
+                      final result = await Navigator.of(context).push<String>(
+                        MaterialPageRoute(
+                          fullscreenDialog: true,
+                          builder: (_) => const BarcodeScannerScreen(),
+                        ),
+                      );
+                      if (result != null && result.isNotEmpty) {
+                        _searchController.text = result;
+                        setState(() {});
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      margin: const EdgeInsets.all(6),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.barcode_reader,
+                        color: AppColors.primary,
+                        size: 18,
+                      ),
                     ),
                   ),
             filled: true,

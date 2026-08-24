@@ -1,0 +1,144 @@
+class Customer {
+  final String id;
+  final String name;
+  final String phone;
+  final String? email;
+  final String? tinNumber;
+  final String? location;
+  final double creditLimit;
+  final double totalSpent;
+  final double creditBalance;
+  final int totalPurchases;
+  final DateTime createdAt;
+
+  const Customer({
+    required this.id,
+    required this.name,
+    required this.phone,
+    this.email,
+    this.tinNumber,
+    this.location,
+    this.creditLimit = 0.0,
+    this.totalSpent = 0.0,
+    this.creditBalance = 0.0,
+    this.totalPurchases = 0,
+    required this.createdAt,
+  });
+
+  Customer copyWith({
+    String? id,
+    String? name,
+    String? phone,
+    String? email,
+    String? tinNumber,
+    String? location,
+    double? creditLimit,
+    double? totalSpent,
+    double? creditBalance,
+    int? totalPurchases,
+    DateTime? createdAt,
+  }) {
+    return Customer(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      tinNumber: tinNumber ?? this.tinNumber,
+      location: location ?? this.location,
+      creditLimit: creditLimit ?? this.creditLimit,
+      totalSpent: totalSpent ?? this.totalSpent,
+      creditBalance: creditBalance ?? this.creditBalance,
+      totalPurchases: totalPurchases ?? this.totalPurchases,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  static List<Customer> sampleCustomers() {
+    return [
+      Customer(
+        id: '1',
+        name: 'Amina Juma',
+        phone: '+255 712 345 678',
+        email: 'amina@example.com',
+        tinNumber: '123-456-789',
+        location: 'Dar es Salaam',
+        creditLimit: 500000,
+        totalSpent: 450000,
+        creditBalance: 0,
+        totalPurchases: 12,
+        createdAt: DateTime(2025, 1, 15),
+      ),
+      Customer(
+        id: '2',
+        name: 'Hassan Mwangi',
+        phone: '+255 723 456 789',
+        tinNumber: '987-654-321',
+        location: 'Arusha',
+        creditLimit: 200000,
+        totalSpent: 320000,
+        creditBalance: 50000,
+        totalPurchases: 8,
+        createdAt: DateTime(2025, 2, 20),
+      ),
+      Customer(
+        id: '3',
+        name: 'Fatima Omar',
+        phone: '+255 734 567 890',
+        email: 'fatima@example.com',
+        location: 'Mwanza',
+        creditLimit: 1000000,
+        totalSpent: 780000,
+        creditBalance: 0,
+        totalPurchases: 23,
+        createdAt: DateTime(2024, 11, 5),
+      ),
+      Customer(
+        id: '4',
+        name: 'Juma Bakari',
+        phone: '+255 745 678 901',
+        location: 'Dodoma',
+        creditLimit: 150000,
+        totalSpent: 150000,
+        creditBalance: 25000,
+        totalPurchases: 5,
+        createdAt: DateTime(2025, 3, 10),
+      ),
+      Customer(
+        id: '5',
+        name: 'Neema Kimaro',
+        phone: '+255 756 789 012',
+        email: 'neema@example.com',
+        tinNumber: '456-789-123',
+        location: 'Tanga',
+        creditLimit: 300000,
+        totalSpent: 920000,
+        creditBalance: 0,
+        totalPurchases: 31,
+        createdAt: DateTime(2024, 9, 1),
+      ),
+      Customer(
+        id: '6',
+        name: 'Ibrahim Hassan',
+        phone: '+255 767 890 123',
+        location: 'Morogoro',
+        creditLimit: 100000,
+        totalSpent: 210000,
+        creditBalance: 15000,
+        totalPurchases: 7,
+        createdAt: DateTime(2025, 4, 18),
+      ),
+      Customer(
+        id: '7',
+        name: 'Rehema Salim',
+        phone: '+255 778 901 234',
+        tinNumber: '789-123-456',
+        location: 'Zanzibar',
+        creditLimit: 400000,
+        totalSpent: 560000,
+        creditBalance: 0,
+        totalPurchases: 16,
+        createdAt: DateTime(2025, 1, 8),
+      ),
+    ];
+  }
+}

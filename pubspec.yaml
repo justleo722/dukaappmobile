@@ -30,6 +30,8 @@ dependencies:
   flutter_animate: ^4.5.2
   path_provider: ^2.1.5
   open_file: ^3.5.4
+  share_plus: ^10.1.4
+  url_launcher: ^6.3.1
 
   # File Parsing
   excel: ^4.0.6
@@ -42,6 +44,9 @@ dependencies:
   mobile_scanner: ^7.4.0
   image_picker: ^1.2.3
   file_picker: ^11.0.2
+
+  # PDF Preview & Printing
+  printing: ^5.13.4
 
 dev_dependencies:
   flutter_test:

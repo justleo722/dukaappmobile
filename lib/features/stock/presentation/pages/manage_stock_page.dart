@@ -13,6 +13,7 @@ import 'package:dukaapp/features/stock/presentation/widgets/stock_select_bar.dar
 import 'package:dukaapp/features/stock/presentation/widgets/stock_product_card.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/stock_categories_grid.dart';
 import 'package:dukaapp/features/stock/presentation/pages/import_stock_page.dart';
+import 'package:dukaapp/features/stock/presentation/widgets/product_reports_helper.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class ManageStockPage extends StatefulWidget {
@@ -400,16 +401,87 @@ class _ManageStockPageState extends State<ManageStockPage> {
           onSelectionChanged: (_) => _toggleProductSelection(index),
           isExpanded: _expandedProductIndex == index,
           onExpandToggle: () => _toggleProductExpansion(index),
-          onEdit: () {},
-          onHistory: () {},
-          onStockPdf: () {},
-          onSalesPdf: () {},
-          onPhotos: () {},
-          onRestock: () {},
-          onAdjust: () {},
-          onDelete: () {},
+          onEdit: () => _editProduct(index),
+          onHistory: () => ProductReportsHelper.exportHistoryPdf(
+            context: context,
+            productName: product['name'],
+          ),
+          onStockPdf: () => ProductReportsHelper.exportStockPdf(
+            context: context,
+            productName: product['name'],
+            buyingPrice: product['buyingPrice'],
+          ),
+          onSalesPdf: () => ProductReportsHelper.exportSalesPdf(
+            context: context,
+            productName: product['name'],
+            sellingPrice: product['sellingPrice'],
+          ),
+          onPhotos: () => ProductReportsHelper.showPhotosDialog(
+            context: context,
+            productName: product['name'],
+          ),
+          onRestock: () => context.push('/stock/manage/purchase', extra: product),
+          onAdjust: () => context.push('/adjust'),
+          onDelete: () => _deleteProduct(index),
         );
       }),
+    );
+  }
+
+  void _editProduct(int index) {
+    context.push('/stock/manage/add', extra: _products[index]);
+  }
+
+  void _deleteProduct(int index) {
+    final product = _products[index];
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.radiusMD),
+        ),
+        title: Text(
+          'Delete Product',
+          style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
+        ),
+        content: Text(
+          'Are you sure you want to delete "${product['name']}"?',
+          style: AppTypography.bodyMedium.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {
+                _products.removeAt(index);
+                _expandedProductIndex = null;
+                _selectedProducts.remove(index);
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('${product['name']} deleted')),
+              );
+            },
+            child: Text(
+              'Delete',
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.danger,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

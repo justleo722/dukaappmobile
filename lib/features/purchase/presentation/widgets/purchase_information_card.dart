@@ -23,6 +23,10 @@ class PurchaseInformationCard extends StatelessWidget {
     'Coca-Cola Kwanza Ltd',
     'SAFARI BREWERIES LTD',
     'Local Wholesaler',
+    'JUMA SUPPLIERS',
+    'AMINA TRADERS',
+    'HASSAN WHOLESALE',
+    'FATIMA ENTERPRISES',
   ];
 
   const PurchaseInformationCard({

@@ -82,7 +82,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           child: InkWell(
             borderRadius: BorderRadius.circular(AppConstants.radiusFull),
             onTap: () {
-              // TODO: Navigate to online shop
+              context.push('/storefront');
             },
             child: Padding(
               padding: EdgeInsets.symmetric(

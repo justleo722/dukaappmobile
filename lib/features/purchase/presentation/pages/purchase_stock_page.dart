@@ -3,10 +3,11 @@ import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
-import 'package:dukaapp/features/stock/presentation/widgets/purchase_information_card.dart';
-import 'package:dukaapp/features/stock/presentation/widgets/purchase_product_card.dart';
-import 'package:dukaapp/features/stock/presentation/widgets/purchase_summary_card.dart';
-import 'package:dukaapp/features/stock/presentation/widgets/purchase_bottom_bar.dart';
+import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
+import 'package:dukaapp/features/purchase/presentation/widgets/purchase_information_card.dart';
+import 'package:dukaapp/features/purchase/presentation/widgets/purchase_product_card.dart';
+import 'package:dukaapp/features/purchase/presentation/widgets/purchase_summary_card.dart';
+import 'package:dukaapp/features/purchase/presentation/widgets/purchase_bottom_bar.dart';
 
 class _PurchaseItem {
   final String name;
@@ -36,7 +37,22 @@ class _PurchaseItem {
 }
 
 class PurchaseStockPage extends StatefulWidget {
-  const PurchaseStockPage({super.key});
+  final Map<String, dynamic>? initialProduct;
+  final bool editMode;
+  final bool createMode;
+  final String? poNumber;
+  final String? initialSupplier;
+  final List<Map<String, dynamic>>? editProducts;
+
+  const PurchaseStockPage({
+    super.key,
+    this.initialProduct,
+    this.editMode = false,
+    this.createMode = false,
+    this.poNumber,
+    this.initialSupplier,
+    this.editProducts,
+  });
 
   @override
   State<PurchaseStockPage> createState() => _PurchaseStockPageState();
@@ -55,6 +71,45 @@ class _PurchaseStockPageState extends State<PurchaseStockPage> {
     {'name': 'COCA COLA 600ML', 'stock': 3, 'buyingPrice': 800.0, 'sellingPrice': 1000.0, 'wholesalePrice': 1000.0},
     {'name': 'COKE', 'stock': 12, 'buyingPrice': 800.0, 'sellingPrice': 1000.0, 'wholesalePrice': 950.0},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.editMode && widget.editProducts != null) {
+      _selectedSupplier = widget.initialSupplier;
+      for (final product in widget.editProducts!) {
+        final name = product['name'] as String;
+        final quantity = product['quantity'] as int? ?? 1;
+        final price = (product['price'] as num?)?.toDouble() ?? 0;
+        if (!_items.any((item) => item.name == name)) {
+          final item = _PurchaseItem(
+            name: name,
+            currentStock: 0,
+            buyingPriceValue: price,
+            sellingPriceValue: price,
+            wholesalePriceValue: price,
+          );
+          item.quantity = quantity;
+          _items.add(item);
+        }
+      }
+    } else if (widget.initialProduct != null) {
+      _addInitialProduct(widget.initialProduct!);
+    }
+  }
+
+  void _addInitialProduct(Map<String, dynamic> product) {
+    final name = product['name'] as String;
+    if (!_items.any((item) => item.name == name)) {
+      _items.add(_PurchaseItem(
+        name: name,
+        currentStock: product['stock'] as int? ?? 0,
+        buyingPriceValue: product['buyingPrice'] as double? ?? 0,
+        sellingPriceValue: product['sellingPrice'] as double? ?? 0,
+        wholesalePriceValue: product['wholesalePrice'] as double? ?? 0,
+      ));
+    }
+  }
 
   int get _totalQuantity => _items.fold(0, (sum, item) => sum + item.quantity);
 
@@ -255,6 +310,42 @@ class _PurchaseStockPageState extends State<PurchaseStockPage> {
                               Icons.search_rounded,
                               color: AppColors.textHint,
                               size: 20,
+                            ),
+                            suffixIcon: Container(
+                              margin: const EdgeInsets.all(6),
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: InkWell(
+                                onTap: () async {
+                                  final result = await Navigator.of(context).push<String>(
+                                    MaterialPageRoute(
+                                      fullscreenDialog: true,
+                                      builder: (_) => const BarcodeScannerScreen(),
+                                    ),
+                                  );
+                                  if (result != null && result.isNotEmpty) {
+                                    searchController.text = result;
+                                    final query = result.toLowerCase().trim();
+                                    setSheetState(() {
+                                      selectedIndices.clear();
+                                      filtered = query.isEmpty
+                                          ? List.from(_dummyProducts)
+                                          : _dummyProducts.where((p) {
+                                              final name = (p['name'] as String).toLowerCase();
+                                              return name.contains(query);
+                                            }).toList();
+                                    });
+                                  }
+                                },
+                                child: const Icon(
+                                  Icons.barcode_reader,
+                                  color: AppColors.primary,
+                                  size: 18,
+                                ),
+                              ),
                             ),
                             filled: true,
                             fillColor: AppColors.background,
@@ -532,12 +623,19 @@ class _PurchaseStockPageState extends State<PurchaseStockPage> {
             ),
             PurchaseBottomBar(
               onClose: () => context.pop(),
+              saveLabel: widget.editMode
+                  ? 'Update Order'
+                  : widget.createMode
+                      ? 'Create Order'
+                      : null,
               onSave: _items.isNotEmpty
                   ? () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            'Purchase saved successfully',
+                            widget.editMode
+                                ? 'Purchase order updated successfully'
+                                : 'Purchase saved successfully',
                             style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
                           ),
                           backgroundColor: AppColors.success,
@@ -547,6 +645,9 @@ class _PurchaseStockPageState extends State<PurchaseStockPage> {
                           ),
                         ),
                       );
+                      if (widget.editMode) {
+                        context.pop();
+                      }
                     }
                   : null,
             ),
@@ -581,7 +682,11 @@ class _PurchaseStockPageState extends State<PurchaseStockPage> {
       title: Column(
         children: [
           Text(
-            'Purchase Stock',
+            widget.createMode
+                ? 'Create Purchase Order'
+                : widget.editMode
+                    ? 'Edit Purchase Order'
+                    : 'Purchase Stock',
             style: AppTypography.h6.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -589,7 +694,11 @@ class _PurchaseStockPageState extends State<PurchaseStockPage> {
           ),
           const SizedBox(height: 2),
           Text(
-            'Add purchased products into inventory.',
+            widget.createMode
+                ? 'Create a new purchase order.'
+                : widget.editMode
+                    ? 'Editing ${widget.poNumber ?? "purchase order"}'
+                    : 'Add purchased products into inventory.',
             style: AppTypography.caption.copyWith(
               color: AppColors.textSecondary,
               fontSize: 10,

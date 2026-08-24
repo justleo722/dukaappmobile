@@ -2,8 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 
-class LanguageSelector extends StatelessWidget {
+class LanguageSelector extends StatefulWidget {
   const LanguageSelector({super.key});
+
+  @override
+  State<LanguageSelector> createState() => _LanguageSelectorState();
+}
+
+class _LanguageSelectorState extends State<LanguageSelector> {
+  String _selectedLanguage = 'English';
 
   @override
   Widget build(BuildContext context) {
@@ -16,7 +23,7 @@ class LanguageSelector extends StatelessWidget {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: 'English',
+          value: _selectedLanguage,
           isDense: true,
           icon: const Icon(
             Icons.keyboard_arrow_down_rounded,
@@ -30,9 +37,14 @@ class LanguageSelector extends StatelessWidget {
           items: const [
             DropdownMenuItem(value: 'English', child: Text('English')),
             DropdownMenuItem(value: 'Swahili', child: Text('Swahili')),
-            DropdownMenuItem(value: 'Arabic', child: Text('Arabic')),
           ],
-          onChanged: (value) {},
+          onChanged: (value) {
+            if (value != null) {
+              setState(() {
+                _selectedLanguage = value;
+              });
+            }
+          },
         ),
       ),
     );

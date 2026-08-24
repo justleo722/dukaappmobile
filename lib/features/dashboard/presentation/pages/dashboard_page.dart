@@ -30,7 +30,7 @@ class _DashboardPageState extends State<DashboardPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: DashboardAppBar(onRefresh: _onRefresh, isRefreshing: _isRefreshing),
-      drawer: const AppDrawer(),
+      drawer: AppDrawer(onRefresh: _onRefresh),
       body: Column(
         children: [
           Expanded(

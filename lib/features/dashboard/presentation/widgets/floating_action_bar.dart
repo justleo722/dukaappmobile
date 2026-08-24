@@ -24,7 +24,7 @@ class FloatingActionBar extends StatelessWidget {
               icon: Icons.add_shopping_cart_rounded,
               label: 'Add Sale',
               color: AppColors.secondary,
-              onTap: () {},
+              onTap: () => context.push('/sales/add'),
             ),
           ),
           Container(
@@ -50,7 +50,7 @@ class FloatingActionBar extends StatelessWidget {
               icon: Icons.receipt_long_rounded,
               label: 'Order',
               color: AppColors.secondary,
-              onTap: () {},
+              onTap: () => context.push('/sales/add-order'),
             ),
           ),
         ],

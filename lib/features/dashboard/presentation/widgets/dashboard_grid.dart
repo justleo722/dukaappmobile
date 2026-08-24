@@ -11,6 +11,33 @@ class DashboardGrid extends StatelessWidget {
       case 'Add Product':
         context.push('/stock/manage');
         break;
+      case 'Add Sale':
+        context.push('/sales/manage');
+        break;
+      case 'Purchase':
+        context.push('/sales/purchases');
+        break;
+      case 'Profit & Expenses':
+        context.push('/profit-expenses');
+        break;
+      case 'Accounts & Cashflow':
+        context.push('/accounts-cashflow');
+        break;
+      case 'Staff':
+        context.push('/staff');
+        break;
+      case 'Manufacturing':
+        context.push('/manufacturing');
+        break;
+      case 'Online Shop':
+        context.push('/online-shop');
+        break;
+      case 'Shop Settings':
+        context.push('/shop-settings');
+        break;
+      case 'Renew':
+        context.push('/renew');
+        break;
       default:
         break;
     }

@@ -6,11 +6,13 @@ import 'package:dukaapp/app/typography.dart';
 class PurchaseBottomBar extends StatelessWidget {
   final VoidCallback? onClose;
   final VoidCallback? onSave;
+  final String? saveLabel;
 
   const PurchaseBottomBar({
     super.key,
     this.onClose,
     this.onSave,
+    this.saveLabel,
   });
 
   @override
@@ -77,7 +79,7 @@ class PurchaseBottomBar extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  'Save Purchase',
+                  saveLabel ?? 'Save Purchase',
                   style: AppTypography.buttonLarge,
                 ),
               ),

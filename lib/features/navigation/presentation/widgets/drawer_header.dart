@@ -10,6 +10,7 @@ class AppDrawerHeader extends StatelessWidget {
   final String activeShopId;
   final VoidCallback onEditProfile;
   final VoidCallback onSwitchShop;
+  final VoidCallback onProfileImageTap;
 
   const AppDrawerHeader({
     super.key,
@@ -19,6 +20,7 @@ class AppDrawerHeader extends StatelessWidget {
     required this.activeShopId,
     required this.onEditProfile,
     required this.onSwitchShop,
+    required this.onProfileImageTap,
   });
 
   @override
@@ -40,41 +42,44 @@ class AppDrawerHeader extends StatelessWidget {
   }
 
   Widget _buildProfileImage() {
-    return Stack(
-      children: [
-        Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AppColors.primary.withValues(alpha: 0.1),
-            border: Border.all(
-              color: AppColors.primary.withValues(alpha: 0.2),
-              width: 2,
-            ),
-            image: const DecorationImage(
-              image: AssetImage('assets/images/submark_logo.png'),
-              fit: BoxFit.cover,
-            ),
-          ),
-        ),
-        Positioned(
-          right: 0,
-          bottom: 0,
-          child: Container(
-            width: 14,
-            height: 14,
+    return GestureDetector(
+      onTap: onProfileImageTap,
+      child: Stack(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
             decoration: BoxDecoration(
-              color: AppColors.success,
               shape: BoxShape.circle,
+              color: AppColors.primary.withValues(alpha: 0.1),
               border: Border.all(
-                color: AppColors.textWhite,
+                color: AppColors.primary.withValues(alpha: 0.2),
                 width: 2,
+              ),
+              image: const DecorationImage(
+                image: AssetImage('assets/images/submark_logo.png'),
+                fit: BoxFit.cover,
               ),
             ),
           ),
-        ),
-      ],
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(
+                color: AppColors.success,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: AppColors.textWhite,
+                  width: 2,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
