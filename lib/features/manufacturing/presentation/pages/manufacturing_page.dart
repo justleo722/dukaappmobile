@@ -76,7 +76,7 @@ class _ManufacturingPageState extends State<ManufacturingPage> {
 
   Widget _buildSummaryCards() {
     return SizedBox(
-      height: 120,
+      height: 124,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG, vertical: 8),
