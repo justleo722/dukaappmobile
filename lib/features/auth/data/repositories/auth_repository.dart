@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:dukaapp/features/auth/data/datasources/auth_remote_datasource.dart';
 import 'package:dukaapp/features/auth/data/models/auth_models.dart';
 import 'package:dukaapp/core/storage/secure_storage_service.dart';
@@ -49,7 +50,7 @@ class AuthRepository {
 
         if (result.shops != null) {
           final shopsJson = result.shops!.map((s) => s.toJson()).toList();
-          await _localStorage.saveString('available_shops', shopsJson.toString());
+          await _localStorage.saveString('available_shops', jsonEncode(shopsJson));
         }
 
         return result;
@@ -173,7 +174,25 @@ class AuthRepository {
           await _secureStorage.saveActiveShop(result.shop!.toJson());
         }
 
-        return result;
+        // Restore saved shops list — prefer localStorage (fast), else fetch fresh
+        var shops = await _loadSavedShops();
+        if (shops == null || shops.isEmpty) {
+          shops = await _remoteDatasource.fetchMyShops();
+          if (shops.isNotEmpty) {
+            await _localStorage.saveString(
+                'available_shops', jsonEncode(shops.map((s) => s.toJson()).toList()));
+          }
+        }
+
+        return AuthResult(
+          success: result.success,
+          user: result.user,
+          shop: result.shop,
+          shops: shops.isEmpty ? result.shops : shops,
+          token: result.token,
+          roleId: result.roleId,
+          message: result.message,
+        );
       }
 
       // API returned a response but success=false — session is invalid on server.
@@ -182,22 +201,35 @@ class AuthRepository {
       return AuthResult.failure('Session expired.');
     } catch (e) {
       // Network or server error — use cached data, keep token.
-      // If no cached user exists (e.g. old install before this fix), still mark
-      // authenticated so the app can reach the dashboard and populate the cache.
       final cachedUser = await _secureStorage.getUser();
       final cachedShop = await _secureStorage.getActiveShop();
+      final shops = await _loadSavedShops();
 
       if (cachedUser != null) {
         return AuthResult(
           success: true,
           user: User.fromJson(cachedUser),
           shop: cachedShop != null ? Shop.fromJson(cachedShop) : null,
+          shops: shops ?? [],
         );
       }
 
-      // Token exists but cache is empty (first run with old install / after fix).
-      // Trust the token — dashboard will show real data from session_user.
+      // Token exists but cache is empty — trust the token.
       return const AuthResult(success: true);
+    }
+  }
+
+  /// Load the shops list saved during login from localStorage.
+  Future<List<Shop>?> _loadSavedShops() async {
+    try {
+      final raw = await _localStorage.getString('available_shops');
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw) as List;
+      return decoded
+          .map((e) => Shop.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return null;
     }
   }
 
@@ -227,18 +259,43 @@ class AuthRepository {
     }
   }
 
-  Future<void> switchShop(String shopId) async {
+  /// Switch the active shop on the server, then update local caches.
+  /// Returns the new session data (user+shop+shops) so the controller can
+  /// update its state without a second network round-trip.
+  Future<AuthResult> switchShop(String shopId) async {
     final response = await _remoteDatasource.switchShop(shopId);
 
     if (!response.success) {
       throw Exception(response.message ?? 'Failed to switch shop.');
     }
 
-    await _cacheManager.invalidate('active_shop');
+    final result = response.data!;
+
+    // Persist the new active shop
+    if (result.shop != null) {
+      await _secureStorage.saveActiveShop(result.shop!.toJson());
+    }
+
+    // Re-save shops list if the server returned them
+    if (result.shops != null && result.shops!.isNotEmpty) {
+      await _localStorage.saveString(
+        'available_shops',
+        jsonEncode(result.shops!.map((s) => s.toJson()).toList()),
+      );
+    }
+
+    // Invalidate cached dashboard/session data so it is re-fetched for new shop
+    await _cacheManager.invalidateAll(['active_shop', 'session_user', 'dashboard']);
+
+    return result;
   }
 
   Future<bool> isAuthenticated() async {
     return await _secureStorage.hasToken();
+  }
+
+  Future<String?> getToken() async {
+    return await _secureStorage.getToken();
   }
 
   String _getErrorMessage(dynamic error) {

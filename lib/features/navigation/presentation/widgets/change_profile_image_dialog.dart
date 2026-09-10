@@ -35,7 +35,7 @@ class _ChangeProfileImageDialogState extends State<ChangeProfileImageDialog> {
   String _fileName = 'No file chosen';
 
   Future<void> _pickFile() async {
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
       allowMultiple: false,
     );

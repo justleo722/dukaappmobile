@@ -25,7 +25,7 @@ class _ImportStockPageState extends State<ImportStockPage> {
 
   Future<void> _pickFile() async {
     try {
-      final result = await FilePicker.pickFiles(
+      final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
       );
       if (result != null && result.files.isNotEmpty) {

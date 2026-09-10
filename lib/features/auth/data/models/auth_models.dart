@@ -2,6 +2,7 @@ class AuthResult {
   final bool success;
   final String? message;
   final String? token;
+  final String? roleId; // from JWT payload: role_id
   final User? user;
   final Shop? shop;
   final List<Shop>? shops;
@@ -10,6 +11,7 @@ class AuthResult {
     required this.success,
     this.message,
     this.token,
+    this.roleId,
     this.user,
     this.shop,
     this.shops,
@@ -126,6 +128,9 @@ class Shop {
     this.lobName,
     this.isActive,
   });
+
+  /// Alias — some API responses use shop_id, some use id.
+  dynamic get shopId => id;
 
   factory Shop.fromJson(Map<String, dynamic> json) {
     return Shop(

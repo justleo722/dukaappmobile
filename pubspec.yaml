@@ -1,5 +1,5 @@
 name: dukaapp
-description: "DukaApp - Smart Business Management"
+description: "DukaApp - POS"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -35,6 +35,9 @@ dependencies:
   # Local Storage
   shared_preferences: ^2.3.4
 
+  # Offline-first local database (unique DB per role+shop)
+  sqflite: ^2.3.3+1
+
   # Utilities
   intl: ^0.19.0
   flutter_animate: ^4.5.2
@@ -53,7 +56,7 @@ dependencies:
   # Camera & Media
   mobile_scanner: ^7.4.0
   image_picker: ^1.2.3
-  file_picker: ^11.0.2
+  file_picker: ^5.5.0
 
   # PDF Preview & Printing
   printing: ^5.13.4

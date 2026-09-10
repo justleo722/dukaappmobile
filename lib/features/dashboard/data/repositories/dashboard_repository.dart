@@ -1,10 +1,3 @@
-/// DashboardRepository — thin layer between the datasource and providers.
-///
-/// Wraps DashboardRemoteDatasource and exposes a single [fetch] method
-/// that returns the dashboard data plus the current user session.
-/// Exceptions from the datasource propagate up to the Riverpod provider
-/// so they can be handled as AsyncError states in the UI.
-
 import 'package:dukaapp/features/dashboard/data/datasources/dashboard_remote_datasource.dart';
 import 'package:dukaapp/features/dashboard/data/models/dashboard_model.dart';
 import 'package:dukaapp/features/dashboard/data/models/session_user_model.dart';
@@ -15,8 +8,24 @@ class DashboardState {
     required this.sessionUser,
   });
 
-  final DashboardModel dashboard;
-  final SessionUserModel sessionUser;
+  final DashboardModel    dashboard;
+  final SessionUserModel  sessionUser;
+
+  // ── Cache serialisation ─────────────────────────────────────────────────
+
+  Map<String, dynamic> toJson() => {
+    'dashboard'   : dashboard.toJson(),
+    'session_user': sessionUser.toJson(),
+  };
+
+  factory DashboardState.fromCache(Map<String, dynamic> json) {
+    return DashboardState(
+      dashboard  : DashboardModel.fromJson(
+          json['dashboard']    as Map<String, dynamic>? ?? {}),
+      sessionUser: SessionUserModel.fromJson(
+          json['session_user'] as Map<String, dynamic>? ?? {}),
+    );
+  }
 }
 
 class DashboardRepository {
@@ -24,7 +33,6 @@ class DashboardRepository {
 
   final DashboardRemoteDatasource _datasource;
 
-  /// Fetches dashboard summary and session user in parallel.
   Future<DashboardState> fetch() async {
     final (dashboard, sessionUser) = await _datasource.fetchAll();
     return DashboardState(dashboard: dashboard, sessionUser: sessionUser);

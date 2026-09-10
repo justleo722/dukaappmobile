@@ -66,6 +66,21 @@ class DashboardModel {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+    'currency'          : currency,
+    'today_sales'       : todaySales,
+    'today_profit'      : todayProfit,
+    'today_expense'     : todayExpense,
+    'today_stockin'     : todayStockin,
+    'today_topay'       : todayTopay,
+    'today_credit'      : todayCredit,
+    'today_orders'      : todayOrders,
+    'thismonth_sales'   : thisMonthSales,
+    'thismonth_profit'  : thisMonthProfit,
+    'thismonth_expense' : thisMonthExpense,
+    'thismonth_stockin' : thisMonthStockin,
+  };
+
   static const DashboardModel empty = DashboardModel(
     currency: 'Tsh',
     todaySales: 0,

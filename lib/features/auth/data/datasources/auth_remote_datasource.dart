@@ -355,25 +355,48 @@ class AuthRemoteDatasource {
     return _parseAuthResponse(response);
   }
 
-  Future<ApiResponse<void>> switchShop(String shopId) async {
+  Future<ApiResponse<AuthResult>> switchShop(String shopId) async {
     final response = await _apiClient.post(
       ApiConfig.authSwitchShop(shopId),
     );
 
-    final body = response.data;
-    if (body is Map<String, dynamic>) {
-      final rawStatus = body['status'];
-      final status = rawStatus?.toString();
-      final message = body['message']?.toString();
-      if (rawStatus != true && status != 'success' && status != 'true') {
-        throw ApiException(
-          message: message ?? 'Failed to switch shop.',
-          statusCode: response.statusCode,
-        );
-      }
+    // Try to parse the full session payload; fall back to a bare success so
+    // the client can still update its local state from the shops list it has.
+    try {
+      return _parseAuthResponse(response);
+    } on ApiException {
+      rethrow; // real failure (403, etc.) — let caller handle
+    } catch (_) {
+      // Response succeeded but had no session data — return minimal result
+      return ApiResponse.success(AuthResult(success: true));
     }
+  }
 
-    return ApiResponse<void>.success(null as dynamic);
+  /// Fetch all shops the current user has access to.
+  /// Returns an empty list on any error.
+  Future<List<Shop>> fetchMyShops() async {
+    try {
+      final response = await _apiClient.get(ApiConfig.getData('my_shops'));
+      final body = response.data;
+      List<dynamic>? raw;
+      if (body is List) {
+        raw = body;
+      } else if (body is Map<String, dynamic>) {
+        final v = body['data'] ?? body['shops'] ?? body['result'];
+        if (v is List) raw = v;
+      }
+      if (raw == null) return [];
+      return raw
+          .whereType<Map<String, dynamic>>()
+          .map((e) => Shop(
+                id: e['shop_id'] ?? e['id'],
+                shopName: (e['shop_name'] ?? e['shopname'])?.toString(),
+                shopType: e['shop_type']?.toString(),
+              ))
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   Future<ApiResponse<AuthResult>> validateSession() async {

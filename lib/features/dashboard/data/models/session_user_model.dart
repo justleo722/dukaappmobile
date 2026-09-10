@@ -86,6 +86,18 @@ class SessionUserModel {
 
   bool get canSeeSettings => isOwner || isManager;
 
+  Map<String, dynamic> toJson() => {
+    'role_id'             : roleId,
+    'role'                : role,
+    'is_manager'          : isManager ? 1 : 0,
+    'username'            : username,
+    'name'                : name,
+    'currency'            : currency,
+    'subscription_status' : subscriptionStatus,
+    'remaining_days'      : remainingDays,
+    ...permissions.map((k, v) => MapEntry(k, v ? 1 : 0)),
+  };
+
   static bool _b(dynamic v) => v == 1 || v == true || v == '1';
 
   factory SessionUserModel.fromJson(Map<String, dynamic> json) {

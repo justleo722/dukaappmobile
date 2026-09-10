@@ -1,7 +1,25 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dukaapp/features/auth/data/models/auth_models.dart';
 import 'package:dukaapp/features/auth/data/repositories/auth_repository.dart';
 import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/core/database/local_database.dart';
+
+/// Decode a JWT and return its payload as a Map.
+Map<String, dynamic> _jwtPayload(String token) {
+  try {
+    final parts = token.split('.');
+    if (parts.length < 2) return {};
+    // Base64Url decode (pad to multiple of 4)
+    String payload = parts[1];
+    payload += '=' * ((4 - payload.length % 4) % 4);
+    return json.decode(utf8.decode(base64Url.decode(payload)))
+        as Map<String, dynamic>;
+  } catch (_) {
+    return {};
+  }
+}
 
 enum AuthStatus { initial, loading, authenticated, unauthenticated, error }
 
@@ -46,10 +64,53 @@ class AuthState {
 
 class AuthNotifier extends StateNotifier<AuthState> {
   final AuthRepository _authRepository;
+  final LocalDatabase  _localDb;
 
-  AuthNotifier({required AuthRepository authRepository})
-      : _authRepository = authRepository,
+  AuthNotifier({
+    required AuthRepository authRepository,
+    required LocalDatabase  localDb,
+  })  : _authRepository = authRepository,
+        _localDb        = localDb,
         super(const AuthState());
+
+  /// Open the local DB for the given role+shop.
+  /// Never throws — DB errors are non-fatal; app works online if DB fails.
+  Future<void> _openDb({
+    String? token,
+    String? roleId,
+    String? shopId,
+  }) async {
+    try {
+      String? rid = roleId;
+      String? sid = shopId;
+
+      // Fall back to JWT payload when role/shop not provided
+      if ((rid == null || sid == null) && token != null) {
+        final payload = _jwtPayload(token);
+        rid ??= payload['role_id']?.toString();
+        sid ??= payload['shop_id']?.toString();
+      }
+
+      if (rid != null && sid != null) {
+        await _localDb.open(rid, sid);
+      }
+    } catch (e) {
+      // DB failure is non-fatal — app continues online-only
+      debugPrint('[AuthNotifier] _openDb failed (non-fatal): $e');
+    }
+  }
+
+  /// Close and wipe the local DB on logout.
+  Future<void> _closeDb() async {
+    try {
+      if (_localDb.isOpen) {
+        await _localDb.clearAll();
+        await _localDb.close();
+      }
+    } catch (e) {
+      debugPrint('[AuthNotifier] _closeDb failed (non-fatal): $e');
+    }
+  }
 
   Future<bool> login({
     required String identifier,
@@ -63,6 +124,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
 
     if (result.success) {
+      // Open unique DB for this role+shop — use JWT payload for role_id
+      final token = await _authRepository.getToken();
+      await _openDb(
+        token : token,
+        roleId: result.roleId,
+        shopId: result.shop?.id?.toString(),
+      );
+
       state = state.copyWith(
         status: AuthStatus.authenticated,
         user: result.user,
@@ -109,6 +178,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
 
     if (result.success) {
+      final token = await _authRepository.getToken();
+      await _openDb(
+        token : token,
+        roleId: result.roleId,
+        shopId: result.shop?.id?.toString(),
+      );
+
       state = state.copyWith(
         status: AuthStatus.authenticated,
         user: result.user,
@@ -154,6 +230,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Continue with local cleanup even if API call fails
     }
 
+    await _closeDb();
     await _authRepository.clearLocalAuth();
 
     state = const AuthState(status: AuthStatus.unauthenticated);
@@ -165,6 +242,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final result = await _authRepository.restoreSession();
 
     if (result.success) {
+      // Re-open the DB for this session (token still valid from before)
+      final token = await _authRepository.getToken();
+      await _openDb(
+        token : token,
+        shopId: result.shop?.id?.toString(),
+      );
+
       state = state.copyWith(
         status: AuthStatus.authenticated,
         user: result.user,
@@ -174,6 +258,33 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } else {
       state = const AuthState(status: AuthStatus.unauthenticated);
     }
+  }
+
+  /// Switch the active shop.
+  /// Calls the backend, saves new session data, re-opens the local DB,
+  /// and updates the state — all in one step.
+  Future<void> switchShop(String shopId) async {
+    // Call backend + update secureStorage/localStorage
+    final result = await _authRepository.switchShop(shopId);
+
+    // Re-open local DB for the new shop (role_id stays the same)
+    final token = await _authRepository.getToken();
+    await _openDb(token: token, shopId: shopId);
+
+    // Prefer server-returned shop; fallback to finding it in the local list
+    final newShop = result.shop ??
+        state.shops?.firstWhere(
+          (s) => s.id?.toString() == shopId || s.shopId?.toString() == shopId,
+          orElse: () => Shop(id: shopId),
+        );
+
+    state = state.copyWith(
+      activeShop: newShop,
+      // Use updated shops list from server if provided
+      shops: (result.shops != null && result.shops!.isNotEmpty)
+          ? result.shops
+          : state.shops,
+    );
   }
 
   void clearError() {
@@ -190,6 +301,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
 }
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  final repository = ref.watch(authRepositoryProvider);
-  return AuthNotifier(authRepository: repository);
+  return AuthNotifier(
+    authRepository: ref.watch(authRepositoryProvider),
+    localDb       : ref.watch(localDatabaseProvider),
+  );
 });

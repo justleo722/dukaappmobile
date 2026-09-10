@@ -10,6 +10,7 @@ import 'package:dukaapp/features/navigation/presentation/widgets/change_profile_
 import 'package:dukaapp/features/navigation/presentation/widgets/drawer_header.dart';
 import 'package:dukaapp/features/navigation/presentation/widgets/drawer_menu_item.dart';
 import 'package:dukaapp/features/navigation/presentation/widgets/shop_selector_bottom_sheet.dart';
+import 'package:dukaapp/features/dashboard/presentation/providers/dashboard_provider.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
   final VoidCallback? onRefresh;
@@ -21,36 +22,40 @@ class AppDrawer extends ConsumerStatefulWidget {
 }
 
 class _AppDrawerState extends ConsumerState<AppDrawer> {
-  String _activeShopId = 'S0003';
   File? _profileImage;
 
-  final List<Map<String, dynamic>> _shops = const [
-    {'id': 'S0021', 'name': 'ABC MARKET'},
-    {'id': 'S0019', 'name': 'ASU COSMETICS'},
-    {'id': 'S0018', 'name': 'BLACK MAGIC DESIGN'},
-    {'id': 'S0020', 'name': 'JOHN PERFORMS'},
-    {'id': 'S0003', 'name': 'SON COLLECTION'},
-  ];
-
-  String get _activeShopName {
-    final shop = _shops.firstWhere(
-      (s) => s['id'] == _activeShopId,
-      orElse: () => _shops.last,
-    );
-    return shop['name'];
-  }
-
-  void _onShopSelected(Map<String, dynamic> shop) {
-    setState(() {
-      _activeShopId = shop['id'];
-    });
+  void _onShopSelected(Map<String, dynamic> shop) async {
+    final shopId = shop['id']?.toString() ?? '';
+    if (shopId.isEmpty) return;
+    Navigator.pop(context);
+    try {
+      await ref.read(authProvider.notifier).switchShop(shopId);
+      ref.invalidate(dashboardProvider);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Imeshindwa kubadilisha duka: $e'),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    }
   }
 
   void _openShopSelector() {
+    final authState = ref.read(authProvider);
+    final shops = (authState.shops ?? []).map((s) => {
+      'id'  : s.id?.toString() ?? '',
+      'name': s.shopName ?? s.id?.toString() ?? '',
+      'shopId': s.id?.toString() ?? '',  // kept for switch logic
+    }).toList();
+    final activeId = authState.activeShop?.id?.toString() ?? '';
+
     ShopSelectorBottomSheet.show(
-      context: context,
-      shops: _shops,
-      activeShopId: _activeShopId,
+      context       : context,
+      shops         : shops,
+      activeShopId  : activeId,
       onShopSelected: _onShopSelected,
     );
   }
@@ -118,8 +123,17 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
   @override
   Widget build(BuildContext context) {
+    final authState  = ref.watch(authProvider);
     final screenWidth = MediaQuery.of(context).size.width;
     final drawerWidth = screenWidth * 0.78;
+
+    final user       = authState.user;
+    final activeShop = authState.activeShop;
+
+    final userName   = user?.username ?? 'Mtumiaji';
+    final userId     = user?.id?.toString() ?? '';
+    final shopName   = activeShop?.shopName ?? activeShop?.id?.toString() ?? '—';
+    final activeId   = activeShop?.id?.toString() ?? '';
 
     return Drawer(
       width: drawerWidth,
@@ -129,27 +143,24 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AppDrawerHeader(
-              userName: 'SON',
-              userId: 'U0003',
-              shopName: _activeShopName,
-              activeShopId: _activeShopId,
-              onEditProfile: () {
+              userName          : userName,
+              userId            : userId,
+              shopName          : shopName,
+              activeShopId      : activeId,
+              onEditProfile     : () {
                 Navigator.pop(context);
                 context.push('/edit-profile');
               },
-              onSwitchShop: _openShopSelector,
-              onProfileImageTap: _openProfileImageDialog,
+              onSwitchShop      : _openShopSelector,
+              onProfileImageTap : _openProfileImageDialog,
             ),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
-              child: Divider(
-                color: AppColors.divider,
-                height: 1,
-              ),
+              child: Divider(color: AppColors.divider, height: 1),
             ),
             const SizedBox(height: 8),
             DrawerMenuItem(
-              icon: Icons.home_rounded,
+              icon : Icons.home_rounded,
               label: 'Dashboard',
               onTap: () {
                 Navigator.pop(context);
@@ -157,8 +168,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               },
             ),
             DrawerMenuItem(
-              icon: Icons.add_rounded,
-              label: 'Add Shop',
+              icon          : Icons.add_rounded,
+              label         : 'Add Shop',
+              showExpandIcon: true,
               onTap: () {
                 Navigator.pop(context);
                 AddShopBottomSheet.show(
@@ -166,18 +178,16 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   onShopCreated: (shopData) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(
-                            'Shop "${shopData['name']}" created successfully'),
+                        content: Text('Shop "${shopData['name']}" created successfully'),
                         backgroundColor: AppColors.success,
                       ),
                     );
                   },
                 );
               },
-              showExpandIcon: true,
             ),
             DrawerMenuItem(
-              icon: Icons.settings_rounded,
+              icon : Icons.settings_rounded,
               label: 'Shop Settings',
               onTap: () {
                 Navigator.pop(context);
@@ -185,7 +195,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               },
             ),
             DrawerMenuItem(
-              icon: Icons.book_rounded,
+              icon : Icons.book_rounded,
               label: 'Guide',
               onTap: () {
                 Navigator.pop(context);
@@ -194,9 +204,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             ),
             const Spacer(),
             DrawerMenuItem(
-              icon: Icons.logout_rounded,
-              label: 'Logout',
-              onTap: () => _confirmLogout(),
+              icon        : Icons.logout_rounded,
+              label       : 'Logout',
+              onTap       : () => _confirmLogout(),
               isDestructive: true,
             ),
             const SizedBox(height: 16),
