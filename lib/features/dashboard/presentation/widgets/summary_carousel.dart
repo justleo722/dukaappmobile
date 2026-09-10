@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:dukaapp/features/dashboard/presentation/constants/dashboard_constants.dart';
 import 'package:dukaapp/features/dashboard/presentation/widgets/summary_card.dart';
 
@@ -64,6 +65,12 @@ class _SummaryCarouselState extends State<SummaryCarousel> {
               icon: card['icon'],
               color: card['color'],
               bgColor: card['bgColor'],
+              onTap: () {
+                final route = card['route'] as String?;
+                if (route != null && context.mounted) {
+                  context.push(route);
+                }
+              },
             ),
           );
         },

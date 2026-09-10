@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/features/dashboard/presentation/widgets/language_selector.dart';
 
-class DashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
+class DashboardAppBar extends ConsumerWidget implements PreferredSizeWidget {
   final VoidCallback? onRefresh;
   final bool isRefreshing;
 
@@ -17,7 +19,7 @@ class DashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => const Size.fromHeight(60);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return AppBar(
       backgroundColor: Colors.white,
       elevation: 0,
@@ -64,7 +66,40 @@ class DashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
         const SizedBox(width: 8),
         IconButton(
-          onPressed: () => context.go('/login'),
+          onPressed: () async {
+            final confirmed = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                title: const Text('Logout'),
+                content: const Text('Are you sure you want to logout?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    child: const Text('Logout'),
+                  ),
+                ],
+              ),
+            );
+            if (confirmed == true && context.mounted) {
+              await ref.read(authProvider.notifier).signOut();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Logged out successfully'),
+                    backgroundColor: Colors.green,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                context.go('/login');
+              }
+            }
+          },
           icon: const Icon(
             Icons.logout_rounded,
             color: AppColors.textPrimary,

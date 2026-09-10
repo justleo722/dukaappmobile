@@ -46,6 +46,7 @@ class DashboardConstants {
       'icon': Icons.point_of_sale_rounded,
       'color': Color(0xFF2563EB),
       'bgColor': Color(0xFFEBF2FF),
+      'route': '/sales/manage',
     },
     {
       'title': 'Today Profit',
@@ -54,6 +55,7 @@ class DashboardConstants {
       'icon': Icons.trending_up_rounded,
       'color': Color(0xFF22C55E),
       'bgColor': Color(0xFFE8FAF0),
+      'route': '/profit-expenses',
     },
     {
       'title': 'Today Expense',
@@ -62,6 +64,7 @@ class DashboardConstants {
       'icon': Icons.receipt_long_rounded,
       'color': Color(0xFFEF4444),
       'bgColor': Color(0xFFFEE8E8),
+      'route': '/profit-expenses',
     },
     {
       'title': 'Today Stock In',
@@ -70,6 +73,7 @@ class DashboardConstants {
       'icon': Icons.inventory_2_rounded,
       'color': Color(0xFFFF7A00),
       'bgColor': Color(0xFFFFF0E0),
+      'route': '/stock/manage',
     },
     {
       'title': 'To Receive',
@@ -78,6 +82,7 @@ class DashboardConstants {
       'icon': Icons.download_rounded,
       'color': Color(0xFF9333EA),
       'bgColor': Color(0xFFF3E8FF),
+      'route': '/purchases/orders',
     },
     {
       'title': 'To Pay',
@@ -86,6 +91,7 @@ class DashboardConstants {
       'icon': Icons.upload_rounded,
       'color': Color(0xFFF59E0B),
       'bgColor': Color(0xFFFFF8E1),
+      'route': '/purchases/orders',
     },
     {
       'title': 'Today Orders',
@@ -94,6 +100,7 @@ class DashboardConstants {
       'icon': Icons.shopping_bag_rounded,
       'color': Color(0xFF3B82F6),
       'bgColor': Color(0xFFEBF5FF),
+      'route': '/sales/orders',
     },
   ];
 

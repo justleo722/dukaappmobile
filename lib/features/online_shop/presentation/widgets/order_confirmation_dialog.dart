@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
@@ -86,6 +88,7 @@ class _OrderConfirmationDialogState extends State<OrderConfirmationDialog> {
   bool _showConfirmation = false;
   bool _copied = false;
   final GlobalKey _invoiceKey = GlobalKey();
+  Uint8List? _invoiceImageBytes;
 
   String _formatPrice(int amount) {
     final str = amount.toString();
@@ -117,10 +120,20 @@ class _OrderConfirmationDialogState extends State<OrderConfirmationDialog> {
     );
   }
 
-  Future<void> _downloadAsImage() async {
+  Future<void> _captureInvoiceImage() async {
     try {
       final boundary = _invoiceKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) {
+      if (boundary == null) return;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+      _invoiceImageBytes = byteData.buffer.asUint8List();
+    } catch (_) {}
+  }
+
+  Future<void> _downloadAsImage() async {
+    try {
+      if (_invoiceImageBytes == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Could not capture invoice'),
@@ -129,23 +142,17 @@ class _OrderConfirmationDialogState extends State<OrderConfirmationDialog> {
         );
         return;
       }
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return;
-      final pngBytes = byteData.buffer.asUint8List();
 
-      final dir = await getApplicationDocumentsDirectory();
-      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-      final file = File('${dir.path}/invoice_${widget.orderId}_$timestamp.png');
-      await file.writeAsBytes(pngBytes);
+      final dir = await getTemporaryDirectory();
+      final filePath = '${dir.path}/invoice_${widget.orderId}.png';
+      final file = File(filePath);
+      await file.writeAsBytes(_invoiceImageBytes!);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Invoice saved to ${file.path}'),
-            backgroundColor: AppColors.success,
-            duration: const Duration(seconds: 3),
-          ),
+        await Share.shareXFiles(
+          [XFile(filePath, mimeType: 'image/png')],
+          subject: 'Invoice ${widget.orderId}',
+          text: 'Order Invoice for ${widget.orderId}',
         );
       }
     } catch (e) {
@@ -216,85 +223,321 @@ class _OrderConfirmationDialogState extends State<OrderConfirmationDialog> {
               padding: EdgeInsets.fromLTRB(20, 0, 20, 20),
               child: RepaintBoundary(
                 key: _invoiceKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildOrderInfoRow('Order ID', widget.orderId),
-                    _buildOrderInfoRow('Date & Time', _formatDateTime()),
-                    _buildOrderInfoRow('Status', 'Received', valueColor: AppColors.success),
-                    const SizedBox(height: 12),
-                    const Divider(color: AppColors.divider, height: 1),
-                    const SizedBox(height: 12),
-                    _buildOrderInfoRow('Customer', widget.customerName),
-                    _buildOrderInfoRow('Phone', widget.phone),
-                    _buildOrderInfoRow('Address', widget.address),
-                    _buildOrderInfoRow('Delivery', widget.deliveryMethod),
-                    _buildOrderInfoRow('Payment', widget.paymentMethod),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Items',
-                      style: AppTypography.label.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _buildItemsTable(isNarrow),
-                    const SizedBox(height: 16),
-                    const Divider(color: AppColors.divider, height: 1),
-                    const SizedBox(height: 12),
-                    _buildOrderInfoRow('Subtotal', _formatPrice(widget.subtotal)),
-                    _buildOrderInfoRow(
-                      'Delivery',
-                      widget.deliveryFee == 0 ? 'Free' : _formatPrice(widget.deliveryFee),
-                    ),
-                    const SizedBox(height: 8),
-                    const Divider(color: AppColors.divider, height: 1),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Grand Total',
-                          style: AppTypography.h6.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
+                child: Container(
+                  width: double.infinity,
+                  color: Colors.white,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // --- Invoice Header ---
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
                         ),
-                        Text(
-                          _formatPrice(widget.total),
-                          style: AppTypography.h6.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.secondary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.info_outline_rounded, size: 18, color: AppColors.secondary),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Please copy your Order ID before closing this window so you can track your order later.',
-                              style: AppTypography.caption.copyWith(
-                                color: AppColors.textSecondary,
-                                height: 1.4,
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: const BoxDecoration(
+                                color: Colors.white24,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.receipt_long_rounded,
+                                color: Colors.white,
+                                size: 24,
                               ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 10),
+                            Text(
+                              'DukaApp',
+                              style: AppTypography.h5.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+                              ),
+                              child: Text(
+                                'INVOICE',
+                                style: AppTypography.captionBold.copyWith(
+                                  color: Colors.white,
+                                  letterSpacing: 2,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+
+                      // --- Order Status Bar ---
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        color: AppColors.success.withValues(alpha: 0.1),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: AppColors.success,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'ORDER RECEIVED',
+                              style: AppTypography.captionBold.copyWith(
+                                color: AppColors.success,
+                                letterSpacing: 1.5,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // --- Invoice Body ---
+                      Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Order Info
+                            _buildInvoiceInfoSection('Order Details', [
+                              _buildInvoiceRow('Order ID', widget.orderId),
+                              _buildInvoiceRow('Date', _formatDateTime()),
+                            ]),
+                            const SizedBox(height: 16),
+
+                            // Customer Info
+                            _buildInvoiceInfoSection('Customer Information', [
+                              _buildInvoiceRow('Name', widget.customerName),
+                              _buildInvoiceRow('Phone', widget.phone),
+                              _buildInvoiceRow('Address', widget.address),
+                            ]),
+                            const SizedBox(height: 16),
+
+                            // Delivery & Payment
+                            _buildInvoiceInfoSection('Delivery & Payment', [
+                              _buildInvoiceRow('Delivery', widget.deliveryMethod),
+                              _buildInvoiceRow('Payment', widget.paymentMethod),
+                            ]),
+                            const SizedBox(height: 20),
+
+                            // Items Header
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: const BoxDecoration(
+                                color: AppColors.primary,
+                              ),
+                              child: Text(
+                                'ORDER ITEMS',
+                                style: AppTypography.captionBold.copyWith(
+                                  color: Colors.white,
+                                  letterSpacing: 1.5,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+
+                            // Items Table
+                            Container(
+                              decoration: const BoxDecoration(
+                                border: Border(
+                                  left: BorderSide(color: AppColors.border, width: 0.5),
+                                  right: BorderSide(color: AppColors.border, width: 0.5),
+                                  bottom: BorderSide(color: AppColors.border, width: 0.5),
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  // Table header
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                    color: AppColors.background,
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          flex: 4,
+                                          child: Text('ITEM', style: AppTypography.captionBold.copyWith(fontSize: 10, color: AppColors.textSecondary)),
+                                        ),
+                                        Expanded(
+                                          flex: 2,
+                                          child: Text('QTY', style: AppTypography.captionBold.copyWith(fontSize: 10, color: AppColors.textSecondary), textAlign: TextAlign.center),
+                                        ),
+                                        Expanded(
+                                          flex: 3,
+                                          child: Text('PRICE', style: AppTypography.captionBold.copyWith(fontSize: 10, color: AppColors.textSecondary), textAlign: TextAlign.right),
+                                        ),
+                                        Expanded(
+                                          flex: 3,
+                                          child: Text('TOTAL', style: AppTypography.captionBold.copyWith(fontSize: 10, color: AppColors.textSecondary), textAlign: TextAlign.right),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Items
+                                  ...widget.items.asMap().entries.map((entry) {
+                                    final idx = entry.key;
+                                    final item = entry.value;
+                                    final qty = (item['qty'] as int?) ?? 1;
+                                    final price = _parsePrice((item['price'] as String?) ?? '0');
+                                    final itemTotal = price * qty;
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      color: idx.isEven ? Colors.white : AppColors.background.withValues(alpha: 0.5),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            flex: 4,
+                                            child: Text(
+                                              (item['name'] as String?) ?? 'Product',
+                                              style: AppTypography.bodySmall.copyWith(
+                                                color: AppColors.textPrimary,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 2,
+                                            child: Text(
+                                              '$qty',
+                                              style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 3,
+                                            child: Text(
+                                              _formatPrice(price),
+                                              style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+                                              textAlign: TextAlign.right,
+                                            ),
+                                          ),
+                                          Expanded(
+                                            flex: 3,
+                                            child: Text(
+                                              _formatPrice(itemTotal),
+                                              style: AppTypography.bodySmall.copyWith(
+                                                color: AppColors.textPrimary,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                              textAlign: TextAlign.right,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+
+                            // Totals
+                            Container(
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: AppColors.background,
+                                borderRadius: BorderRadius.circular(AppConstants.radiusSM),
+                              ),
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                children: [
+                                  _buildTotalRow('Subtotal', _formatPrice(widget.subtotal)),
+                                  const SizedBox(height: 6),
+                                  _buildTotalRow(
+                                    'Delivery',
+                                    widget.deliveryFee == 0 ? 'Free' : _formatPrice(widget.deliveryFee),
+                                  ),
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 8),
+                                    child: Divider(color: AppColors.divider, height: 1),
+                                  ),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'GRAND TOTAL',
+                                        style: AppTypography.bodyMedium.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                          color: AppColors.textPrimary,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                      Text(
+                                        _formatPrice(widget.total),
+                                        style: AppTypography.h6.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+
+                            // Footer
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.06),
+                                borderRadius: BorderRadius.circular(AppConstants.radiusSM),
+                                border: Border.all(
+                                  color: AppColors.primary.withValues(alpha: 0.15),
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.storefront_rounded,
+                                    size: 20,
+                                    color: AppColors.primary,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Thank you for shopping with DukaApp!',
+                                    style: AppTypography.bodySmall.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Keep this invoice for your records.',
+                                    style: AppTypography.caption.copyWith(
+                                      color: AppColors.textSecondary,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -348,17 +591,60 @@ class _OrderConfirmationDialogState extends State<OrderConfirmationDialog> {
     );
   }
 
-  Widget _buildOrderInfoRow(String label, String value, {Color? valueColor}) {
+  int _parsePrice(String priceStr) {
+    final cleaned = priceStr.replaceAll(RegExp(r'[^0-9]'), '');
+    return int.tryParse(cleaned) ?? 0;
+  }
+
+  Widget _buildInvoiceInfoSection(String title, List<Widget> rows) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppConstants.radiusSM),
+            ),
+          ),
+          child: Text(
+            title.toUpperCase(),
+            style: AppTypography.captionBold.copyWith(
+              color: AppColors.primary,
+              letterSpacing: 1.5,
+              fontSize: 10,
+            ),
+          ),
+        ),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(AppConstants.radiusSM),
+            ),
+            border: Border.all(color: AppColors.border, width: 0.5),
+          ),
+          child: Column(children: rows),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInvoiceRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 90,
+            width: 80,
             child: Text(
               label,
-              style: AppTypography.bodySmall.copyWith(
+              style: AppTypography.caption.copyWith(
                 color: AppColors.textSecondary,
               ),
             ),
@@ -366,9 +652,9 @@ class _OrderConfirmationDialogState extends State<OrderConfirmationDialog> {
           Expanded(
             child: Text(
               value,
-              style: AppTypography.bodySmall.copyWith(
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textPrimary,
                 fontWeight: FontWeight.w600,
-                color: valueColor ?? AppColors.textPrimary,
               ),
             ),
           ),
@@ -377,103 +663,25 @@ class _OrderConfirmationDialogState extends State<OrderConfirmationDialog> {
     );
   }
 
-  Widget _buildItemsTable(bool isNarrow) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.08),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(AppConstants.radiusSM)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Text('Product', style: AppTypography.captionBold.copyWith(fontSize: 11)),
-                ),
-                Expanded(
-                  flex: isNarrow ? 2 : 1,
-                  child: Text('Qty', style: AppTypography.captionBold.copyWith(fontSize: 11), textAlign: TextAlign.center),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text('Price', style: AppTypography.captionBold.copyWith(fontSize: 11), textAlign: TextAlign.right),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text('Total', style: AppTypography.captionBold.copyWith(fontSize: 11), textAlign: TextAlign.right),
-                ),
-              ],
-            ),
+  Widget _buildTotalRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.textSecondary,
           ),
-          ...widget.items.map((item) {
-            final qty = (item['qty'] as int?) ?? 1;
-            final price = _parsePrice((item['price'] as String?) ?? '0');
-            final itemTotal = price * qty;
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: Text(
-                      (item['name'] as String?) ?? 'Product',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Expanded(
-                    flex: isNarrow ? 2 : 1,
-                    child: Text(
-                      '$qty',
-                      style: AppTypography.caption.copyWith(color: AppColors.textPrimary),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      _formatPrice(price),
-                      style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
-                      textAlign: TextAlign.right,
-                    ),
-                  ),
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      _formatPrice(itemTotal),
-                      style: AppTypography.captionBold.copyWith(
-                        color: AppColors.textPrimary,
-                        fontSize: 11,
-                      ),
-                      textAlign: TextAlign.right,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
+        ),
+        Text(
+          value,
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
-  }
-
-  int _parsePrice(String priceStr) {
-    final cleaned = priceStr.replaceAll(RegExp(r'[^0-9]'), '');
-    return int.tryParse(cleaned) ?? 0;
   }
 
   Widget _buildInvoiceActions() {
@@ -488,9 +696,10 @@ class _OrderConfirmationDialogState extends State<OrderConfirmationDialog> {
             child: SizedBox(
               height: AppConstants.buttonHeight,
               child: OutlinedButton(
-                onPressed: () {
+                onPressed: () async {
                   _copyOrderId();
-                  setState(() => _showConfirmation = true);
+                  await _captureInvoiceImage();
+                  if (mounted) setState(() => _showConfirmation = true);
                 },
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,

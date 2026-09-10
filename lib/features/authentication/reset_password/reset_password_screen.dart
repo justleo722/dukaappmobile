@@ -6,6 +6,7 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/shared/widgets/auth_logo.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'widgets/reset_password_card.dart';
 
 class ResetPasswordScreen extends ConsumerStatefulWidget {
@@ -26,11 +27,56 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   }
 
   void _handleSendCode() {
-    // TODO: Implement reset code sending with provider — no API yet
+    final identifier = _identifierController.text.trim();
+
+    if (identifier.isEmpty) {
+      _showSnackBar('Please enter your user ID, phone, or email.');
+      return;
+    }
+
+    ref.read(authProvider.notifier).sendPasswordReset(
+      identifier: identifier,
+    );
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+
+    ref.listen<AuthState>(authProvider, (previous, next) {
+      if (next.successMessage != null && next.successMessage!.isNotEmpty) {
+        _showSuccessSnackBar(next.successMessage!);
+        ref.read(authProvider.notifier).clearSuccess();
+      } else if (next.errorMessage != null && next.errorMessage!.isNotEmpty) {
+        _showSnackBar(next.errorMessage!);
+        ref.read(authProvider.notifier).clearError();
+      }
+    });
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -52,6 +98,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                     SizedBox(height: 32.h),
                     ResetPasswordCard(
                       identifierController: _identifierController,
+                      isLoading: authState.isLoading,
                       onSendCode: _handleSendCode,
                     ),
                     SizedBox(height: 24.h),

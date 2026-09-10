@@ -6,11 +6,13 @@ import 'package:dukaapp/shared/buttons/primary_button.dart';
 
 class ResetPasswordCard extends StatelessWidget {
   final TextEditingController identifierController;
+  final bool isLoading;
   final VoidCallback onSendCode;
 
   const ResetPasswordCard({
     super.key,
     required this.identifierController,
+    this.isLoading = false,
     required this.onSendCode,
   });
 
@@ -36,6 +38,7 @@ class ResetPasswordCard extends StatelessWidget {
           SizedBox(height: 24.h),
           PrimaryButton(
             text: 'Reset',
+            isLoading: isLoading,
             onPressed: onSendCode,
           ),
         ],

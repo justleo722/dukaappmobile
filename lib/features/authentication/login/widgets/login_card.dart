@@ -10,6 +10,7 @@ class LoginCard extends StatelessWidget {
   final TextEditingController userIdController;
   final TextEditingController passwordController;
   final bool isPasswordVisible;
+  final bool isLoading;
   final VoidCallback onPasswordToggle;
   final VoidCallback onLogin;
   final VoidCallback onRegister;
@@ -20,6 +21,7 @@ class LoginCard extends StatelessWidget {
     required this.userIdController,
     required this.passwordController,
     required this.isPasswordVisible,
+    this.isLoading = false,
     required this.onPasswordToggle,
     required this.onLogin,
     required this.onRegister,
@@ -46,6 +48,7 @@ class LoginCard extends StatelessWidget {
           SizedBox(height: 24.h),
           PrimaryButton(
             text: 'Login',
+            isLoading: isLoading,
             onPressed: onLogin,
           ),
           SizedBox(height: 20.h),

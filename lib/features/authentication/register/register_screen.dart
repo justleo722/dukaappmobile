@@ -7,6 +7,8 @@ import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/shared/widgets/auth_logo.dart';
 import 'package:dukaapp/shared/widgets/step_indicator.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
+import 'package:dukaapp/features/auth/data/models/auth_models.dart';
 import 'widgets/register_card.dart';
 import 'widgets/terms_and_conditions_screen.dart';
 
@@ -25,15 +27,37 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _referralController = TextEditingController();
+  final _regionController = TextEditingController();
   String? _shopType;
-  String? _region;
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   bool _agreeToTerms = false;
   bool _showReferralCode = false;
   int _currentStep = 0;
+  AuthConstants? _constants;
 
   static const _stepLabels = ['Account', 'Business', 'Security'];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadConstants();
+    });
+  }
+
+  Future<void> _loadConstants() async {
+    try {
+      final constants = await ref.read(authProvider.notifier).getConstants();
+      if (mounted) {
+        setState(() {
+          _constants = constants;
+        });
+      }
+    } catch (_) {
+      // Constants will remain null if fetch fails
+    }
+  }
 
   @override
   void dispose() {
@@ -44,6 +68,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _referralController.dispose();
+    _regionController.dispose();
     super.dispose();
   }
 
@@ -60,12 +85,110 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   void _handleRegister() {
-    // TODO: Implement register with provider — no API yet
-    context.pushNamed('dashboard');
+    final username = _usernameController.text.trim();
+    final email = _emailController.text.trim();
+    final phone = _phoneController.text.trim();
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+    final shopName = _shopNameController.text.trim();
+
+    if (username.isEmpty) {
+      _showSnackBar('Please enter your username.');
+      return;
+    }
+
+    if (phone.isEmpty) {
+      _showSnackBar('Please enter your phone number.');
+      return;
+    }
+
+    if (password.isEmpty) {
+      _showSnackBar('Please enter your password.');
+      return;
+    }
+
+    if (password != confirmPassword) {
+      _showSnackBar('Passwords do not match.');
+      return;
+    }
+
+    if (shopName.isEmpty) {
+      _showSnackBar('Please enter your shop name.');
+      return;
+    }
+
+    if (_shopType == null) {
+      _showSnackBar('Please select a shop type.');
+      return;
+    }
+
+    final region = _regionController.text.trim();
+    if (region.isEmpty) {
+      _showSnackBar('Please enter your region.');
+      return;
+    }
+
+    final lobId = _constants?.businessCategories.isNotEmpty == true
+        ? _constants!.businessCategories.first.id
+        : 1;
+
+    ref.read(authProvider.notifier).register(
+      username: username,
+      email: email,
+      phone: phone,
+      password: password,
+      country: 'Kenya',
+      iso: '+254',
+      region: region,
+      shopName: shopName,
+      shopType: _shopType!,
+      lobId: lobId,
+    );
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+
+    ref.listen<AuthState>(authProvider, (previous, next) {
+      if (next.status == AuthStatus.authenticated) {
+        if (next.successMessage != null && next.successMessage!.isNotEmpty) {
+          _showSuccessSnackBar(next.successMessage!);
+          ref.read(authProvider.notifier).clearSuccess();
+        }
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          if (context.mounted) context.go('/dashboard');
+        });
+      } else if (next.errorMessage != null && next.errorMessage!.isNotEmpty) {
+        _showSnackBar(next.errorMessage!);
+        ref.read(authProvider.notifier).clearError();
+      }
+    });
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -103,17 +226,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       passwordController: _passwordController,
                       confirmPasswordController: _confirmPasswordController,
                       referralController: _referralController,
+                      regionController: _regionController,
                       shopType: _shopType,
-                      region: _region,
                       isPasswordVisible: _isPasswordVisible,
                       isConfirmPasswordVisible: _isConfirmPasswordVisible,
                       agreeToTerms: _agreeToTerms,
                       showReferralCode: _showReferralCode,
+                      isLoading: authState.isLoading,
+                      businessCategories: _constants?.businessCategories ?? [],
                       onShopTypeChanged: (value) {
                         setState(() => _shopType = value);
-                      },
-                      onRegionChanged: (value) {
-                        setState(() => _region = value);
                       },
                       onPasswordToggle: () {
                         setState(() => _isPasswordVisible = !_isPasswordVisible);

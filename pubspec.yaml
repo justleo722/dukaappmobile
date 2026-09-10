@@ -25,6 +25,16 @@ dependencies:
   flutter_svg: ^2.0.17
   responsive_framework: ^1.5.1
 
+  # Networking
+  dio: ^5.7.0
+  internet_connection_checker_plus: ^2.7.3
+
+  # Secure Storage
+  flutter_secure_storage: ^9.2.4
+
+  # Local Storage
+  shared_preferences: ^2.3.4
+
   # Utilities
   intl: ^0.19.0
   flutter_animate: ^4.5.2

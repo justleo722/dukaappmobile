@@ -8,6 +8,7 @@ import 'package:dukaapp/shared/cards/app_card.dart';
 import 'package:dukaapp/shared/textfields/app_text_field.dart';
 import 'package:dukaapp/shared/buttons/primary_button.dart';
 import 'package:dukaapp/shared/buttons/outlined_button.dart';
+import 'package:dukaapp/features/auth/data/models/auth_models.dart';
 
 class RegisterCard extends StatelessWidget {
   final int currentStep;
@@ -18,14 +19,15 @@ class RegisterCard extends StatelessWidget {
   final TextEditingController passwordController;
   final TextEditingController confirmPasswordController;
   final TextEditingController referralController;
+  final TextEditingController regionController;
   final String? shopType;
-  final String? region;
   final bool isPasswordVisible;
   final bool isConfirmPasswordVisible;
   final bool agreeToTerms;
   final bool showReferralCode;
+  final bool isLoading;
+  final List<BusinessCategory> businessCategories;
   final ValueChanged<String?> onShopTypeChanged;
-  final ValueChanged<String?> onRegionChanged;
   final VoidCallback onPasswordToggle;
   final VoidCallback onConfirmPasswordToggle;
   final ValueChanged<bool?> onTermsChanged;
@@ -45,14 +47,15 @@ class RegisterCard extends StatelessWidget {
     required this.passwordController,
     required this.confirmPasswordController,
     required this.referralController,
+    required this.regionController,
     this.shopType,
-    this.region,
     required this.isPasswordVisible,
     required this.isConfirmPasswordVisible,
     required this.agreeToTerms,
     required this.showReferralCode,
+    this.isLoading = false,
+    this.businessCategories = const [],
     required this.onShopTypeChanged,
-    required this.onRegionChanged,
     required this.onPasswordToggle,
     required this.onConfirmPasswordToggle,
     required this.onTermsChanged,
@@ -199,27 +202,20 @@ class RegisterCard extends StatelessWidget {
           hint: 'Select shop type',
           prefixIcon: Icons.category_outlined,
           items: const [
-            DropdownMenuItem(value: 'retail', child: Text('Retail')),
-            DropdownMenuItem(value: 'wholesale', child: Text('Wholesale')),
-            DropdownMenuItem(value: 'online', child: Text('Online')),
-            DropdownMenuItem(value: 'service', child: Text('Service')),
+            DropdownMenuItem(value: 'product_services', child: Text('Product & Services')),
+            DropdownMenuItem(value: 'manufacturing', child: Text('Manufacturing')),
+            DropdownMenuItem(value: 'onlineshop', child: Text('Online Shop')),
           ],
           onChanged: onShopTypeChanged,
         ),
         SizedBox(height: 16.h),
-        _buildDropdown(
+        AppTextField(
           label: 'Region',
-          value: region,
-          hint: 'Select region',
+          hintText: 'Enter your region',
+          controller: regionController,
+          keyboardType: TextInputType.text,
+          textInputAction: TextInputAction.next,
           prefixIcon: Icons.location_on_outlined,
-          items: const [
-            DropdownMenuItem(value: 'nairobi', child: Text('Nairobi')),
-            DropdownMenuItem(value: 'mombasa', child: Text('Mombasa')),
-            DropdownMenuItem(value: 'kisumu', child: Text('Kisumu')),
-            DropdownMenuItem(value: 'nakuru', child: Text('Nakuru')),
-            DropdownMenuItem(value: 'other', child: Text('Other')),
-          ],
-          onChanged: onRegionChanged,
         ),
       ],
     );
@@ -319,6 +315,7 @@ class RegisterCard extends StatelessWidget {
         if (isLastStep)
           PrimaryButton(
             text: 'Register',
+            isLoading: isLoading,
             onPressed: onRegister,
           ),
         if (currentStep > 0) ...[

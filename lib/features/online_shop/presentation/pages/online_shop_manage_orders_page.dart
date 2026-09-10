@@ -567,16 +567,15 @@ class _OrderCard extends StatelessWidget {
           const SizedBox(height: 12),
           const Divider(height: 1, color: AppColors.divider),
           const SizedBox(height: 12),
-          Row(
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               _buildInfoColumn('Items', '${order['items']}'),
-              const SizedBox(width: 16),
               _buildInfoColumn('Total', order['total'] as String),
-              const SizedBox(width: 16),
               _buildInfoColumn('Payment', order['payment'] as String),
-              const SizedBox(width: 16),
               _buildInfoColumn('Date', order['date'] as String),
-              const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
