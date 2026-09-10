@@ -176,22 +176,14 @@ class AuthRepository {
         return result;
       }
 
-      // API responded but session is invalid — try cached data
-      final cachedUser = await _secureStorage.getUser();
-      if (cachedUser != null) {
-        final cachedShop = await _secureStorage.getActiveShop();
-        return AuthResult(
-          success: true,
-          user: User.fromJson(cachedUser),
-          shop: cachedShop != null ? Shop.fromJson(cachedShop) : null,
-        );
-      }
-
-      // No cached data either — clear and force re-login
+      // API returned a response but success=false — session is invalid on server.
+      // Clear auth data and force re-login.
       await _secureStorage.clearAuthData();
       return AuthResult.failure('Session expired.');
     } catch (e) {
-      // Network or server error — use cached data, keep token
+      // Network or server error — use cached data, keep token.
+      // If no cached user exists (e.g. old install before this fix), still mark
+      // authenticated so the app can reach the dashboard and populate the cache.
       final cachedUser = await _secureStorage.getUser();
       final cachedShop = await _secureStorage.getActiveShop();
 
@@ -203,7 +195,9 @@ class AuthRepository {
         );
       }
 
-      return AuthResult.failure('No cached session found.');
+      // Token exists but cache is empty (first run with old install / after fix).
+      // Trust the token — dashboard will show real data from session_user.
+      return const AuthResult(success: true);
     }
   }
 

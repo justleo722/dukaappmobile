@@ -381,6 +381,50 @@ class AuthRemoteDatasource {
       ApiConfig.getData('session_user'),
     );
     _logResponse('validateSession', response);
-    return _parseAuthResponse(response);
+
+    // session_user returns raw data (not wrapped in {status:true, data:{...}}).
+    // It comes back as a List of role rows (one per shop the user is logged into)
+    // or as a plain Map. Parse it directly so we can keep the user cache fresh.
+    final body = response.data;
+    Map<String, dynamic>? rowJson;
+
+    if (body is List && body.isNotEmpty) {
+      rowJson = body.first as Map<String, dynamic>?;
+    } else if (body is Map<String, dynamic>) {
+      // Single-object format — or standard auth wrapper (check for 'status').
+      final rawStatus = body['status'];
+      final isAuthWrapper = rawStatus == true || rawStatus?.toString() == 'success';
+      if (isAuthWrapper) {
+        // Standard auth wrapper — delegate to the normal parser.
+        return _parseAuthResponse(response);
+      }
+      rowJson = body;
+    }
+
+    if (rowJson == null) {
+      throw const ApiException(message: 'Unexpected session_user response format.');
+    }
+
+    // Build a minimal User and Shop from the session row.
+    final user = User(
+      id: rowJson['auth_user_id'] ?? rowJson['user_id'],
+      username: rowJson['username']?.toString(),
+      email: rowJson['email']?.toString(),
+      phone: rowJson['phone']?.toString(),
+      country: rowJson['country']?.toString(),
+      region: rowJson['region']?.toString(),
+      iso: rowJson['iso']?.toString(),
+      role: rowJson['role']?.toString(),
+    );
+
+    final shopId = rowJson['shop_id'];
+    final shopName = rowJson['shop_name']?.toString() ?? rowJson['shopname']?.toString();
+    final shop = (shopId != null)
+        ? Shop(id: shopId, shopName: shopName, shopType: rowJson['shop_type']?.toString())
+        : null;
+
+    return ApiResponse.success(
+      AuthResult(success: true, user: user, shop: shop),
+    );
   }
 }
