@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -28,28 +30,36 @@ class _CategoryData {
   });
 }
 
-class SalesByCategoryReportPage extends StatefulWidget {
+class SalesByCategoryReportPage extends ConsumerStatefulWidget {
   const SalesByCategoryReportPage({super.key});
 
   @override
-  State<SalesByCategoryReportPage> createState() =>
+  ConsumerState<SalesByCategoryReportPage> createState() =>
       _SalesByCategoryReportPageState();
 }
 
-class _SalesByCategoryReportPageState extends State<SalesByCategoryReportPage> {
+class _SalesByCategoryReportPageState extends ConsumerState<SalesByCategoryReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_CategoryData> _allItems = [
-    _CategoryData(sn: 1, category: 'Beverages', lastSale: '01 Aug 2026', total: 320000, profit: 85000),
-    _CategoryData(sn: 2, category: 'Snacks', lastSale: '01 Aug 2026', total: 180000, profit: 52000),
-    _CategoryData(sn: 3, category: 'Electronics', lastSale: '31 Jul 2026', total: 450000, profit: 120000),
-    _CategoryData(sn: 4, category: 'Groceries', lastSale: '01 Aug 2026', total: 275000, profit: 68000),
-    _CategoryData(sn: 5, category: 'Clothing', lastSale: '30 Jul 2026', total: 195000, profit: 47000),
-    _CategoryData(sn: 6, category: 'Stationery', lastSale: '31 Jul 2026', total: 95000, profit: 28000),
-    _CategoryData(sn: 7, category: 'Frozen Foods', lastSale: '01 Aug 2026', total: 140000, profit: 38000),
-    _CategoryData(sn: 8, category: 'Personal Care', lastSale: '30 Jul 2026', total: 110000, profit: 32000),
-  ];
+  List<_CategoryData> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportSalesByCategory();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _CategoryData(sn: r.sn, category: r.category, lastSale: r.lastSale, total: r.total, profit: r.profit)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_CategoryData> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

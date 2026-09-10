@@ -336,6 +336,14 @@ abstract final class ApiEndpoints {
   static final getReportSuppliers = _r('suppliers');
   static final getReportTeam      = _r('team');
 
+  // ── Sales sub-reports (getreport/{method}) ────────────────────────────────
+  /// Dynamic sales sub-report: totalSales, creditSales, allOrders, invoiceSales,
+  /// salesByPaymentMode, salesByCategory, salesByProduct, unpaidSalesByProduct,
+  /// staffSalesByItems, individualTeamSales, salesByCustomer, salesByStaff,
+  /// combinedSalesByStaff, combinedTotalSales, oncreditCustomers,
+  /// salesWithVat, salesWithoutVat.
+  static String getReportSalesByMethod(String method) => _r(method);
+
   // ═══════════════════════════════════════════════════════════════════════════
   // GET MAPPED  —  GET /api/v1/app/get/getdata/{path}
   // Controller-backed GET routes with typed parameters.

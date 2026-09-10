@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -30,29 +32,35 @@ class _CustomerSale {
   });
 }
 
-class SalesByCustomerReportPage extends StatefulWidget {
+class SalesByCustomerReportPage extends ConsumerStatefulWidget {
   const SalesByCustomerReportPage({super.key});
 
   @override
-  State<SalesByCustomerReportPage> createState() => _SalesByCustomerReportPageState();
+  ConsumerState<SalesByCustomerReportPage> createState() => _SalesByCustomerReportPageState();
 }
 
-class _SalesByCustomerReportPageState extends State<SalesByCustomerReportPage> {
+class _SalesByCustomerReportPageState extends ConsumerState<SalesByCustomerReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_CustomerSale> _allItems = [
-    _CustomerSale(sn: 1, customer: 'John Kamau', total: 125000, paid: 95000, salesBalance: 30000, creditBalance: 15000),
-    _CustomerSale(sn: 2, customer: 'Mary Wanjiru', total: 78000, paid: 78000, salesBalance: 0, creditBalance: 0),
-    _CustomerSale(sn: 3, customer: 'Peter Otieno', total: 234000, paid: 180000, salesBalance: 54000, creditBalance: 32000),
-    _CustomerSale(sn: 4, customer: 'Grace Nyambura', total: 56000, paid: 45000, salesBalance: 11000, creditBalance: 5000),
-    _CustomerSale(sn: 5, customer: 'Samuel Kipchoge', total: 167000, paid: 120000, salesBalance: 47000, creditBalance: 28000),
-    _CustomerSale(sn: 6, customer: 'Faith Achieng', total: 42000, paid: 42000, salesBalance: 0, creditBalance: 0),
-    _CustomerSale(sn: 7, customer: 'Daniel Mwangi', total: 89000, paid: 60000, salesBalance: 29000, creditBalance: 18000),
-    _CustomerSale(sn: 8, customer: 'Rose Nekesa', total: 345000, paid: 300000, salesBalance: 45000, creditBalance: 22000),
-    _CustomerSale(sn: 9, customer: 'Joseph Odhiambo', total: 56000, paid: 56000, salesBalance: 0, creditBalance: 0),
-    _CustomerSale(sn: 10, customer: 'Esther Wairimu', total: 112000, paid: 85000, salesBalance: 27000, creditBalance: 12000),
-  ];
+  List<_CustomerSale> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportSalesByCustomer();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _CustomerSale(sn: r.sn, customer: r.customer, total: r.total, paid: r.paid, salesBalance: r.salesBalance, creditBalance: r.creditBalance)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_CustomerSale> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

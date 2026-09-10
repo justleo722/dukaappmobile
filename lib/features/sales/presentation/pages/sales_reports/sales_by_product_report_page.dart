@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -38,32 +40,36 @@ class _ProductData {
   });
 }
 
-class SalesByProductReportPage extends StatefulWidget {
+class SalesByProductReportPage extends ConsumerStatefulWidget {
   const SalesByProductReportPage({super.key});
 
   @override
-  State<SalesByProductReportPage> createState() =>
+  ConsumerState<SalesByProductReportPage> createState() =>
       _SalesByProductReportPageState();
 }
 
-class _SalesByProductReportPageState extends State<SalesByProductReportPage> {
+class _SalesByProductReportPageState extends ConsumerState<SalesByProductReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_ProductData> _allItems = [
-    _ProductData(sn: 1, date: '01 Aug 2026', product: 'Coca Cola 600ML', type: 'Sales', bp: 800, sp: 1000, qty: 24, total: 24000, discount: 500, profit: 4300),
-    _ProductData(sn: 2, date: '01 Aug 2026', product: 'Fanta Orange', type: 'Sales', bp: 800, sp: 1000, qty: 18, total: 18000, discount: 0, profit: 3600),
-    _ProductData(sn: 3, date: '01 Aug 2026', product: 'Pepsi 500ML', type: 'Credit', bp: 750, sp: 1000, qty: 12, total: 12000, discount: 0, profit: 3000),
-    _ProductData(sn: 4, date: '31 Jul 2026', product: 'Minute Maid', type: 'Sales', bp: 1200, sp: 1800, qty: 10, total: 18000, discount: 0, profit: 6000),
-    _ProductData(sn: 5, date: '31 Jul 2026', product: 'Mango Juice', type: 'Sales', bp: 1000, sp: 1500, qty: 15, total: 22500, discount: 0, profit: 7500),
-    _ProductData(sn: 6, date: '31 Jul 2026', product: 'Energy Drink', type: 'Credit', bp: 1500, sp: 2500, qty: 8, total: 20000, discount: 0, profit: 8000),
-    _ProductData(sn: 7, date: '30 Jul 2026', product: 'Chips', type: 'Sales', bp: 300, sp: 500, qty: 30, total: 15000, discount: 0, profit: 6000),
-    _ProductData(sn: 8, date: '30 Jul 2026', product: 'Biscuits', type: 'Sales', bp: 200, sp: 350, qty: 40, total: 14000, discount: 500, profit: 5500),
-    _ProductData(sn: 9, date: '30 Jul 2026', product: 'Water 1.5L', type: 'Sales', bp: 400, sp: 600, qty: 25, total: 15000, discount: 0, profit: 5000),
-    _ProductData(sn: 10, date: '29 Jul 2026', product: 'Smirnoff Vodka', type: 'Credit', bp: 18000, sp: 22000, qty: 3, total: 66000, discount: 0, profit: 12000),
-    _ProductData(sn: 11, date: '29 Jul 2026', product: 'Jack Daniel', type: 'Sales', bp: 45000, sp: 65000, qty: 2, total: 130000, discount: 0, profit: 40000),
-    _ProductData(sn: 12, date: '29 Jul 2026', product: 'Desperado', type: 'Sales', bp: 2500, sp: 4000, qty: 6, total: 24000, discount: 0, profit: 9000),
-  ];
+  List<_ProductData> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportSalesByProduct();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _ProductData(sn: r.sn, date: r.date, product: r.product, type: r.type, bp: r.bp, sp: r.sp, qty: r.qty, total: r.total, discount: r.discount, profit: r.profit)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_ProductData> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

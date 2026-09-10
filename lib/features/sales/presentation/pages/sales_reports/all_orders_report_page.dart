@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -30,29 +32,35 @@ class _OrderItem {
   });
 }
 
-class AllOrdersReportPage extends StatefulWidget {
+class AllOrdersReportPage extends ConsumerStatefulWidget {
   const AllOrdersReportPage({super.key});
 
   @override
-  State<AllOrdersReportPage> createState() => _AllOrdersReportPageState();
+  ConsumerState<AllOrdersReportPage> createState() => _AllOrdersReportPageState();
 }
 
-class _AllOrdersReportPageState extends State<AllOrdersReportPage> {
+class _AllOrdersReportPageState extends ConsumerState<AllOrdersReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_OrderItem> _allItems = [
-    _OrderItem(sn: 1, date: '01 Jul 2026', type: 'Cash', total: 45000, paid: 45000, unpaid: 0),
-    _OrderItem(sn: 2, date: '02 Jul 2026', type: 'Credit', total: 32000, paid: 20000, unpaid: 12000),
-    _OrderItem(sn: 3, date: '03 Jul 2026', type: 'M-Pesa', total: 67000, paid: 67000, unpaid: 0),
-    _OrderItem(sn: 4, date: '05 Jul 2026', type: 'Cash', total: 38500, paid: 38500, unpaid: 0),
-    _OrderItem(sn: 5, date: '07 Jul 2026', type: 'Credit', total: 28000, paid: 15000, unpaid: 13000),
-    _OrderItem(sn: 6, date: '08 Jul 2026', type: 'M-Pesa', total: 85000, paid: 85000, unpaid: 0),
-    _OrderItem(sn: 7, date: '10 Jul 2026', type: 'Cash', total: 52000, paid: 52000, unpaid: 0),
-    _OrderItem(sn: 8, date: '12 Jul 2026', type: 'Credit', total: 31000, paid: 18000, unpaid: 13000),
-    _OrderItem(sn: 9, date: '14 Jul 2026', type: 'M-Pesa', total: 74000, paid: 74000, unpaid: 0),
-    _OrderItem(sn: 10, date: '16 Jul 2026', type: 'Cash', total: 42000, paid: 42000, unpaid: 0),
-  ];
+  List<_OrderItem> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportAllOrders();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _OrderItem(sn: r.sn, date: r.date, type: r.type, total: r.total, paid: r.paid, unpaid: r.unpaid)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_OrderItem> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

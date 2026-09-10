@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -24,26 +26,36 @@ class _PaymentData {
   });
 }
 
-class SalesByPaymentsReportPage extends StatefulWidget {
+class SalesByPaymentsReportPage extends ConsumerStatefulWidget {
   const SalesByPaymentsReportPage({super.key});
 
   @override
-  State<SalesByPaymentsReportPage> createState() =>
+  ConsumerState<SalesByPaymentsReportPage> createState() =>
       _SalesByPaymentsReportPageState();
 }
 
-class _SalesByPaymentsReportPageState extends State<SalesByPaymentsReportPage> {
+class _SalesByPaymentsReportPageState extends ConsumerState<SalesByPaymentsReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_PaymentData> _allItems = [
-    _PaymentData(sn: 1, mode: 'Cash', total: 450000),
-    _PaymentData(sn: 2, mode: 'M-Pesa', total: 320000),
-    _PaymentData(sn: 3, mode: 'Bank Transfer', total: 180000),
-    _PaymentData(sn: 4, mode: 'Card', total: 125000),
-    _PaymentData(sn: 5, mode: 'Cheque', total: 75000),
-    _PaymentData(sn: 6, mode: 'Credit', total: 210000),
-  ];
+  List<_PaymentData> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportSalesByPayment();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _PaymentData(sn: r.sn, mode: r.mode, total: r.total)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_PaymentData> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

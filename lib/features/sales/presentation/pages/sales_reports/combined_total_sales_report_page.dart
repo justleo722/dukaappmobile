@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -30,29 +32,37 @@ class _StaffItem {
   });
 }
 
-class CombinedTotalSalesReportPage extends StatefulWidget {
+class CombinedTotalSalesReportPage extends ConsumerStatefulWidget {
   const CombinedTotalSalesReportPage({super.key});
 
   @override
-  State<CombinedTotalSalesReportPage> createState() =>
+  ConsumerState<CombinedTotalSalesReportPage> createState() =>
       _CombinedTotalSalesReportPageState();
 }
 
 class _CombinedTotalSalesReportPageState
-    extends State<CombinedTotalSalesReportPage> {
+    extends ConsumerState<CombinedTotalSalesReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_StaffItem> _allItems = [
-    _StaffItem(sn: 1, attendantId: 'ATT-001', staff: 'John Kamau', shop: 'SON COLLECTION', sales: 450000, total: 520000),
-    _StaffItem(sn: 2, attendantId: 'ATT-002', staff: 'Mary Wanjiku', shop: 'SON COLLECTION', sales: 380000, total: 410000),
-    _StaffItem(sn: 3, attendantId: 'ATT-003', staff: 'Peter Ochieng', shop: 'SON COLLECTION', sales: 520000, total: 600000),
-    _StaffItem(sn: 4, attendantId: 'ATT-004', staff: 'Grace Muthoni', shop: 'SON COLLECTION', sales: 290000, total: 340000),
-    _StaffItem(sn: 5, attendantId: 'ATT-005', staff: 'David Njoroge', shop: 'SON COLLECTION', sales: 610000, total: 700000),
-    _StaffItem(sn: 6, attendantId: 'ATT-006', staff: 'Sarah Achieng', shop: 'SON COLLECTION', sales: 340000, total: 390000),
-    _StaffItem(sn: 7, attendantId: 'ATT-007', staff: 'James Mwangi', shop: 'SON COLLECTION', sales: 470000, total: 550000),
-    _StaffItem(sn: 8, attendantId: 'ATT-008', staff: 'Faith Njeri', shop: 'SON COLLECTION', sales: 360000, total: 420000),
-  ];
+  List<_StaffItem> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportCombinedTotalSales();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _StaffItem(sn: r.sn, attendantId: r.attendantId, staff: r.staff, shop: r.shop, sales: r.sales, total: r.total)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_StaffItem> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

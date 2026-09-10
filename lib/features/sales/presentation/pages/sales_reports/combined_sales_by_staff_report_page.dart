@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -34,29 +36,35 @@ class _CombinedStaffSale {
   });
 }
 
-class CombinedSalesByStaffReportPage extends StatefulWidget {
+class CombinedSalesByStaffReportPage extends ConsumerStatefulWidget {
   const CombinedSalesByStaffReportPage({super.key});
 
   @override
-  State<CombinedSalesByStaffReportPage> createState() => _CombinedSalesByStaffReportPageState();
+  ConsumerState<CombinedSalesByStaffReportPage> createState() => _CombinedSalesByStaffReportPageState();
 }
 
-class _CombinedSalesByStaffReportPageState extends State<CombinedSalesByStaffReportPage> {
+class _CombinedSalesByStaffReportPageState extends ConsumerState<CombinedSalesByStaffReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_CombinedStaffSale> _allItems = [
-    _CombinedStaffSale(sn: 1, shop: 'SON COLLECTION', attendantId: 'ATT-001', staff: 'Alice Njeri', sales: 345000, total: 360000, paid: 320000, balance: 40000),
-    _CombinedStaffSale(sn: 2, shop: 'SON COLLECTION', attendantId: 'ATT-002', staff: 'Brian Omondi', sales: 278000, total: 290000, paid: 250000, balance: 40000),
-    _CombinedStaffSale(sn: 3, shop: 'SON COLLECTION', attendantId: 'ATT-003', staff: 'Clara Wanjiku', sales: 412000, total: 430000, paid: 400000, balance: 30000),
-    _CombinedStaffSale(sn: 4, shop: 'SON COLLECTION', attendantId: 'ATT-004', staff: 'David Kiprop', sales: 189000, total: 200000, paid: 170000, balance: 30000),
-    _CombinedStaffSale(sn: 5, shop: 'SON COLLECTION', attendantId: 'ATT-005', staff: 'Eva Muthoni', sales: 523000, total: 540000, paid: 500000, balance: 40000),
-    _CombinedStaffSale(sn: 6, shop: 'SON COLLECTION', attendantId: 'ATT-006', staff: 'Frank Kariuki', sales: 156000, total: 165000, paid: 140000, balance: 25000),
-    _CombinedStaffSale(sn: 7, shop: 'SON COLLECTION', attendantId: 'ATT-007', staff: 'Grace Achieng', sales: 298000, total: 310000, paid: 270000, balance: 40000),
-    _CombinedStaffSale(sn: 8, shop: 'SON COLLECTION', attendantId: 'ATT-008', staff: 'Henry Mutua', sales: 467000, total: 480000, paid: 450000, balance: 30000),
-    _CombinedStaffSale(sn: 9, shop: 'SON COLLECTION', attendantId: 'ATT-009', staff: 'Irene Nekesa', sales: 334000, total: 350000, paid: 310000, balance: 40000),
-    _CombinedStaffSale(sn: 10, shop: 'SON COLLECTION', attendantId: 'ATT-010', staff: 'James Odhiambo', sales: 221000, total: 235000, paid: 200000, balance: 35000),
-  ];
+  List<_CombinedStaffSale> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportCombinedSalesByStaff();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _CombinedStaffSale(sn: r.sn, shop: r.shop, attendantId: r.attendantId, staff: r.staff, sales: r.sales, total: r.total, paid: r.paid, balance: r.balance)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_CombinedStaffSale> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

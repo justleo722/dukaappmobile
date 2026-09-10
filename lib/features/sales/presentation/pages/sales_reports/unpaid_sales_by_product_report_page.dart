@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -34,31 +36,37 @@ class _UnpaidProductData {
   });
 }
 
-class UnpaidSalesByProductReportPage extends StatefulWidget {
+class UnpaidSalesByProductReportPage extends ConsumerStatefulWidget {
   const UnpaidSalesByProductReportPage({super.key});
 
   @override
-  State<UnpaidSalesByProductReportPage> createState() =>
+  ConsumerState<UnpaidSalesByProductReportPage> createState() =>
       _UnpaidSalesByProductReportPageState();
 }
 
 class _UnpaidSalesByProductReportPageState
-    extends State<UnpaidSalesByProductReportPage> {
+    extends ConsumerState<UnpaidSalesByProductReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_UnpaidProductData> _allItems = [
-    _UnpaidProductData(sn: 1, product: 'Smirnoff Vodka', category: 'Beverages', lastSale: '29 Jul 2026', total: 66000, paid: 40000, balance: 26000, profit: 12000),
-    _UnpaidProductData(sn: 2, product: 'Jack Daniel', category: 'Beverages', lastSale: '29 Jul 2026', total: 130000, paid: 80000, balance: 50000, profit: 40000),
-    _UnpaidProductData(sn: 3, product: 'Energy Drink', category: 'Beverages', lastSale: '31 Jul 2026', total: 20000, paid: 10000, balance: 10000, profit: 8000),
-    _UnpaidProductData(sn: 4, product: 'Pepsi 500ML', category: 'Beverages', lastSale: '01 Aug 2026', total: 12000, paid: 5000, balance: 7000, profit: 3000),
-    _UnpaidProductData(sn: 5, product: 'Biscuits', category: 'Snacks', lastSale: '30 Jul 2026', total: 14000, paid: 8000, balance: 6000, profit: 5500),
-    _UnpaidProductData(sn: 6, product: 'Chips', category: 'Snacks', lastSale: '30 Jul 2026', total: 15000, paid: 10000, balance: 5000, profit: 6000),
-    _UnpaidProductData(sn: 7, product: 'Desperado', category: 'Beverages', lastSale: '29 Jul 2026', total: 24000, paid: 12000, balance: 12000, profit: 9000),
-    _UnpaidProductData(sn: 8, product: 'Water 1.5L', category: 'Beverages', lastSale: '30 Jul 2026', total: 15000, paid: 10000, balance: 5000, profit: 5000),
-    _UnpaidProductData(sn: 9, product: 'Mango Juice', category: 'Beverages', lastSale: '31 Jul 2026', total: 22500, paid: 15000, balance: 7500, profit: 7500),
-    _UnpaidProductData(sn: 10, product: 'Minute Maid', category: 'Beverages', lastSale: '31 Jul 2026', total: 18000, paid: 12000, balance: 6000, profit: 6000),
-  ];
+  List<_UnpaidProductData> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportUnpaidSalesByProduct();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _UnpaidProductData(sn: r.sn, product: r.product, category: r.category, lastSale: r.lastSale, total: r.total, paid: r.paid, balance: r.balance, profit: r.profit)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_UnpaidProductData> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

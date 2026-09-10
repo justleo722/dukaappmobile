@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
@@ -8,16 +10,16 @@ import 'package:dukaapp/features/sales/presentation/widgets/add_sale_item_tile.d
 import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 import 'package:dukaapp/features/customers/presentation/pages/add_customer_page.dart';
 
-class AddSalePage extends StatefulWidget {
+class AddSalePage extends ConsumerStatefulWidget {
   final Map<String, dynamic>? existingSale;
 
   const AddSalePage({super.key, this.existingSale});
 
   @override
-  State<AddSalePage> createState() => _AddSalePageState();
+  ConsumerState<AddSalePage> createState() => _AddSalePageState();
 }
 
-class _AddSalePageState extends State<AddSalePage> {
+class _AddSalePageState extends ConsumerState<AddSalePage> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _discountController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
@@ -29,16 +31,8 @@ class _AddSalePageState extends State<AddSalePage> {
   static const String _addNewCustomerValue = '__add_new_customer__';
   static const String _addNewPaymentValue = '__add_new_payment__';
 
-  final List<String> _customers = [
-    'Walk-in',
-    'Amina',
-    'Hassan',
-    'Fatima',
-    'Juma',
-    'Neema',
-    'Ibrahim',
-    'Rehema',
-  ];
+  // Customers loaded from backend; prefilled with Walk-in
+  List<String> _customers = ['Walk-in'];
 
   final List<String> _paymentTypes = [
     'Cash',
@@ -55,24 +49,13 @@ class _AddSalePageState extends State<AddSalePage> {
     _items = [];
     if (_isEditing) {
       _loadExistingSale();
-    } else {
-      _items = [
-        {
-          'name': 'AIR FRESH',
-          'sellingPrice': 7000.0,
-          'quantity': 1,
-          'stock': 15,
-          'discount': 0.0,
-        },
-        {
-          'name': 'BEAUTY CREAM',
-          'sellingPrice': 18000.0,
-          'quantity': 1,
-          'stock': 8,
-          'discount': 0.0,
-        },
-      ];
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCustomers());
+  }
+
+  Future<void> _loadCustomers() async {
+    // Customers will be fully loaded when the Customers module is connected.
+    // For now, Walk-in is the default — additional customers can be added inline.
   }
 
   void _loadExistingSale() {
@@ -422,21 +405,80 @@ class _AddSalePageState extends State<AddSalePage> {
     );
   }
 
-  void _saveSale() {
+  bool _isSaving = false;
+
+  Future<void> _saveSale() async {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please add at least one item')),
       );
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _isEditing ? 'Sale updated successfully' : 'Sale saved successfully',
-        ),
-      ),
-    );
-    context.pop();
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+
+    try {
+      // Build items in pipe format: product_id|stock_id|qty|price|discount|subtotal|vat|total
+      final itemStrings = _items.map((item) {
+        final productId = item['product_id'] ?? 0;
+        final stockId = item['stock_id'] ?? '';
+        final qty = item['quantity'] ?? 1;
+        final price = item['sellingPrice'] ?? 0.0;
+        final discount = item['discount'] ?? 0.0;
+        final subtotal = (price * qty) - discount;
+        return '$productId|$stockId|$qty|$price|$discount|$subtotal|0|$subtotal';
+      }).toList();
+
+      final body = {
+        'items': itemStrings,
+        'payment_mode': _selectedPaymentType,
+        'customer_id': _selectedCustomer != null && _selectedCustomer != 'Walk-in'
+            ? _selectedCustomer
+            : '',
+        'total_amount': _items.fold<double>(0, (s, i) {
+          final price = (i['sellingPrice'] ?? 0.0) as double;
+          final qty = (i['quantity'] ?? 1) as int;
+          return s + price * qty - ((i['discount'] ?? 0.0) as double);
+        }),
+        'paid_amount': _selectedPaymentType.toLowerCase() == 'credit'
+            ? 0
+            : _items.fold<double>(0, (s, i) {
+                final price = (i['sellingPrice'] ?? 0.0) as double;
+                final qty = (i['quantity'] ?? 1) as int;
+                return s + price * qty - ((i['discount'] ?? 0.0) as double);
+              }),
+        'discount': double.tryParse(_discountController.text) ?? 0.0,
+        'date': _selectedDate.toIso8601String().split('T')[0],
+        'sale_type': _selectedPaymentType.toLowerCase() == 'credit' ? 'sale' : 'cashsale',
+      };
+
+      if (_isEditing) {
+        body['sale_id'] = widget.existingSale!['sale_id'] ?? '';
+      }
+
+      final repo = ref.read(salesRepositoryProvider);
+      final res = _isEditing ? await repo.updateSale(body) : await repo.addSale(body);
+      final ok = res['status']?.toString() == '1' ||
+          res['status'] == true ||
+          res['status']?.toString() == 'success';
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok
+            ? (_isEditing ? 'Sale updated successfully' : 'Sale saved successfully')
+            : (res['message']?.toString() ?? 'Failed to save sale')),
+        backgroundColor: ok ? AppColors.success : AppColors.danger,
+      ));
+      if (ok) context.pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override

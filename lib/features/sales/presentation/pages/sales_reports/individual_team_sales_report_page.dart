@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -28,29 +30,35 @@ class _TeamSale {
   });
 }
 
-class IndividualTeamSalesReportPage extends StatefulWidget {
+class IndividualTeamSalesReportPage extends ConsumerStatefulWidget {
   const IndividualTeamSalesReportPage({super.key});
 
   @override
-  State<IndividualTeamSalesReportPage> createState() => _IndividualTeamSalesReportPageState();
+  ConsumerState<IndividualTeamSalesReportPage> createState() => _IndividualTeamSalesReportPageState();
 }
 
-class _IndividualTeamSalesReportPageState extends State<IndividualTeamSalesReportPage> {
+class _IndividualTeamSalesReportPageState extends ConsumerState<IndividualTeamSalesReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_TeamSale> _allItems = [
-    _TeamSale(sn: 1, date: '01 Jul 2026', staff: 'Alice Njeri', type: 'Cash', total: 45000),
-    _TeamSale(sn: 2, date: '01 Jul 2026', staff: 'Brian Omondi', type: 'Credit', total: 78000),
-    _TeamSale(sn: 3, date: '02 Jul 2026', staff: 'Clara Wanjiku', type: 'Cash', total: 32000),
-    _TeamSale(sn: 4, date: '02 Jul 2026', staff: 'David Kiprop', type: 'M-Pesa', total: 56000),
-    _TeamSale(sn: 5, date: '03 Jul 2026', staff: 'Eva Muthoni', type: 'Cash', total: 41000),
-    _TeamSale(sn: 6, date: '03 Jul 2026', staff: 'Frank Kariuki', type: 'Credit', total: 23000),
-    _TeamSale(sn: 7, date: '04 Jul 2026', staff: 'Grace Achieng', type: 'Cash', total: 67000),
-    _TeamSale(sn: 8, date: '04 Jul 2026', staff: 'Henry Mutua', type: 'M-Pesa', total: 89000),
-    _TeamSale(sn: 9, date: '05 Jul 2026', staff: 'Irene Nekesa', type: 'Cash', total: 34000),
-    _TeamSale(sn: 10, date: '05 Jul 2026', staff: 'James Odhiambo', type: 'Credit', total: 52000),
-  ];
+  List<_TeamSale> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportIndividualTeamSales();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _TeamSale(sn: r.sn, date: r.date, staff: r.staff, type: r.type, total: r.total)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_TeamSale> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

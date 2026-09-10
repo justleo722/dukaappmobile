@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/app/colors.dart' show AppColors;
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
@@ -8,14 +11,14 @@ import 'package:dukaapp/features/sales/presentation/widgets/add_sale_item_tile.d
 import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 import 'package:dukaapp/features/customers/presentation/pages/add_customer_page.dart';
 
-class CreateInvoicePage extends StatefulWidget {
+class CreateInvoicePage extends ConsumerStatefulWidget {
   const CreateInvoicePage({super.key});
 
   @override
-  State<CreateInvoicePage> createState() => _CreateInvoicePageState();
+  ConsumerState<CreateInvoicePage> createState() => _CreateInvoicePageState();
 }
 
-class _CreateInvoicePageState extends State<CreateInvoicePage> {
+class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _discountController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
@@ -383,7 +386,9 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
     );
   }
 
-  void _saveInvoice() {
+  bool _isSaving = false;
+
+  Future<void> _saveInvoice() async {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please add at least one item')),
@@ -396,10 +401,52 @@ class _CreateInvoicePageState extends State<CreateInvoicePage> {
       );
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Invoice created successfully')),
-    );
-    context.pop();
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+    try {
+      final itemStrings = _items.map((item) {
+        final productId = item['product_id'] ?? 0;
+        final stockId = item['stock_id'] ?? '';
+        final qty = item['quantity'] ?? 1;
+        final price = item['sellingPrice'] ?? item['price'] ?? 0.0;
+        final discount = item['discount'] ?? 0.0;
+        final subtotal = (price * qty) - discount;
+        return '\$productId|\$stockId|\$qty|\$price|\$discount|\$subtotal|0|\$subtotal';
+      }).toList();
+
+      final total = _items.fold<double>(0, (s, i) {
+        final price = ((i['sellingPrice'] ?? i['price'] ?? 0.0) as num).toDouble();
+        final qty = (i['quantity'] ?? 1) as int;
+        final discount = ((i['discount'] ?? 0.0) as num).toDouble();
+        return s + price * qty - discount;
+      });
+
+      final body = {
+        'items': itemStrings,
+        'payment_mode': 'invoice',
+        'customer_id': _selectedCustomer ?? '',
+        'total_amount': total,
+        'paid_amount': 0,
+        'discount': 0.0,
+        'sale_type': 'invoice',
+      };
+
+      final repo = ref.read(salesRepositoryProvider);
+      final res = await repo.addSale(body);
+      final ok = res['status']?.toString() == '1' || res['status'] == true || res['status']?.toString() == 'success';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok ? 'Invoice created successfully' : (res['message']?.toString() ?? 'Failed')),
+        backgroundColor: ok ? AppColors.success : AppColors.danger,
+      ));
+      if (ok) context.pop();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: \$e'), backgroundColor: AppColors.danger),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override

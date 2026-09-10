@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/data/models/sales_models.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
@@ -10,101 +13,61 @@ import 'package:dukaapp/features/sales/presentation/widgets/payment_summary_card
 import 'package:dukaapp/features/sales/presentation/widgets/sales_bottom_actions.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
-class InvoicesPage extends StatefulWidget {
+class InvoicesPage extends ConsumerStatefulWidget {
   const InvoicesPage({super.key});
 
   @override
-  State<InvoicesPage> createState() => _InvoicesPageState();
+  ConsumerState<InvoicesPage> createState() => _InvoicesPageState();
 }
 
-class _InvoicesPageState extends State<InvoicesPage> {
+class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   int? _expandedIndex;
   final Set<int> _selectedInvoices = {};
 
-  final List<Map<String, dynamic>> _invoices = [
-    {
-      'invoice': '#653',
-      'status': 'UNPAID',
-      'customer': 'HASSAN ALI',
-      'date': 'Jul 31, 2026 14:29',
-      'dueDate': 'Aug 15, 2026',
-      'createdBy': 'SON',
-      'products': [
-        {'name': 'CAR PHONE HOLDER', 'quantity': 2, 'price': 15000.0, 'total': 30000.0},
-        {'name': 'CHARGER CABLE', 'quantity': 3, 'price': 6000.0, 'total': 18000.0},
-      ],
-      'discount': 0.0,
-      'paid': 30000.0,
-      'balance': 18000.0,
-      'paymentMode': 'Credit',
-    },
-    {
-      'invoice': '#652',
-      'status': 'PAID',
-      'customer': 'AMINA HASSAN',
-      'date': 'Jul 30, 2026 11:15',
-      'dueDate': 'Aug 14, 2026',
-      'createdBy': 'MKE',
-      'products': [
-        {'name': 'BEAUTY CREAM', 'quantity': 1, 'price': 18000.0, 'total': 18000.0},
-        {'name': 'FACE MASK', 'quantity': 2, 'price': 9000.0, 'total': 18000.0},
-      ],
-      'discount': 0.0,
-      'paid': 36000.0,
-      'balance': 0.0,
-      'paymentMode': 'Mobile Money',
-    },
-    {
-      'invoice': '#651',
-      'status': 'UNPAID',
-      'customer': 'FATIMA OSMAN',
-      'date': 'Jul 29, 2026 09:45',
-      'dueDate': 'Aug 13, 2026',
-      'createdBy': 'SON',
-      'products': [
-        {'name': 'BEAUTY CREAM', 'quantity': 1, 'price': 18000.0, 'total': 18000.0},
-        {'name': 'DISH SOAP', 'quantity': 2, 'price': 3500.0, 'total': 7000.0},
-      ],
-      'discount': 0.0,
-      'paid': 0.0,
-      'balance': 25000.0,
-      'paymentMode': 'Pending',
-    },
-    {
-      'invoice': '#650',
-      'status': 'PAID',
-      'customer': 'JUMA JUMA',
-      'date': 'Jul 28, 2026 16:00',
-      'dueDate': 'Aug 12, 2026',
-      'createdBy': 'SON',
-      'products': [
-        {'name': 'AIR', 'quantity': 1, 'price': 125000.0, 'total': 125000.0},
-        {'name': 'AIR FRESH', 'quantity': 1, 'price': 7000.0, 'total': 7000.0},
-      ],
-      'discount': 0.0,
-      'paid': 132000.0,
-      'balance': 0.0,
-      'paymentMode': 'Cash',
-    },
-    {
-      'invoice': '#649',
-      'status': 'UNPAID',
-      'customer': 'NEEMA KIMARO',
-      'date': 'Jul 27, 2026 10:30',
-      'dueDate': 'Aug 11, 2026',
-      'createdBy': 'JUM',
-      'products': [
-        {'name': 'HAIR DRYER', 'quantity': 1, 'price': 45000.0, 'total': 45000.0},
-        {'name': 'HAIR OIL', 'quantity': 2, 'price': 15000.0, 'total': 30000.0},
-      ],
-      'discount': 0.0,
-      'paid': 30000.0,
-      'balance': 45000.0,
-      'paymentMode': 'Credit',
-    },
-  ];
+  List<Map<String, dynamic>> _invoices = [];
+  InvoiceSummary _invoiceSummary = InvoiceSummary.empty;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadInvoices());
+  }
+
+  Future<void> _loadInvoices() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final results = await Future.wait([
+        repo.fetchInvoices(),
+        repo.fetchInvoiceSummary(),
+      ]);
+      if (!mounted) return;
+      final records = results[0] as List<SaleRecord>;
+      setState(() {
+        _invoiceSummary = results[1] as InvoiceSummary;
+        _invoices = records.map((r) => {
+          'sale_id': r.saleId,
+          'date': r.date,
+          'customer': r.customer,
+          'invoiceNo': r.invoiceNo ?? '',
+          'paymentMethod': r.paymentMethod,
+          'paid': r.paid,
+          'balance': r.balance,
+          'total': r.totalRaw,
+          'status': r.balance > 0.01 ? 'UNPAID' : 'PAID',
+          'soldBy': r.soldBy,
+          'products': r.products.map((p) => {
+            'name': p.name,
+            'quantity': p.quantity,
+            'price': p.price,
+            'total': p.total,
+          }).toList(),
+        }).toList();
+      });
+    } catch (_) {}
+  }
+
 
   @override
   void dispose() {

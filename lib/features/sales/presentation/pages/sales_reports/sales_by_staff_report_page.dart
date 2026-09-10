@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -24,27 +26,35 @@ class _StaffSale {
   });
 }
 
-class SalesByStaffReportPage extends StatefulWidget {
+class SalesByStaffReportPage extends ConsumerStatefulWidget {
   const SalesByStaffReportPage({super.key});
 
   @override
-  State<SalesByStaffReportPage> createState() => _SalesByStaffReportPageState();
+  ConsumerState<SalesByStaffReportPage> createState() => _SalesByStaffReportPageState();
 }
 
-class _SalesByStaffReportPageState extends State<SalesByStaffReportPage> {
+class _SalesByStaffReportPageState extends ConsumerState<SalesByStaffReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_StaffSale> _allItems = [
-    _StaffSale(sn: 1, staff: 'Alice Njeri', total: 345000),
-    _StaffSale(sn: 2, staff: 'Brian Omondi', total: 278000),
-    _StaffSale(sn: 3, staff: 'Clara Wanjiku', total: 412000),
-    _StaffSale(sn: 4, staff: 'David Kiprop', total: 189000),
-    _StaffSale(sn: 5, staff: 'Eva Muthoni', total: 523000),
-    _StaffSale(sn: 6, staff: 'Frank Kariuki', total: 156000),
-    _StaffSale(sn: 7, staff: 'Grace Achieng', total: 298000),
-    _StaffSale(sn: 8, staff: 'Henry Mutua', total: 467000),
-  ];
+  List<_StaffSale> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportSalesByStaff();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _StaffSale(sn: r.sn, staff: r.staff, total: r.total)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_StaffSale> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

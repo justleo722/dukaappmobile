@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -32,29 +34,35 @@ class _VatSaleData {
   });
 }
 
-class SalesWithVatReportPage extends StatefulWidget {
+class SalesWithVatReportPage extends ConsumerStatefulWidget {
   const SalesWithVatReportPage({super.key});
 
   @override
-  State<SalesWithVatReportPage> createState() => _SalesWithVatReportPageState();
+  ConsumerState<SalesWithVatReportPage> createState() => _SalesWithVatReportPageState();
 }
 
-class _SalesWithVatReportPageState extends State<SalesWithVatReportPage> {
+class _SalesWithVatReportPageState extends ConsumerState<SalesWithVatReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_VatSaleData> _allItems = [
-    _VatSaleData(sn: 1, date: '01 Aug 2026', type: 'Cash Sale', vat: 6000, total: 40000, paid: 40000, balance: 0),
-    _VatSaleData(sn: 2, date: '01 Aug 2026', type: 'M-Pesa Sale', vat: 4500, total: 30000, paid: 30000, balance: 0),
-    _VatSaleData(sn: 3, date: '31 Jul 2026', type: 'Credit Sale', vat: 3000, total: 20000, paid: 10000, balance: 10000),
-    _VatSaleData(sn: 4, date: '31 Jul 2026', type: 'Cash Sale', vat: 7500, total: 50000, paid: 50000, balance: 0),
-    _VatSaleData(sn: 5, date: '30 Jul 2026', type: 'Card Sale', vat: 4800, total: 32000, paid: 32000, balance: 0),
-    _VatSaleData(sn: 6, date: '30 Jul 2026', type: 'Credit Sale', vat: 6300, total: 42000, paid: 25000, balance: 17000),
-    _VatSaleData(sn: 7, date: '29 Jul 2026', type: 'Bank Transfer', vat: 9000, total: 60000, paid: 60000, balance: 0),
-    _VatSaleData(sn: 8, date: '29 Jul 2026', type: 'Cash Sale', vat: 3600, total: 24000, paid: 24000, balance: 0),
-    _VatSaleData(sn: 9, date: '28 Jul 2026', type: 'M-Pesa Sale', vat: 5400, total: 36000, paid: 36000, balance: 0),
-    _VatSaleData(sn: 10, date: '28 Jul 2026', type: 'Credit Sale', vat: 4200, total: 28000, paid: 15000, balance: 13000),
-  ];
+  List<_VatSaleData> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportSalesWithVat();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _VatSaleData(sn: r.sn, date: r.date, type: r.type, vat: r.vat, total: r.total, paid: r.paid, balance: r.balance)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_VatSaleData> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

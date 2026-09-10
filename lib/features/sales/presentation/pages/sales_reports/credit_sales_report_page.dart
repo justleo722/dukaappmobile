@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -32,27 +34,35 @@ class _CreditSaleItem {
   });
 }
 
-class CreditSalesReportPage extends StatefulWidget {
+class CreditSalesReportPage extends ConsumerStatefulWidget {
   const CreditSalesReportPage({super.key});
 
   @override
-  State<CreditSalesReportPage> createState() => _CreditSalesReportPageState();
+  ConsumerState<CreditSalesReportPage> createState() => _CreditSalesReportPageState();
 }
 
-class _CreditSalesReportPageState extends State<CreditSalesReportPage> {
+class _CreditSalesReportPageState extends ConsumerState<CreditSalesReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_CreditSaleItem> _allItems = [
-    _CreditSaleItem(sn: 1, date: '02 Jul 2026', customer: 'Mary Wanjiku', type: 'Credit', total: 32000, paid: 20000, balance: 12000),
-    _CreditSaleItem(sn: 2, date: '07 Jul 2026', customer: 'David Njoroge', type: 'Credit', total: 28000, paid: 15000, balance: 13000),
-    _CreditSaleItem(sn: 3, date: '12 Jul 2026', customer: 'Faith Njeri', type: 'Credit', total: 31000, paid: 18000, balance: 13000),
-    _CreditSaleItem(sn: 4, date: '16 Jul 2026', customer: 'Alice Nyambura', type: 'Credit', total: 42000, paid: 22000, balance: 20000),
-    _CreditSaleItem(sn: 5, date: '18 Jul 2026', customer: 'Samuel Kipchoge', type: 'Credit', total: 25000, paid: 10000, balance: 15000),
-    _CreditSaleItem(sn: 6, date: '20 Jul 2026', customer: 'Grace Muthoni', type: 'Credit', total: 35000, paid: 20000, balance: 15000),
-    _CreditSaleItem(sn: 7, date: '22 Jul 2026', customer: 'Peter Ochieng', type: 'Credit', total: 29000, paid: 12000, balance: 17000),
-    _CreditSaleItem(sn: 8, date: '24 Jul 2026', customer: 'James Mwangi', type: 'Credit', total: 38000, paid: 18000, balance: 20000),
-  ];
+  List<_CreditSaleItem> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportCreditSales();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _CreditSaleItem(sn: r.sn, date: r.date, customer: r.customer, type: r.type, total: r.total, paid: r.paid, balance: r.balance)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_CreditSaleItem> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

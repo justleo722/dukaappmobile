@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -34,29 +36,37 @@ class _CustomerCreditItem {
   });
 }
 
-class CustomerOnCreditReportPage extends StatefulWidget {
+class CustomerOnCreditReportPage extends ConsumerStatefulWidget {
   const CustomerOnCreditReportPage({super.key});
 
   @override
-  State<CustomerOnCreditReportPage> createState() =>
+  ConsumerState<CustomerOnCreditReportPage> createState() =>
       _CustomerOnCreditReportPageState();
 }
 
 class _CustomerOnCreditReportPageState
-    extends State<CustomerOnCreditReportPage> {
+    extends ConsumerState<CustomerOnCreditReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_CustomerCreditItem> _allItems = [
-    _CustomerCreditItem(sn: 1, lastCreditDate: '02 Jul 2026', customer: 'Mary Wanjiku', phone: '0712 345 678', creditSales: 32000, total: 52000, paid: 20000, creditBalance: 12000),
-    _CustomerCreditItem(sn: 2, lastCreditDate: '07 Jul 2026', customer: 'David Njoroge', phone: '0723 456 789', creditSales: 28000, total: 45000, paid: 15000, creditBalance: 13000),
-    _CustomerCreditItem(sn: 3, lastCreditDate: '12 Jul 2026', customer: 'Faith Njeri', phone: '0734 567 890', creditSales: 31000, total: 48000, paid: 18000, creditBalance: 13000),
-    _CustomerCreditItem(sn: 4, lastCreditDate: '16 Jul 2026', customer: 'Alice Nyambura', phone: '0745 678 901', creditSales: 42000, total: 62000, paid: 22000, creditBalance: 20000),
-    _CustomerCreditItem(sn: 5, lastCreditDate: '18 Jul 2026', customer: 'Samuel Kipchoge', phone: '0756 789 012', creditSales: 25000, total: 35000, paid: 10000, creditBalance: 15000),
-    _CustomerCreditItem(sn: 6, lastCreditDate: '20 Jul 2026', customer: 'Grace Muthoni', phone: '0767 890 123', creditSales: 35000, total: 55000, paid: 20000, creditBalance: 15000),
-    _CustomerCreditItem(sn: 7, lastCreditDate: '22 Jul 2026', customer: 'Peter Ochieng', phone: '0778 901 234', creditSales: 29000, total: 41000, paid: 12000, creditBalance: 17000),
-    _CustomerCreditItem(sn: 8, lastCreditDate: '24 Jul 2026', customer: 'James Mwangi', phone: '0789 012 345', creditSales: 38000, total: 58000, paid: 18000, creditBalance: 20000),
-  ];
+  List<_CustomerCreditItem> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportOnCreditCustomers();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _CustomerCreditItem(sn: r.sn, lastCreditDate: r.lastCreditDate, customer: r.customer, phone: r.phone, creditSales: r.creditSales, total: r.total, paid: r.paid, creditBalance: r.creditBalance)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_CustomerCreditItem> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

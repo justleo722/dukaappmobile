@@ -810,6 +810,12 @@ class ApiService {
   Future<Response> getReportSales({String? from, String? to}) =>
       _client.get(ApiEndpoints.getReportSales, queryParameters: _range(from, to));
 
+  /// Generic sales sub-report by method name (e.g. 'totalSales', 'creditSales').
+  /// Maps to GET /api/v1/app/get/getreport/{method}.
+  Future<Response> getReportSalesByMethod(String method, {String? from, String? to}) =>
+      _client.get(ApiEndpoints.getReportSalesByMethod(method),
+          queryParameters: _range(from, to));
+
   Future<Response> getReportStock({String? from, String? to}) =>
       _client.get(ApiEndpoints.getReportStock, queryParameters: _range(from, to));
 

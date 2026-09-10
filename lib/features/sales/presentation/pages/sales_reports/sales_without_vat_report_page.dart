@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -30,30 +32,36 @@ class _NonVatSaleData {
   });
 }
 
-class SalesWithoutVatReportPage extends StatefulWidget {
+class SalesWithoutVatReportPage extends ConsumerStatefulWidget {
   const SalesWithoutVatReportPage({super.key});
 
   @override
-  State<SalesWithoutVatReportPage> createState() =>
+  ConsumerState<SalesWithoutVatReportPage> createState() =>
       _SalesWithoutVatReportPageState();
 }
 
-class _SalesWithoutVatReportPageState extends State<SalesWithoutVatReportPage> {
+class _SalesWithoutVatReportPageState extends ConsumerState<SalesWithoutVatReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_NonVatSaleData> _allItems = [
-    _NonVatSaleData(sn: 1, date: '01 Aug 2026', type: 'Cash Sale', total: 25000, paid: 25000, balance: 0),
-    _NonVatSaleData(sn: 2, date: '01 Aug 2026', type: 'M-Pesa Sale', total: 18000, paid: 18000, balance: 0),
-    _NonVatSaleData(sn: 3, date: '31 Jul 2026', type: 'Credit Sale', total: 12000, paid: 5000, balance: 7000),
-    _NonVatSaleData(sn: 4, date: '31 Jul 2026', type: 'Cash Sale', total: 35000, paid: 35000, balance: 0),
-    _NonVatSaleData(sn: 5, date: '30 Jul 2026', type: 'Cheque Sale', total: 22000, paid: 22000, balance: 0),
-    _NonVatSaleData(sn: 6, date: '30 Jul 2026', type: 'Credit Sale', total: 15000, paid: 8000, balance: 7000),
-    _NonVatSaleData(sn: 7, date: '29 Jul 2026', type: 'M-Pesa Sale', total: 30000, paid: 30000, balance: 0),
-    _NonVatSaleData(sn: 8, date: '29 Jul 2026', type: 'Cash Sale', total: 14000, paid: 14000, balance: 0),
-    _NonVatSaleData(sn: 9, date: '28 Jul 2026', type: 'Credit Sale', total: 20000, paid: 10000, balance: 10000),
-    _NonVatSaleData(sn: 10, date: '28 Jul 2026', type: 'Bank Transfer', total: 40000, paid: 40000, balance: 0),
-  ];
+  List<_NonVatSaleData> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportSalesWithoutVat();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _NonVatSaleData(sn: r.sn, date: r.date, type: r.type, total: r.total, paid: r.paid, balance: r.balance)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_NonVatSaleData> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

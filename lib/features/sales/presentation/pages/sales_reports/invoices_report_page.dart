@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -34,29 +36,35 @@ class _InvoiceItem {
   });
 }
 
-class InvoicesReportPage extends StatefulWidget {
+class InvoicesReportPage extends ConsumerStatefulWidget {
   const InvoicesReportPage({super.key});
 
   @override
-  State<InvoicesReportPage> createState() => _InvoicesReportPageState();
+  ConsumerState<InvoicesReportPage> createState() => _InvoicesReportPageState();
 }
 
-class _InvoicesReportPageState extends State<InvoicesReportPage> {
+class _InvoicesReportPageState extends ConsumerState<InvoicesReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_InvoiceItem> _allItems = [
-    _InvoiceItem(sn: 1, date: '01 Jul 2026', customer: 'James Mwangi', type: 'Cash', invoiceStatus: 'Paid', total: 45000, paid: 45000, balance: 0),
-    _InvoiceItem(sn: 2, date: '02 Jul 2026', customer: 'Mary Wanjiku', type: 'Credit', invoiceStatus: 'Pending', total: 32000, paid: 20000, balance: 12000),
-    _InvoiceItem(sn: 3, date: '03 Jul 2026', customer: 'Peter Ochieng', type: 'M-Pesa', invoiceStatus: 'Paid', total: 67000, paid: 67000, balance: 0),
-    _InvoiceItem(sn: 4, date: '05 Jul 2026', customer: 'Grace Muthoni', type: 'Cash', invoiceStatus: 'Paid', total: 38500, paid: 38500, balance: 0),
-    _InvoiceItem(sn: 5, date: '07 Jul 2026', customer: 'David Njoroge', type: 'Credit', invoiceStatus: 'Overdue', total: 28000, paid: 15000, balance: 13000),
-    _InvoiceItem(sn: 6, date: '08 Jul 2026', customer: 'Sarah Achieng', type: 'M-Pesa', invoiceStatus: 'Paid', total: 85000, paid: 85000, balance: 0),
-    _InvoiceItem(sn: 7, date: '10 Jul 2026', customer: 'John Kamau', type: 'Cash', invoiceStatus: 'Paid', total: 52000, paid: 52000, balance: 0),
-    _InvoiceItem(sn: 8, date: '12 Jul 2026', customer: 'Faith Njeri', type: 'Credit', invoiceStatus: 'Pending', total: 31000, paid: 18000, balance: 13000),
-    _InvoiceItem(sn: 9, date: '14 Jul 2026', customer: 'Samuel Kipchoge', type: 'M-Pesa', invoiceStatus: 'Paid', total: 74000, paid: 74000, balance: 0),
-    _InvoiceItem(sn: 10, date: '16 Jul 2026', customer: 'Alice Nyambura', type: 'Credit', invoiceStatus: 'Overdue', total: 42000, paid: 22000, balance: 20000),
-  ];
+  List<_InvoiceItem> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportInvoices();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _InvoiceItem(sn: r.sn, date: r.date, customer: r.customer, type: r.type, invoiceStatus: r.invoiceStatus, total: r.total, paid: r.paid, balance: r.balance)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_InvoiceItem> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

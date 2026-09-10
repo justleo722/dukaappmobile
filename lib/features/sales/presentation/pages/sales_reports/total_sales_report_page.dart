@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -32,31 +34,38 @@ class _SaleItem {
   });
 }
 
-class TotalSalesReportPage extends StatefulWidget {
+class TotalSalesReportPage extends ConsumerStatefulWidget {
   const TotalSalesReportPage({super.key});
 
   @override
-  State<TotalSalesReportPage> createState() => _TotalSalesReportPageState();
+  ConsumerState<TotalSalesReportPage> createState() => _TotalSalesReportPageState();
 }
 
-class _TotalSalesReportPageState extends State<TotalSalesReportPage> {
+class _TotalSalesReportPageState extends ConsumerState<TotalSalesReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_SaleItem> _allItems = [
-    _SaleItem(sn: 1, date: '01 Jul 2026', type: 'Cash', profit: 12000, total: 45000, paid: 45000, balance: 0),
-    _SaleItem(sn: 2, date: '02 Jul 2026', type: 'Credit', profit: 8500, total: 32000, paid: 20000, balance: 12000),
-    _SaleItem(sn: 3, date: '03 Jul 2026', type: 'M-Pesa', profit: 15000, total: 67000, paid: 67000, balance: 0),
-    _SaleItem(sn: 4, date: '05 Jul 2026', type: 'Cash', profit: 9200, total: 38500, paid: 38500, balance: 0),
-    _SaleItem(sn: 5, date: '07 Jul 2026', type: 'Credit', profit: 6800, total: 28000, paid: 15000, balance: 13000),
-    _SaleItem(sn: 6, date: '08 Jul 2026', type: 'M-Pesa', profit: 21000, total: 85000, paid: 85000, balance: 0),
-    _SaleItem(sn: 7, date: '10 Jul 2026', type: 'Cash', profit: 11500, total: 52000, paid: 52000, balance: 0),
-    _SaleItem(sn: 8, date: '12 Jul 2026', type: 'Credit', profit: 7300, total: 31000, paid: 18000, balance: 13000),
-    _SaleItem(sn: 9, date: '14 Jul 2026', type: 'M-Pesa', profit: 18500, total: 74000, paid: 74000, balance: 0),
-    _SaleItem(sn: 10, date: '16 Jul 2026', type: 'Cash', profit: 10200, total: 42000, paid: 42000, balance: 0),
-    _SaleItem(sn: 11, date: '18 Jul 2026', type: 'Credit', profit: 5600, total: 24000, paid: 12000, balance: 12000),
-    _SaleItem(sn: 12, date: '20 Jul 2026', type: 'M-Pesa', profit: 22000, total: 91000, paid: 91000, balance: 0),
-  ];
+  List<_SaleItem> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportTotalSales();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _SaleItem(
+          sn: r.sn, date: r.date, type: r.type,
+          profit: r.profit, total: r.total, paid: r.paid, balance: r.balance,
+        )).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_SaleItem> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

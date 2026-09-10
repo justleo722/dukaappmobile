@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -28,29 +30,35 @@ class _StaffItem {
   });
 }
 
-class StaffSalesByItemsReportPage extends StatefulWidget {
+class StaffSalesByItemsReportPage extends ConsumerStatefulWidget {
   const StaffSalesByItemsReportPage({super.key});
 
   @override
-  State<StaffSalesByItemsReportPage> createState() => _StaffSalesByItemsReportPageState();
+  ConsumerState<StaffSalesByItemsReportPage> createState() => _StaffSalesByItemsReportPageState();
 }
 
-class _StaffSalesByItemsReportPageState extends State<StaffSalesByItemsReportPage> {
+class _StaffSalesByItemsReportPageState extends ConsumerState<StaffSalesByItemsReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_StaffItem> _allItems = [
-    _StaffItem(sn: 1, staff: 'Alice Njeri', item: 'COCA COLA 600ML', qty: 12, amount: 12000),
-    _StaffItem(sn: 2, staff: 'Brian Omondi', item: 'SMIRNOFF VODKA', qty: 3, amount: 66000),
-    _StaffItem(sn: 3, staff: 'Clara Wanjiku', item: 'APPLE JUICE', qty: 8, amount: 16000),
-    _StaffItem(sn: 4, staff: 'David Kiprop', item: 'JACK DANIEL', qty: 2, amount: 130000),
-    _StaffItem(sn: 5, staff: 'Eva Muthoni', item: 'DESPERADO', qty: 6, amount: 24000),
-    _StaffItem(sn: 6, staff: 'Frank Kariuki', item: 'AIR FRESH', qty: 10, amount: 55000),
-    _StaffItem(sn: 7, staff: 'Grace Achieng', item: 'ENERGY DRINK', qty: 5, amount: 12500),
-    _StaffItem(sn: 8, staff: 'Henry Mutua', item: 'COKE', qty: 15, amount: 15000),
-    _StaffItem(sn: 9, staff: 'Irene Nekesa', item: 'BILIAN', qty: 4, amount: 48000),
-    _StaffItem(sn: 10, staff: 'James Odhiambo', item: 'MANGO JUICE', qty: 7, amount: 10500),
-  ];
+  List<_StaffItem> _allItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final data = await repo.fetchReportStaffSalesByItems();
+      if (!mounted) return;
+      setState(() {
+        _allItems = data.map((r) => _StaffItem(sn: r.sn, staff: r.staff, item: r.item, qty: r.qty, amount: r.amount)).toList();
+      });
+    } catch (_) {}
+  }
 
   List<_StaffItem> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();

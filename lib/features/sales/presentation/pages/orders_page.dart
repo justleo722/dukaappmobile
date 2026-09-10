@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/sales/data/models/sales_models.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/sales_action_button.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/sale_product_tile.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/payment_summary_card.dart';
@@ -11,78 +14,55 @@ import 'package:dukaapp/features/sales/presentation/widgets/sales_bottom_actions
 import 'package:dukaapp/features/sales/presentation/widgets/receipt_widget.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
-class OrdersPage extends StatefulWidget {
+class OrdersPage extends ConsumerStatefulWidget {
   const OrdersPage({super.key});
 
   @override
-  State<OrdersPage> createState() => _OrdersPageState();
+  ConsumerState<OrdersPage> createState() => _OrdersPageState();
 }
 
-class _OrdersPageState extends State<OrdersPage> {
+class _OrdersPageState extends ConsumerState<OrdersPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   int? _expandedOrderIndex;
   final Set<int> _selectedOrders = {};
   String _activeFilter = 'all';
 
-  final List<Map<String, dynamic>> _orders = [
-    {
-      'date': 'Jul 31, 2026 14:29',
-      'status': 'PAID',
-      'createdBy': 'SON',
-      'customer': 'JUMA JUMA',
-      'products': [
-        {'name': 'AIR', 'quantity': 1, 'price': 125000.0, 'total': 125000.0},
-        {'name': 'AIR FRESH', 'quantity': 1, 'price': 7000.0, 'total': 7000.0},
-      ],
-      'discount': 0.0,
-      'paid': 132000.0,
-      'balance': 0.0,
-      'paymentMode': 'Cash',
-    },
-    {
-      'date': 'Jul 30, 2026 11:15',
-      'status': 'PAID',
-      'createdBy': 'MKE',
-      'customer': 'AMINA HASSAN',
-      'products': [
-        {'name': 'BEAUTY CREAM', 'quantity': 1, 'price': 18000.0, 'total': 18000.0},
-        {'name': 'FACE MASK', 'quantity': 2, 'price': 9000.0, 'total': 18000.0},
-      ],
-      'discount': 0.0,
-      'paid': 36000.0,
-      'balance': 0.0,
-      'paymentMode': 'Mobile Money',
-    },
-    {
-      'date': 'Jul 29, 2026 09:45',
-      'status': 'PENDING',
-      'createdBy': 'JUM',
-      'customer': 'HASSAN ALI',
-      'products': [
-        {'name': 'CAR PHONE HOLDER', 'quantity': 2, 'price': 15000.0, 'total': 30000.0},
-        {'name': 'CHARGER CABLE', 'quantity': 3, 'price': 6000.0, 'total': 18000.0},
-      ],
-      'discount': 5000.0,
-      'paid': 30000.0,
-      'balance': 13000.0,
-      'paymentMode': 'Credit',
-    },
-    {
-      'date': 'Jul 28, 2026 16:00',
-      'status': 'PENDING',
-      'createdBy': 'SON',
-      'customer': 'FATIMA OSMAN',
-      'products': [
-        {'name': 'BEAUTY CREAM', 'quantity': 1, 'price': 18000.0, 'total': 18000.0},
-        {'name': 'DISH SOAP', 'quantity': 2, 'price': 3500.0, 'total': 7000.0},
-      ],
-      'discount': 0.0,
-      'paid': 0.0,
-      'balance': 25000.0,
-      'paymentMode': 'Pending',
-    },
-  ];
+  List<Map<String, dynamic>> _orders = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadOrders());
+  }
+
+  Future<void> _loadOrders() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final records = await repo.fetchOrders();
+      if (!mounted) return;
+      setState(() {
+        _orders = records.map((r) => {
+          'sale_id': r.saleId,
+          'date': r.date,
+          'status': r.balance > 0.01 ? 'UNPAID' : 'PAID',
+          'paymentMethod': r.paymentMethod,
+          'paid': r.paid,
+          'balance': r.balance,
+          'total': r.totalRaw,
+          'customer': r.customer,
+          'soldBy': r.soldBy,
+          'products': r.products.map((p) => {
+            'name': p.name,
+            'quantity': p.quantity,
+            'price': p.price,
+            'total': p.total,
+          }).toList(),
+        }).toList();
+      });
+    } catch (_) {}
+  }
+
 
   @override
   void dispose() {
@@ -182,15 +162,31 @@ class _OrdersPageState extends State<OrdersPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              setState(() {
-                _orders.removeAt(index);
-                _expandedOrderIndex = null;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Order deleted')),
-              );
+              final saleId = index < _orders.length ? _orders[index]['sale_id']?.toString() : null;
+              if (saleId == null || saleId.isEmpty) {
+                setState(() => _expandedOrderIndex = null);
+                return;
+              }
+              try {
+                final repo = ref.read(salesRepositoryProvider);
+                final res = await repo.deleteRecord({'sale_id': saleId});
+                final ok = res['status']?.toString() == '1' || res['status'] == true;
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(ok ? 'Order deleted' : (res['message']?.toString() ?? 'Delete failed')),
+                  backgroundColor: ok ? AppColors.success : AppColors.danger,
+                ));
+                if (ok) {
+                  setState(() => _expandedOrderIndex = null);
+                  await _loadOrders();
+                }
+              } catch (e) {
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger),
+                );
+              }
             },
             child: Text(
               'Delete',
@@ -233,19 +229,35 @@ class _OrdersPageState extends State<OrdersPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              final sorted = _selectedOrders.toList()..sort((a, b) => b.compareTo(a));
-              setState(() {
-                for (final i in sorted) {
-                  _orders.removeAt(i);
+              final ids = _selectedOrders
+                  .where((i) => i < _orders.length)
+                  .map((i) => _orders[i]['sale_id'])
+                  .where((id) => id != null && id.toString().isNotEmpty)
+                  .toList();
+              if (ids.isEmpty) {
+                setState(() => _selectedOrders.clear());
+                return;
+              }
+              try {
+                final repo = ref.read(salesRepositoryProvider);
+                final res = await repo.bulkDelete({'sale_id': ids});
+                final ok = res['status']?.toString() == '1' || res['status'] == true;
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(ok ? 'Orders deleted' : (res['message']?.toString() ?? 'Delete failed')),
+                  backgroundColor: ok ? AppColors.success : AppColors.danger,
+                ));
+                if (ok) {
+                  setState(() => _selectedOrders.clear());
+                  await _loadOrders();
                 }
-                _selectedOrders.clear();
-                _expandedOrderIndex = null;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Orders deleted')),
-              );
+              } catch (e) {
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger),
+                );
+              }
             },
             child: Text(
               'Delete',

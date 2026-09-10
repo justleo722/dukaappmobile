@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/sales/data/models/sales_models.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/sales_summary_card.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/sales_action_button.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/sales_search_field.dart';
@@ -13,147 +16,82 @@ import 'package:dukaapp/features/sales/presentation/widgets/payment_badge.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/receipt_widget.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
-class ManageSalesPage extends StatefulWidget {
+class ManageSalesPage extends ConsumerStatefulWidget {
   const ManageSalesPage({super.key});
 
   @override
-  State<ManageSalesPage> createState() => _ManageSalesPageState();
+  ConsumerState<ManageSalesPage> createState() => _ManageSalesPageState();
 }
 
-class _ManageSalesPageState extends State<ManageSalesPage> {
+class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
   final TextEditingController _searchController = TextEditingController();
   bool _viewList = false;
   int? _expandedSaleIndex;
   final Set<int> _selectedSales = {};
+  bool _isDeleting = false;
 
-  final List<Map<String, dynamic>> _sales = [
-    {
-      'date': 'Jul 31, 2026 14:29',
-      'paymentStatus': 'Paid',
-      'soldBy': 'SON',
-      'total': 'Tsh 132,000',
-      'totalRaw': 132000.0,
-      'products': [
-        {
-          'name': 'AIR',
-          'quantity': 1,
-          'price': 125000.0,
-          'total': 125000.0,
-        },
-        {
-          'name': 'AIR FRESH',
-          'quantity': 1,
-          'price': 7000.0,
-          'total': 7000.0,
-        },
-      ],
-      'paymentMethod': 'Cash',
-      'paid': 132000.0,
-      'discount': 0.0,
-      'balance': 0.0,
-      'customer': 'Walk-in',
-      'paymentType': PaymentType.cash,
-    },
-    {
-      'date': 'Jul 30, 2026 11:15',
-      'paymentStatus': 'Paid',
-      'soldBy': 'MKE',
-      'total': 'Tsh 45,000',
-      'totalRaw': 45000.0,
-      'products': [
-        {
-          'name': 'BEAUTY CREAM',
-          'quantity': 1,
-          'price': 18000.0,
-          'total': 18000.0,
-        },
-        {
-          'name': 'FACE MASK',
-          'quantity': 2,
-          'price': 9000.0,
-          'total': 18000.0,
-        },
-        {
-          'name': 'DISH SOAP',
-          'quantity': 1,
-          'price': 3500.0,
-          'total': 3500.0,
-        },
-      ],
-      'paymentMethod': 'Cash',
-      'paid': 45000.0,
-      'discount': 0.0,
-      'balance': 0.0,
-      'customer': 'Amina',
-      'paymentType': PaymentType.cash,
-    },
-    {
-      'date': 'Jul 29, 2026 09:45',
-      'paymentStatus': 'Credit',
-      'soldBy': 'JUM',
-      'total': 'Tsh 68,000',
-      'totalRaw': 68000.0,
-      'products': [
-        {
-          'name': 'CAR PHONE HOLDER',
-          'quantity': 2,
-          'price': 15000.0,
-          'total': 30000.0,
-        },
-        {
-          'name': 'CHARGER CABLE',
-          'quantity': 3,
-          'price': 6000.0,
-          'total': 18000.0,
-        },
-        {
-          'name': 'DISH SOAP',
-          'quantity': 2,
-          'price': 3500.0,
-          'total': 7000.0,
-        },
-        {
-          'name': 'AIR FRESH',
-          'quantity': 1,
-          'price': 7000.0,
-          'total': 7000.0,
-        },
-      ],
-      'paymentMethod': 'Credit',
-      'paid': 50000.0,
-      'discount': 0.0,
-      'balance': 18000.0,
-      'customer': 'Hassan',
-      'paymentType': PaymentType.credit,
-    },
-    {
-      'date': 'Jul 28, 2026 16:00',
-      'paymentStatus': 'Pending',
-      'soldBy': 'SON',
-      'total': 'Tsh 25,000',
-      'totalRaw': 25000.0,
-      'products': [
-        {
-          'name': 'BEAUTY CREAM',
-          'quantity': 1,
-          'price': 18000.0,
-          'total': 18000.0,
-        },
-        {
-          'name': 'FACE MASK',
-          'quantity': 1,
-          'price': 7000.0,
-          'total': 7000.0,
-        },
-      ],
-      'paymentMethod': 'Pending',
-      'paid': 0.0,
-      'discount': 0.0,
-      'balance': 25000.0,
-      'customer': 'Fatima',
-      'paymentType': PaymentType.pending,
-    },
-  ];
+  // Live data loaded from salesProvider
+  List<Map<String, dynamic>> _sales = [];
+  SalesSummary _summary = SalesSummary.empty;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadSales());
+  }
+
+  Future<void> _loadSales() async {
+    try {
+      final repo = ref.read(salesRepositoryProvider);
+      final results = await Future.wait([
+        repo.fetchSales(),
+        repo.fetchSalesSummary(),
+      ]);
+      if (!mounted) return;
+      final records = results[0] as List<SaleRecord>;
+      setState(() {
+        _summary = results[1] as SalesSummary;
+        _sales = records.map(_saleRecordToMap).toList();
+      });
+    } catch (_) {/* silently fail — show empty list */}
+  }
+
+  /// Convert [SaleRecord] to the map shape the existing UI expects.
+  Map<String, dynamic> _saleRecordToMap(SaleRecord r) {
+    PaymentType paymentType;
+    switch (r.paymentStatus.toLowerCase()) {
+      case 'credit':
+        paymentType = PaymentType.credit;
+        break;
+      case 'pending':
+        paymentType = PaymentType.pending;
+        break;
+      default:
+        paymentType = PaymentType.cash;
+    }
+    return {
+      'sale_id': r.saleId,
+      'date': r.date,
+      'paymentStatus': r.paymentStatus,
+      'soldBy': r.soldBy,
+      'total': r.total,
+      'totalRaw': r.totalRaw,
+      'products': r.products
+          .map((p) => {
+                'name': p.name,
+                'quantity': p.quantity,
+                'price': p.price,
+                'total': p.total,
+              })
+          .toList(),
+      'paymentMethod': r.paymentMethod,
+      'paid': r.paid,
+      'discount': r.discount,
+      'balance': r.balance,
+      'customer': r.customer,
+      'paymentType': paymentType,
+    };
+  }
 
   @override
   void dispose() {
@@ -203,19 +141,45 @@ class _ManageSalesPageState extends State<ManageSalesPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              final sorted = _selectedSales.toList()..sort((a, b) => b.compareTo(a));
-              setState(() {
-                for (final i in sorted) {
-                  _sales.removeAt(i);
+              if (_isDeleting) return;
+              final ids = _selectedSales
+                  .where((i) => i < _sales.length)
+                  .map((i) => _sales[i]['sale_id'])
+                  .where((id) => id != null && id.toString().isNotEmpty)
+                  .toList();
+              if (ids.isEmpty) {
+                setState(() => _selectedSales.clear());
+                return;
+              }
+              setState(() => _isDeleting = true);
+              try {
+                final repo = ref.read(salesRepositoryProvider);
+                final res = await repo.bulkDelete({'sale_id': ids});
+                final ok = res['status']?.toString() == '1' ||
+                    res['status'] == true ||
+                    res['status']?.toString() == 'success';
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(ok ? 'Sales deleted' : (res['message']?.toString() ?? 'Delete failed')),
+                    backgroundColor: ok ? AppColors.success : AppColors.danger,
+                  ),
+                );
+                if (ok) {
+                  setState(() => _selectedSales.clear());
+                  await _loadSales();
                 }
-                _selectedSales.clear();
-                _expandedSaleIndex = null;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Sales deleted')),
-              );
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger),
+                  );
+                }
+              } finally {
+                if (mounted) setState(() => _isDeleting = false);
+              }
             },
             child: Text(
               'Delete',
@@ -256,15 +220,37 @@ class _ManageSalesPageState extends State<ManageSalesPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              setState(() {
-                _sales.removeAt(index);
-                _expandedSaleIndex = null;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Sale deleted')),
-              );
+              final saleId = index < _sales.length ? _sales[index]['sale_id']?.toString() : null;
+              if (saleId == null || saleId.isEmpty) {
+                setState(() => _expandedSaleIndex = null);
+                return;
+              }
+              try {
+                final repo = ref.read(salesRepositoryProvider);
+                final res = await repo.deleteRecord({'sale_id': saleId});
+                final ok = res['status']?.toString() == '1' ||
+                    res['status'] == true ||
+                    res['status']?.toString() == 'success';
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(ok ? 'Sale deleted' : (res['message']?.toString() ?? 'Delete failed')),
+                    backgroundColor: ok ? AppColors.success : AppColors.danger,
+                  ),
+                );
+                if (ok) {
+                  setState(() => _expandedSaleIndex = null);
+                  await _loadSales();
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger),
+                  );
+                }
+              }
             },
             child: Text(
               'Delete',
@@ -296,11 +282,11 @@ class _ManageSalesPageState extends State<ManageSalesPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 12),
-                    const SalesSummaryCard(
-                      totalSales: 'Tsh 132,000',
-                      totalCredits: 'Tsh 0',
-                      totalOrders: 0,
-                      profit: 'Tsh 46,432.2',
+                    SalesSummaryCard(
+                      totalSales: '${_summary.currency} ${_fmt(_summary.total)}',
+                      totalCredits: '${_summary.currency} ${_fmt(_summary.unpaid)}',
+                      totalOrders: _sales.length,
+                      profit: '${_summary.currency} ${_fmt(_summary.paid)}',
                     ),
                     const SizedBox(height: 16),
                     _buildActionButtons(),
@@ -732,19 +718,38 @@ class _ManageSalesPageState extends State<ManageSalesPage> {
     );
 
     if (picked != null && mounted) {
-      final formatted = DateFormat('MMM dd, yyyy HH:mm').format(
-        DateTime(picked.year, picked.month, picked.day, parsedDate.hour, parsedDate.minute),
-      );
-      setState(() {
-        _sales[orderIndex]['date'] = formatted;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sale date updated')),
-        );
+      final saleId = orderIndex < _sales.length
+          ? _sales[orderIndex]['sale_id']?.toString()
+          : null;
+      if (saleId != null && saleId.isNotEmpty) {
+        try {
+          final repo = ref.read(salesRepositoryProvider);
+          final res = await repo.backdate({
+            'sale_id': saleId,
+            'date': DateFormat('yyyy-MM-dd').format(picked),
+          });
+          final ok = res['status']?.toString() == '1' || res['status'] == true;
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(ok ? 'Sale date updated' : (res['message']?.toString() ?? 'Backdate failed')),
+              backgroundColor: ok ? AppColors.success : AppColors.danger,
+            ));
+            if (ok) await _loadSales();
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger),
+            );
+          }
+        }
       }
     }
   }
+
+  String _fmt(double v) => v == v.roundToDouble()
+      ? v.toInt().toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},')
+      : v.toStringAsFixed(2).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+\.)'), (m) => '${m[1]},');
 
   void _showReceiptPreview(Map<String, dynamic> sale) {
     final products = List<Map<String, dynamic>>.from(sale['products']);
