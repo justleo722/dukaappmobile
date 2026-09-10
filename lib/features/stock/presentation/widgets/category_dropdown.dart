@@ -1,28 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/app/typography.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 
-class CategoryDropdown extends StatelessWidget {
+class CategoryDropdown extends ConsumerWidget {
   final String? value;
   final ValueChanged<String?> onChanged;
-  final List<String> categories;
 
   const CategoryDropdown({
     super.key,
     this.value,
     required this.onChanged,
-    this.categories = const [
-      'Uncategorized',
-      'Beverages',
-      'Food',
-      'Electronics',
-      'Hardware',
-    ],
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stockState = ref.watch(stockProvider);
+    final categories = stockState.whenOrNull(
+          data: (s) => s.categories.map((c) => c.name).toList(),
+        ) ??
+        [];
+
+    final safeValue = categories.contains(value) ? value : null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -33,10 +35,10 @@ class CategoryDropdown extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          initialValue: value,
+          initialValue: safeValue,
           isExpanded: true,
           hint: Text(
-            'Select category',
+            categories.isEmpty ? 'Loading...' : 'Select category',
             style: AppTypography.bodyMedium.copyWith(
               color: AppColors.textHint,
             ),
@@ -72,7 +74,7 @@ class CategoryDropdown extends StatelessWidget {
           items: categories.map((cat) {
             return DropdownMenuItem(value: cat, child: Text(cat));
           }).toList(),
-          onChanged: onChanged,
+          onChanged: categories.isEmpty ? null : onChanged,
         ),
       ],
     );

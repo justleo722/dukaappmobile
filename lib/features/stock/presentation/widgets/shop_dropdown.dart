@@ -1,27 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/app/typography.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 
-class ShopDropdown extends StatelessWidget {
+class ShopDropdown extends ConsumerWidget {
   final String? value;
   final ValueChanged<String?> onChanged;
-  final List<String> shops;
 
   const ShopDropdown({
     super.key,
     this.value,
     required this.onChanged,
-    this.shops = const [
-      'BLACK MAGIC DESIGN',
-      'ABC MARKET',
-      'JOHN PERFORMS',
-      'SON COLLECTION',
-    ],
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authProvider);
+    final activeId = authState.activeShop?.id?.toString() ?? '';
+
+    // All shops except the current active one (can't import from self)
+    final shops = (authState.shops ?? [])
+        .where((s) => s.id?.toString() != activeId)
+        .map((s) => s.shopName ?? s.id?.toString() ?? '')
+        .where((name) => name.isNotEmpty)
+        .toList();
+
+    // If current value no longer in list, reset
+    final safeValue = shops.contains(value) ? value : null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -32,10 +40,10 @@ class ShopDropdown extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          initialValue: value,
+          initialValue: safeValue,
           isExpanded: true,
           hint: Text(
-            'Select Shop',
+            shops.isEmpty ? 'No other shops available' : 'Select Shop',
             style: AppTypography.bodyMedium.copyWith(
               color: AppColors.textHint,
             ),
@@ -77,7 +85,7 @@ class ShopDropdown extends StatelessWidget {
               ),
             );
           }).toList(),
-          onChanged: onChanged,
+          onChanged: shops.isEmpty ? null : onChanged,
         ),
       ],
     );

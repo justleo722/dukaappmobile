@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +11,7 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _BadStockItem {
@@ -21,27 +23,46 @@ class _BadStockItem {
   const _BadStockItem({required this.sn, required this.name, required this.quantity, required this.loss});
 }
 
-class BadStockReportPage extends StatefulWidget {
+class BadStockReportPage extends ConsumerStatefulWidget {
   const BadStockReportPage({super.key});
 
   @override
-  State<BadStockReportPage> createState() => _BadStockReportPageState();
+  ConsumerState<BadStockReportPage> createState() => _BadStockReportPageState();
 }
 
-class _BadStockReportPageState extends State<BadStockReportPage> {
+class _BadStockReportPageState extends ConsumerState<BadStockReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_BadStockItem> _allItems = [
-    _BadStockItem(sn: 1, name: 'AIR', quantity: 2, loss: 9000),
-    _BadStockItem(sn: 2, name: 'COCA COLA 600ML', quantity: 5, loss: 4000),
-    _BadStockItem(sn: 3, name: 'COKE', quantity: 3, loss: 2400),
-    _BadStockItem(sn: 4, name: 'FANTA', quantity: 4, loss: 3200),
-    _BadStockItem(sn: 5, name: 'SPRITE', quantity: 2, loss: 1600),
-    _BadStockItem(sn: 6, name: 'ENERGY DRINK', quantity: 1, loss: 1500),
-    _BadStockItem(sn: 7, name: 'PILSNER', quantity: 6, loss: 1200),
-    _BadStockItem(sn: 8, name: 'TUSKER', quantity: 3, loss: 600),
-  ];
+  // Bad stock is tracked separately in the backend; loaded via stockProvider (products with 'bad' status)
+  List<_BadStockItem> _allItems = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    setState(() => _isLoading = true);
+    try {
+      final stockState = ref.read(stockProvider);
+      final products = stockState.whenOrNull(
+            data: (s) => s.products.where((p) => (p.status ?? '') == 'bad').toList(),
+          ) ??
+          [];
+      final items = products.asMap().entries.map((e) {
+        final p = e.value;
+        return _BadStockItem(sn: e.key + 1, name: p.name, quantity: p.available.toInt(), loss: p.buyingPrice * p.available);
+      }).toList();
+      if (mounted) setState(() => _allItems = items);
+    } catch (_) {
+      if (mounted) setState(() => _allItems = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   List<_BadStockItem> get _filteredItems {
     final q = _searchController.text.toLowerCase().trim();
@@ -105,7 +126,10 @@ class _BadStockReportPageState extends State<BadStockReportPage> {
     return Scaffold(backgroundColor: const Color(0xFFF5F7FB), appBar: _buildAppBar(context),
       body: SafeArea(top: false, child: SingleChildScrollView(padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: Column(children: [_buildShopHeader(), _buildActionButtons(context), const SizedBox(height: 12), _buildSearchField(), const SizedBox(height: 12),
-          items.isEmpty ? _buildEmptyState() : _buildTable(items), const SizedBox(height: 24)]))));
+          _isLoading
+              ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+              : items.isEmpty ? _buildEmptyState() : _buildTable(items),
+          const SizedBox(height: 24)]))));
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {

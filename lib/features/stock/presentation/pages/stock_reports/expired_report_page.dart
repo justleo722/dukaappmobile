@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -10,6 +11,7 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _ExpiredItem {
@@ -21,26 +23,43 @@ class _ExpiredItem {
   const _ExpiredItem({required this.sn, required this.name, required this.quantity, required this.loss});
 }
 
-class ExpiredReportPage extends StatefulWidget {
+class ExpiredReportPage extends ConsumerStatefulWidget {
   const ExpiredReportPage({super.key});
 
   @override
-  State<ExpiredReportPage> createState() => _ExpiredReportPageState();
+  ConsumerState<ExpiredReportPage> createState() => _ExpiredReportPageState();
 }
 
-class _ExpiredReportPageState extends State<ExpiredReportPage> {
+class _ExpiredReportPageState extends ConsumerState<ExpiredReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_ExpiredItem> _allItems = [
-    _ExpiredItem(sn: 1, name: 'APPLE JUICE', quantity: 5, loss: 6000),
-    _ExpiredItem(sn: 2, name: 'MANGO JUICE', quantity: 3, loss: 3000),
-    _ExpiredItem(sn: 3, name: 'ORANGE JUICE', quantity: 4, loss: 4000),
-    _ExpiredItem(sn: 4, name: 'COCA COLA 600ML', quantity: 8, loss: 6400),
-    _ExpiredItem(sn: 5, name: 'FANTA', quantity: 6, loss: 4800),
-    _ExpiredItem(sn: 6, name: 'SPRITE', quantity: 5, loss: 4000),
-    _ExpiredItem(sn: 7, name: 'DESPERADO', quantity: 2, loss: 5000),
-  ];
+  List<_ExpiredItem> _allItems = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(stockRepositoryProvider);
+      final products = await repo.fetchExpiredStock();
+      final items = products.asMap().entries.map((e) {
+        final p = e.value;
+        final loss = p.buyingPrice * p.available;
+        return _ExpiredItem(sn: e.key + 1, name: p.name, quantity: p.available.toInt(), loss: loss);
+      }).toList();
+      if (mounted) setState(() => _allItems = items);
+    } catch (_) {
+      if (mounted) setState(() => _allItems = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   List<_ExpiredItem> get _filteredItems {
     final q = _searchController.text.toLowerCase().trim();
@@ -104,7 +123,10 @@ class _ExpiredReportPageState extends State<ExpiredReportPage> {
     return Scaffold(backgroundColor: const Color(0xFFF5F7FB), appBar: _buildAppBar(context),
       body: SafeArea(top: false, child: SingleChildScrollView(padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: Column(children: [_buildShopHeader(), _buildActionButtons(context), const SizedBox(height: 12), _buildSearchField(), const SizedBox(height: 12),
-          items.isEmpty ? _buildEmptyState() : _buildTable(items), const SizedBox(height: 24)]))));
+          _isLoading
+              ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+              : items.isEmpty ? _buildEmptyState() : _buildTable(items),
+          const SizedBox(height: 24)]))));
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {

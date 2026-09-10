@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +11,7 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _LostStockItem {
@@ -21,26 +23,45 @@ class _LostStockItem {
   const _LostStockItem({required this.sn, required this.name, required this.quantity, required this.loss});
 }
 
-class LostStockReportPage extends StatefulWidget {
+class LostStockReportPage extends ConsumerStatefulWidget {
   const LostStockReportPage({super.key});
 
   @override
-  State<LostStockReportPage> createState() => _LostStockReportPageState();
+  ConsumerState<LostStockReportPage> createState() => _LostStockReportPageState();
 }
 
-class _LostStockReportPageState extends State<LostStockReportPage> {
+class _LostStockReportPageState extends ConsumerState<LostStockReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_LostStockItem> _allItems = [
-    _LostStockItem(sn: 1, name: 'AIR', quantity: 1, loss: 4500),
-    _LostStockItem(sn: 2, name: 'APPLE JUICE', quantity: 3, loss: 3600),
-    _LostStockItem(sn: 3, name: 'COCA COLA 600ML', quantity: 2, loss: 1600),
-    _LostStockItem(sn: 4, name: 'ENERGY DRINK', quantity: 1, loss: 1500),
-    _LostStockItem(sn: 5, name: 'PILSNER', quantity: 4, loss: 800),
-    _LostStockItem(sn: 6, name: 'TUSKER', quantity: 2, loss: 400),
-    _LostStockItem(sn: 7, name: 'FANTA', quantity: 1, loss: 800),
-  ];
+  List<_LostStockItem> _allItems = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    setState(() => _isLoading = true);
+    try {
+      final stockState = ref.read(stockProvider);
+      final products = stockState.whenOrNull(
+            data: (s) => s.products.where((p) => (p.status ?? '') == 'lost').toList(),
+          ) ??
+          [];
+      final items = products.asMap().entries.map((e) {
+        final p = e.value;
+        return _LostStockItem(sn: e.key + 1, name: p.name, quantity: p.available.toInt(), loss: p.buyingPrice * p.available);
+      }).toList();
+      if (mounted) setState(() => _allItems = items);
+    } catch (_) {
+      if (mounted) setState(() => _allItems = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   List<_LostStockItem> get _filteredItems {
     final q = _searchController.text.toLowerCase().trim();
@@ -104,7 +125,10 @@ class _LostStockReportPageState extends State<LostStockReportPage> {
     return Scaffold(backgroundColor: const Color(0xFFF5F7FB), appBar: _buildAppBar(context),
       body: SafeArea(top: false, child: SingleChildScrollView(padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: Column(children: [_buildShopHeader(), _buildActionButtons(context), const SizedBox(height: 12), _buildSearchField(), const SizedBox(height: 12),
-          items.isEmpty ? _buildEmptyState() : _buildTable(items), const SizedBox(height: 24)]))));
+          _isLoading
+              ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+              : items.isEmpty ? _buildEmptyState() : _buildTable(items),
+          const SizedBox(height: 24)]))));
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {

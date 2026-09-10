@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/transfer_shop_dropdown.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/transfer_product_card.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/transfer_summary_card.dart';
@@ -11,46 +13,54 @@ import 'package:dukaapp/features/stock/presentation/widgets/transfer_bottom_bar.
 class _TransferItem {
   final String name;
   final int availableStock;
+  final dynamic productId;
   int transferQuantity;
 
   _TransferItem({
     required this.name,
     required this.availableStock,
+    this.productId,
   }) : transferQuantity = 0;
 }
 
-class TransferStockPage extends StatefulWidget {
+class TransferStockPage extends ConsumerStatefulWidget {
   const TransferStockPage({super.key});
 
   @override
-  State<TransferStockPage> createState() => _TransferStockPageState();
+  ConsumerState<TransferStockPage> createState() => _TransferStockPageState();
 }
 
-class _TransferStockPageState extends State<TransferStockPage> {
+class _TransferStockPageState extends ConsumerState<TransferStockPage> {
   String? _selectedShop;
   final TextEditingController _searchController = TextEditingController();
   final List<_TransferItem> _items = [];
+  bool _isSaving = false;
 
-  static const List<Map<String, dynamic>> _dummyProducts = [
-    {'name': 'AIR', 'stock': 6},
-    {'name': 'AIR FRESH', 'stock': 93},
-    {'name': 'BILIAN', 'stock': 1},
-    {'name': 'COCA COLA 600ML', 'stock': 53},
-    {'name': 'COKE', 'stock': 16},
-    {'name': 'DESPERADO', 'stock': 6},
-    {'name': 'ENERGY DRINK', 'stock': 35},
-    {'name': 'JACK DANIEL', 'stock': 11},
-    {'name': 'MANGO JUICE', 'stock': 9},
-    {'name': 'ORANGE JUICE', 'stock': 1},
-  ];
-
-  List<Map<String, dynamic>> get _filteredProducts {
+  List<Map<String, dynamic>> _getFilteredProducts() {
+    final stockState = ref.read(stockProvider);
+    final allProducts = stockState.whenOrNull(
+          data: (s) => s.products
+              .map((p) => {
+                    'name': p.name,
+                    'stock': p.available.toInt(),
+                    'product_id': p.productId,
+                  })
+              .toList(),
+        ) ??
+        [];
     final query = _searchController.text.toLowerCase().trim();
-    if (query.isEmpty) return _dummyProducts;
-    return _dummyProducts.where((p) {
+    if (query.isEmpty) return allProducts;
+    return allProducts.where((p) {
       final name = (p['name'] as String).toLowerCase();
       return name.contains(query);
     }).toList();
+  }
+
+  /// Extract shop_id from label "Shop Name (shop_id)"
+  String? _extractShopId(String? label) {
+    if (label == null) return null;
+    final match = RegExp(r'\(([^)]+)\)$').firstMatch(label);
+    return match?.group(1);
   }
 
   int get _totalTransferQuantity =>
@@ -72,6 +82,7 @@ class _TransferStockPageState extends State<TransferStockPage> {
       _items.add(_TransferItem(
         name: name,
         availableStock: product['stock'] as int,
+        productId: product['product_id'],
       ));
       addedCount++;
     }
@@ -132,28 +143,69 @@ class _TransferStockPageState extends State<TransferStockPage> {
             ),
             TransferBottomBar(
               onClose: () => context.pop(),
-              onTransfer: _items.isNotEmpty && _selectedShop != null
-                  ? () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Transfer initiated successfully',
-                            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-                          ),
-                          backgroundColor: AppColors.success,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-                          ),
-                        ),
-                      );
-                    }
+              onTransfer: (_items.isNotEmpty && _selectedShop != null && !_isSaving)
+                  ? _transfer
                   : null,
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _transfer() async {
+    final shopId = _extractShopId(_selectedShop);
+    if (shopId == null) return;
+    final transferItems = _items
+        .where((item) => item.transferQuantity > 0 && item.productId != null)
+        .map((item) => {'product_id': item.productId, 'quantity': item.transferQuantity})
+        .toList();
+    if (transferItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Set transfer quantity for at least one product.',
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+        ),
+      );
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      final repo = ref.read(stockRepositoryProvider);
+      final res = await repo.transferStock({'to_shop_id': shopId, 'products': transferItems});
+      final ok = res['status']?.toString() == '1' || res['status'] == true || res['status']?.toString() == 'success';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok ? 'Transfer initiated successfully' : (res['message']?.toString() ?? 'Transfer failed'),
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+          ),
+          backgroundColor: ok ? AppColors.success : AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+        ),
+      );
+      if (ok) {
+        ref.read(stockProvider.notifier).refresh();
+        context.pop();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   PreferredSizeWidget _buildAppBar() {
@@ -321,7 +373,7 @@ class _TransferStockPageState extends State<TransferStockPage> {
   }
 
   Widget _buildProductsHeader() {
-    final products = _filteredProducts;
+    final products = _getFilteredProducts();
     final selectableIndices = products
         .asMap()
         .keys
@@ -381,7 +433,7 @@ class _TransferStockPageState extends State<TransferStockPage> {
   }
 
   Widget _buildProductList() {
-    final products = _filteredProducts;
+    final products = _getFilteredProducts();
 
     if (_searchController.text.isNotEmpty && products.isEmpty) {
       return Center(

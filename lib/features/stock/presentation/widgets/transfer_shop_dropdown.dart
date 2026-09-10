@@ -1,18 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 
-class TransferShopDropdown extends StatelessWidget {
+class TransferShopDropdown extends ConsumerWidget {
   final String? value;
   final ValueChanged<String?> onChanged;
-
-  static const List<String> _shops = [
-    'ABC MARKET (S0021)',
-    'BLACK MAGIC DESIGN (S0018)',
-    'JOHN PERFORMS (S0020)',
-    'SON COLLECTION (S0003)',
-  ];
 
   const TransferShopDropdown({
     super.key,
@@ -21,7 +16,23 @@ class TransferShopDropdown extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authProvider);
+    final activeId = authState.activeShop?.id?.toString() ?? '';
+
+    // All shops except the current active one (can't transfer to self)
+    final shops = (authState.shops ?? [])
+        .where((s) => s.id?.toString() != activeId)
+        .map((s) {
+          final name = s.shopName ?? '';
+          final id = s.id?.toString() ?? '';
+          return name.isNotEmpty ? '$name ($id)' : id;
+        })
+        .where((label) => label.isNotEmpty)
+        .toList();
+
+    final safeValue = shops.contains(value) ? value : null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -32,10 +43,10 @@ class TransferShopDropdown extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          initialValue: value,
+          initialValue: safeValue,
           isExpanded: true,
           hint: Text(
-            'Select destination shop',
+            shops.isEmpty ? 'No other shops available' : 'Select destination shop',
             style: AppTypography.bodyMedium.copyWith(
               color: AppColors.textHint,
             ),
@@ -68,13 +79,13 @@ class TransferShopDropdown extends StatelessWidget {
               ),
             ),
           ),
-          items: _shops.map((shop) {
+          items: shops.map((shop) {
             return DropdownMenuItem(
               value: shop,
               child: Text(shop),
             );
           }).toList(),
-          onChanged: onChanged,
+          onChanged: shops.isEmpty ? null : onChanged,
         ),
       ],
     );

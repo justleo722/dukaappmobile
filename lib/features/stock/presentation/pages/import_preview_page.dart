@@ -1,15 +1,17 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:excel/excel.dart' as xls;
 import 'package:csv/csv.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/app/typography.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/import_status_chip.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/sticky_import_buttons.dart';
 
-class ImportPreviewPage extends StatefulWidget {
+class ImportPreviewPage extends ConsumerStatefulWidget {
   final Uint8List fileBytes;
   final String fileName;
 
@@ -20,10 +22,10 @@ class ImportPreviewPage extends StatefulWidget {
   });
 
   @override
-  State<ImportPreviewPage> createState() => _ImportPreviewPageState();
+  ConsumerState<ImportPreviewPage> createState() => _ImportPreviewPageState();
 }
 
-class _ImportPreviewPageState extends State<ImportPreviewPage> {
+class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
   String _searchQuery = '';
   List<Map<String, dynamic>> _products = [];
   List<String> _headers = [];
@@ -192,6 +194,39 @@ class _ImportPreviewPageState extends State<ImportPreviewPage> {
       _products.where((p) => p['isValid'] == false).length;
   int get _skippedCount => 0;
 
+  Future<void> _saveImport() async {
+    final readyProducts = _products.where((p) => p['isValid'] == true).toList();
+    if (readyProducts.isEmpty) return;
+    try {
+      final repo = ref.read(stockRepositoryProvider);
+      final res = await repo.importProducts(readyProducts);
+      final ok = res['status']?.toString() == '1' || res['status'] == true || res['status']?.toString() == 'success';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          ok
+              ? '${readyProducts.length} products imported successfully.'
+              : (res['message']?.toString() ?? 'Import failed'),
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+        ),
+        backgroundColor: ok ? AppColors.success : AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+      ));
+      if (ok) {
+        ref.read(stockProvider.notifier).refresh();
+        context.pop();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Error: $e', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -248,26 +283,7 @@ class _ImportPreviewPageState extends State<ImportPreviewPage> {
                     StickyImportButtons(
                       onChangeFile: () => context.pop(),
                       onCancel: () => context.pop(),
-                      onSave: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              '${_readyCount} products imported successfully.',
-                              style: AppTypography.bodyMedium.copyWith(
-                                color: AppColors.textWhite,
-                              ),
-                            ),
-                            backgroundColor: AppColors.success,
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                AppConstants.radiusSM,
-                              ),
-                            ),
-                          ),
-                        );
-                        context.pop();
-                      },
+                      onSave: _readyCount > 0 ? _saveImport : null,
                     ),
                   ],
                 ),

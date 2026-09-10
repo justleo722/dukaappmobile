@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -11,6 +12,7 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _BarcodeItem {
@@ -29,31 +31,47 @@ class _BarcodeItem {
   });
 }
 
-class GenerateBarcodeReportPage extends StatefulWidget {
+class GenerateBarcodeReportPage extends ConsumerStatefulWidget {
   const GenerateBarcodeReportPage({super.key});
 
   @override
-  State<GenerateBarcodeReportPage> createState() => _GenerateBarcodeReportPageState();
+  ConsumerState<GenerateBarcodeReportPage> createState() => _GenerateBarcodeReportPageState();
 }
 
-class _GenerateBarcodeReportPageState extends State<GenerateBarcodeReportPage> {
+class _GenerateBarcodeReportPageState extends ConsumerState<GenerateBarcodeReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_BarcodeItem> _allItems = [
-    _BarcodeItem(sn: 1, name: 'AIR', barcode: 'DA-2026-0001', sellingPrice: 7000, available: 18),
-    _BarcodeItem(sn: 2, name: 'AIR FRESH', barcode: 'DA-2026-0002', sellingPrice: 5500, available: 98),
-    _BarcodeItem(sn: 3, name: 'APPLE JUICE', barcode: 'DA-2026-0003', sellingPrice: 2000, available: 25),
-    _BarcodeItem(sn: 4, name: 'BILIAN', barcode: 'DA-2026-0004', sellingPrice: 12000, available: 9),
-    _BarcodeItem(sn: 5, name: 'COCA COLA 600ML', barcode: 'DA-2026-0005', sellingPrice: 1000, available: 58),
-    _BarcodeItem(sn: 6, name: 'COKE', barcode: 'DA-2026-0006', sellingPrice: 1000, available: 21),
-    _BarcodeItem(sn: 7, name: 'DESPERADO', barcode: 'DA-2026-0007', sellingPrice: 4000, available: 12),
-    _BarcodeItem(sn: 8, name: 'ENERGY DRINK', barcode: 'DA-2026-0008', sellingPrice: 2500, available: 38),
-    _BarcodeItem(sn: 9, name: 'JACK DANIEL', barcode: 'DA-2026-0009', sellingPrice: 65000, available: 15),
-    _BarcodeItem(sn: 10, name: 'MANGO JUICE', barcode: 'DA-2026-0010', sellingPrice: 1500, available: 11),
-    _BarcodeItem(sn: 11, name: 'SMIRNOFF VODKA', barcode: 'DA-2026-0011', sellingPrice: 22000, available: 10),
-    _BarcodeItem(sn: 12, name: 'PILSNER', barcode: 'DA-2026-0012', sellingPrice: 200, available: 53),
-  ];
+  List<_BarcodeItem> _allItems = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    setState(() => _isLoading = true);
+    try {
+      final stockState = ref.read(stockProvider);
+      final products = stockState.whenOrNull(data: (s) => s.products) ?? [];
+      final items = products.asMap().entries.map((e) {
+        final p = e.value;
+        return _BarcodeItem(
+          sn: e.key + 1, name: p.name,
+          barcode: p.barcode ?? '',
+          sellingPrice: p.sellingPrice,
+          available: p.available.toInt(),
+        );
+      }).toList();
+      if (mounted) setState(() => _allItems = items);
+    } catch (_) {
+      if (mounted) setState(() => _allItems = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   List<_BarcodeItem> get _filteredItems {
     final q = _searchController.text.toLowerCase().trim();
@@ -117,7 +135,10 @@ class _GenerateBarcodeReportPageState extends State<GenerateBarcodeReportPage> {
     return Scaffold(backgroundColor: const Color(0xFFF5F7FB), appBar: _buildAppBar(context),
       body: SafeArea(top: false, child: SingleChildScrollView(padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: Column(children: [_buildShopHeader(), _buildActionButtons(context), const SizedBox(height: 12), _buildSearchField(), const SizedBox(height: 12),
-          items.isEmpty ? _buildEmptyState() : _buildTable(items), const SizedBox(height: 24)]))));
+          _isLoading
+              ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+              : items.isEmpty ? _buildEmptyState() : _buildTable(items),
+          const SizedBox(height: 24)]))));
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -10,6 +11,7 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _PriceItem {
@@ -24,49 +26,42 @@ class _PriceItem {
   });
 }
 
-class PriceListReportPage extends StatefulWidget {
+class PriceListReportPage extends ConsumerStatefulWidget {
   const PriceListReportPage({super.key});
 
   @override
-  State<PriceListReportPage> createState() => _PriceListReportPageState();
+  ConsumerState<PriceListReportPage> createState() => _PriceListReportPageState();
 }
 
-class _PriceListReportPageState extends State<PriceListReportPage> {
+class _PriceListReportPageState extends ConsumerState<PriceListReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_PriceItem> _allItems = [
-    _PriceItem(sn: 1, name: 'AIR', sellingPrice: 7000),
-    _PriceItem(sn: 2, name: 'AIR FRESH', sellingPrice: 5500),
-    _PriceItem(sn: 3, name: 'APPLE JUICE', sellingPrice: 2000),
-    _PriceItem(sn: 4, name: 'BILIAN', sellingPrice: 12000),
-    _PriceItem(sn: 5, name: 'COCA COLA 600ML', sellingPrice: 1000),
-    _PriceItem(sn: 6, name: 'COKE', sellingPrice: 1000),
-    _PriceItem(sn: 7, name: 'DESPERADO', sellingPrice: 4000),
-    _PriceItem(sn: 8, name: 'ENERGY DRINK', sellingPrice: 2500),
-    _PriceItem(sn: 9, name: 'JACK DANIEL', sellingPrice: 65000),
-    _PriceItem(sn: 10, name: 'MANGO JUICE', sellingPrice: 1500),
-    _PriceItem(sn: 11, name: 'ORANGE JUICE', sellingPrice: 1500),
-    _PriceItem(sn: 12, name: 'SMIRNOFF VODKA', sellingPrice: 22000),
-    _PriceItem(sn: 13, name: 'FANTA', sellingPrice: 1000),
-    _PriceItem(sn: 14, name: 'SPRITE', sellingPrice: 1000),
-    _PriceItem(sn: 15, name: 'PILSNER', sellingPrice: 200),
-    _PriceItem(sn: 16, name: 'TUSKER', sellingPrice: 200),
-    _PriceItem(sn: 17, name: 'WHITE CAP', sellingPrice: 200),
-    _PriceItem(sn: 18, name: 'CHIVAS REGAL', sellingPrice: 85000),
-    _PriceItem(sn: 19, name: 'JAMESON', sellingPrice: 45000),
-    _PriceItem(sn: 20, name: 'PATRÓN TEQUILA', sellingPrice: 95000),
-    _PriceItem(sn: 21, name: 'HENNESSY', sellingPrice: 75000),
-    _PriceItem(sn: 22, name: 'MARTINI', sellingPrice: 15000),
-    _PriceItem(sn: 23, name: 'BAILEYS', sellingPrice: 28000),
-    _PriceItem(sn: 24, name: 'CAMPARI', sellingPrice: 12000),
-    _PriceItem(sn: 25, name: 'JOHNNIE WALKER RED', sellingPrice: 35000),
-    _PriceItem(sn: 26, name: 'JOHNNIE WALKER BLACK', sellingPrice: 65000),
-    _PriceItem(sn: 27, name: 'GORDONS GIN', sellingPrice: 18000),
-    _PriceItem(sn: 28, name: 'SMIRNOFF ICE', sellingPrice: 3000),
-    _PriceItem(sn: 29, name: 'CASTLE LITE', sellingPrice: 250),
-    _PriceItem(sn: 30, name: 'AMSTEL', sellingPrice: 250),
-  ];
+  List<_PriceItem> _allItems = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    setState(() => _isLoading = true);
+    try {
+      final stockState = ref.read(stockProvider);
+      final products = stockState.whenOrNull(data: (s) => s.products) ?? [];
+      final items = products.asMap().entries.map((e) {
+        final p = e.value;
+        return _PriceItem(sn: e.key + 1, name: p.name, sellingPrice: p.sellingPrice);
+      }).toList();
+      if (mounted) setState(() => _allItems = items);
+    } catch (_) {
+      if (mounted) setState(() => _allItems = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   List<_PriceItem> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();
@@ -216,9 +211,11 @@ class _PriceListReportPageState extends State<PriceListReportPage> {
               const SizedBox(height: 12),
               _buildSearchField(),
               const SizedBox(height: 12),
-              items.isEmpty
-                  ? _buildEmptyState()
-                  : _buildTable(items),
+              _isLoading
+                  ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+                  : items.isEmpty
+                      ? _buildEmptyState()
+                      : _buildTable(items),
               const SizedBox(height: 24),
             ],
           ),

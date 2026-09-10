@@ -1,9 +1,12 @@
 // features/stock/presentation/pages/manage_stock_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/data/models/stock_models.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/stock_status_chip.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/stock_summary_card.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/stock_action_button.dart';
@@ -16,66 +19,18 @@ import 'package:dukaapp/features/stock/presentation/pages/import_stock_page.dart
 import 'package:dukaapp/features/stock/presentation/widgets/product_reports_helper.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
-class ManageStockPage extends StatefulWidget {
+class ManageStockPage extends ConsumerStatefulWidget {
   const ManageStockPage({super.key});
 
   @override
-  State<ManageStockPage> createState() => _ManageStockPageState();
+  ConsumerState<ManageStockPage> createState() => _ManageStockPageState();
 }
 
-class _ManageStockPageState extends State<ManageStockPage> {
+class _ManageStockPageState extends ConsumerState<ManageStockPage> {
   bool _categoryMode = false;
   final TextEditingController _searchController = TextEditingController();
-  final Set<int> _selectedProducts = {};
-  int? _expandedProductIndex;
-
-  final List<Map<String, dynamic>> _products = const [
-    {
-      'name': 'AIR',
-      'category': 'Uncategorized',
-      'buyingPrice': 4500.0,
-      'sellingPrice': 7000.0,
-      'stock': 15,
-    },
-    {
-      'name': 'BEAUTY CREAM',
-      'category': 'Cosmetics',
-      'buyingPrice': 12000.0,
-      'sellingPrice': 18000.0,
-      'stock': 3,
-    },
-    {
-      'name': 'CAR PHONE HOLDER',
-      'category': 'Accessories',
-      'buyingPrice': 8000.0,
-      'sellingPrice': 15000.0,
-      'stock': 8,
-    },
-    {
-      'name': 'CHARGER CABLE',
-      'category': 'Electronics',
-      'buyingPrice': 3500.0,
-      'sellingPrice': 6000.0,
-      'stock': 2,
-    },
-    {
-      'name': 'DISH SOAP',
-      'category': 'Household',
-      'buyingPrice': 2000.0,
-      'sellingPrice': 3500.0,
-      'stock': 25,
-    },
-    {
-      'name': 'FACE MASK',
-      'category': 'Beauty',
-      'buyingPrice': 5000.0,
-      'sellingPrice': 9000.0,
-      'stock': 4,
-    },
-  ];
-
-  bool get _allSelected =>
-      _selectedProducts.length == _products.length && _products.isNotEmpty;
+  final Set<dynamic> _selectedIds = {};
+  dynamic _expandedProductId;
 
   @override
   void dispose() {
@@ -83,33 +38,54 @@ class _ManageStockPageState extends State<ManageStockPage> {
     super.dispose();
   }
 
-  void _toggleProductSelection(int index) {
+  // ── Filtering ────────────────────────────────────────────────────────────
+
+  List<StockProduct> _filtered(List<StockProduct> products) {
+    final q = _searchController.text.trim().toLowerCase();
+    if (q.isEmpty) return products;
+    return products
+        .where((p) =>
+            p.name.toLowerCase().contains(q) ||
+            (p.category?.toLowerCase().contains(q) ?? false) ||
+            (p.barcode?.toLowerCase().contains(q) ?? false))
+        .toList();
+  }
+
+  // ── Selection ────────────────────────────────────────────────────────────
+
+  bool _allSelected(List<StockProduct> products) =>
+      products.isNotEmpty && _selectedIds.length == products.length;
+
+  void _toggleSelection(dynamic id) {
     setState(() {
-      if (_selectedProducts.contains(index)) {
-        _selectedProducts.remove(index);
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
       } else {
-        _selectedProducts.add(index);
+        _selectedIds.add(id);
       }
     });
   }
 
-  void _toggleAllSelection() {
+  void _toggleAllSelection(List<StockProduct> products) {
     setState(() {
-      if (_allSelected) {
-        _selectedProducts.clear();
+      if (_allSelected(products)) {
+        _selectedIds.clear();
       } else {
-        _selectedProducts.addAll(List.generate(_products.length, (i) => i));
+        _selectedIds.addAll(products.map((p) => p.productId));
       }
     });
   }
 
-  void _toggleProductExpansion(int index) {
+  void _toggleExpansion(dynamic id) {
     setState(() {
-      _expandedProductIndex = _expandedProductIndex == index ? null : index;
+      _expandedProductId = _expandedProductId == id ? null : id;
     });
   }
 
-  void _deleteSelected() {
+  // ── Actions ──────────────────────────────────────────────────────────────
+
+  void _deleteSelected(List<StockProduct> products) {
+    final count = _selectedIds.length;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -119,7 +95,7 @@ class _ManageStockPageState extends State<ManageStockPage> {
           style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
         ),
         content: Text(
-          'Are you sure you want to delete ${_selectedProducts.length} product(s)?',
+          'Are you sure you want to delete $count product(s)?',
           style: AppTypography.bodyMedium.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -137,7 +113,7 @@ class _ManageStockPageState extends State<ManageStockPage> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              setState(() => _selectedProducts.clear());
+              setState(() => _selectedIds.clear());
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Products deleted')),
               );
@@ -155,88 +131,166 @@ class _ManageStockPageState extends State<ManageStockPage> {
     );
   }
 
-  void _navigateToCategory(String categoryName) {
+  void _deleteProduct(StockProduct product) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.radiusMD),
+        ),
+        title: Text(
+          'Delete Product',
+          style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
+        ),
+        content: Text(
+          'Are you sure you want to delete "${product.name}"?',
+          style: AppTypography.bodyMedium.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('${product.name} deleted')),
+              );
+            },
+            child: Text(
+              'Delete',
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.danger,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _navigateToCategory(String categoryName, List<StockProduct> products) {
     context.push(
       '/stock/manage/category',
       extra: {
         'categoryName': categoryName,
-        'products': _products,
+        'products': products
+            .where((p) => p.category == categoryName)
+            .map((p) => {
+                  'name': p.name,
+                  'category': p.category,
+                  'buyingPrice': p.buyingPrice,
+                  'sellingPrice': p.sellingPrice,
+                  'stock': p.available,
+                  'product_id': p.productId,
+                })
+            .toList(),
       },
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final stockAsync = ref.watch(stockProvider);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
-      appBar: _buildAppBar(),
+      appBar: _buildAppBar(stockAsync.isLoading),
       body: SafeArea(
         top: false,
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 12),
-                    _buildStatusChips(),
-                    const SizedBox(height: 16),
-                    const StockSummaryCard(
-                      totalStockValue: 'Tsh 0',
-                      profitEstimate: 'Tsh 0',
-                      allProducts: 6,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildActionButtons(),
-                    const SizedBox(height: 16),
-                    StockSearchField(
-                      controller: _searchController,
-                      onChanged: (value) => setState(() {}),
-                      onClear: () => setState(() {}),
-                    ),
-                    const SizedBox(height: 12),
-                    StockCategorySwitch(
-                      value: _categoryMode,
-                      onChanged: (value) {
-                        setState(() {
-                          _categoryMode = value;
-                          _selectedProducts.clear();
-                          _expandedProductIndex = null;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    if (!_categoryMode) ...[
-                      StockSelectBar(
-                        isAllSelected: _allSelected,
-                        onToggleAll: (_) => _toggleAllSelection(),
-                        selectedCount: _selectedProducts.length,
-                        onDeleteAll: _deleteSelected,
+        child: stockAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => _buildError(e),
+          data: (stock) {
+            final products = _filtered(stock.products);
+            return Column(
+              children: [
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () => ref.read(stockProvider.notifier).refresh(),
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 12),
+                          _buildStatusChips(stock),
+                          const SizedBox(height: 16),
+                          _buildSummaryCard(stock),
+                          const SizedBox(height: 16),
+                          _buildActionButtons(),
+                          const SizedBox(height: 16),
+                          StockSearchField(
+                            controller: _searchController,
+                            onChanged: (value) => setState(() {}),
+                            onClear: () => setState(() {}),
+                          ),
+                          const SizedBox(height: 12),
+                          StockCategorySwitch(
+                            value: _categoryMode,
+                            onChanged: (value) {
+                              setState(() {
+                                _categoryMode = value;
+                                _selectedIds.clear();
+                                _expandedProductId = null;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          if (!_categoryMode) ...[
+                            StockSelectBar(
+                              isAllSelected: _allSelected(products),
+                              onToggleAll: (_) =>
+                                  _toggleAllSelection(products),
+                              selectedCount: _selectedIds.length,
+                              onDeleteAll: () =>
+                                  _deleteSelected(products),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          if (_categoryMode)
+                            StockCategoriesGrid(
+                              products: products
+                                  .map((p) => {
+                                        'name': p.name,
+                                        'category': p.category ?? '',
+                                        'buyingPrice': p.buyingPrice,
+                                        'sellingPrice': p.sellingPrice,
+                                        'stock': p.available,
+                                      })
+                                  .toList(),
+                              onCategoryTap: (cat) =>
+                                  _navigateToCategory(cat, stock.products),
+                            )
+                          else
+                            _buildProductList(products),
+                          SizedBox(height: 24 + bottomPadding),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                    ],
-                    if (_categoryMode)
-                      StockCategoriesGrid(
-                        products: _products,
-                        onCategoryTap: _navigateToCategory,
-                      )
-                    else
-                      _buildProductList(),
-                    SizedBox(height: 24 + bottomPadding),
-                  ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
+  // ── Builders ─────────────────────────────────────────────────────────────
+
+  PreferredSizeWidget _buildAppBar(bool isLoading) {
     return AppBar(
       backgroundColor: AppColors.card,
       elevation: 0,
@@ -266,57 +320,98 @@ class _ManageStockPageState extends State<ManageStockPage> {
         ),
       ),
       centerTitle: true,
+      actions: [
+        if (isLoading)
+          const Padding(
+            padding: EdgeInsets.only(right: 16),
+            child: Center(
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
-  Widget _buildStatusChips() {
+  Widget _buildStatusChips(StockState stock) {
+    final all = stock.products.length;
+    final outOfStock =
+        stock.products.where((p) => p.isOutOfStock).length;
+    final lowStock =
+        stock.products.where((p) => p.isLowStock && !p.isOutOfStock).length;
+
     return SizedBox(
       height: 40,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-        children: const [
+        padding:
+            const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
+        children: [
           StockStatusChip(
             icon: Icons.inventory_2_rounded,
-            count: 15,
+            count: all,
             label: 'All',
             color: AppColors.textSecondary,
             backgroundColor: AppColors.background,
           ),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           StockStatusChip(
             icon: Icons.remove_shopping_cart_rounded,
-            count: 3,
+            count: outOfStock,
             label: 'Out of Stock',
             color: AppColors.danger,
             backgroundColor: AppColors.dangerLight,
           ),
-          SizedBox(width: 8),
-          StockStatusChip(
+          const SizedBox(width: 8),
+          const StockStatusChip(
             icon: Icons.schedule_rounded,
-            count: 4,
+            count: 0,
             label: 'To Expire',
             color: Color(0xFFFF9800),
             backgroundColor: Color(0xFFFFF3E0),
           ),
-          SizedBox(width: 8),
-          StockStatusChip(
+          const SizedBox(width: 8),
+          const StockStatusChip(
             icon: Icons.event_busy_rounded,
-            count: 1,
+            count: 0,
             label: 'Expired',
             color: Color(0xFFE64A19),
             backgroundColor: Color(0xFFFBE9E7),
           ),
-          SizedBox(width: 8),
+          const SizedBox(width: 8),
           StockStatusChip(
             icon: Icons.trending_down_rounded,
-            count: 6,
+            count: lowStock,
             label: 'Running Low',
             color: AppColors.primary,
-            backgroundColor: Color(0xFFE3F2FD),
+            backgroundColor: const Color(0xFFE3F2FD),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSummaryCard(StockState stock) {
+    final s = stock.summary;
+    final currency = s.currency;
+    final stockValue =
+        '$currency ${_fmt(s.stockValue)}';
+
+    // Estimate profit from individual product margins
+    double profitEstimate = 0;
+    for (final p in stock.products) {
+      final margin = p.sellingPrice - p.buyingPrice;
+      if (margin > 0) profitEstimate += margin * p.available;
+    }
+    final profitStr = '$currency ${_fmt(profitEstimate)}';
+
+    return StockSummaryCard(
+      totalStockValue: stockValue,
+      profitEstimate: profitStr,
+      allProducts: s.itemsCount > 0 ? s.itemsCount : stock.products.length,
     );
   }
 
@@ -325,7 +420,8 @@ class _ManageStockPageState extends State<ManageStockPage> {
       height: 90,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
+        padding:
+            const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
         children: [
           StockActionButton(
             icon: Icons.file_download_rounded,
@@ -387,101 +483,96 @@ class _ManageStockPageState extends State<ManageStockPage> {
     );
   }
 
-  Widget _buildProductList() {
+  Widget _buildProductList(List<StockProduct> products) {
     return Column(
-      children: List.generate(_products.length, (index) {
-        final product = _products[index];
+      children: products.map((product) {
+        final id = product.productId;
         return StockProductCard(
-          productName: product['name'],
-          category: product['category'],
-          buyingPrice: product['buyingPrice'],
-          sellingPrice: product['sellingPrice'],
-          currentStock: product['stock'],
-          isSelected: _selectedProducts.contains(index),
-          onSelectionChanged: (_) => _toggleProductSelection(index),
-          isExpanded: _expandedProductIndex == index,
-          onExpandToggle: () => _toggleProductExpansion(index),
-          onEdit: () => _editProduct(index),
+          productName: product.name,
+          category: product.category ?? '',
+          buyingPrice: product.buyingPrice,
+          sellingPrice: product.sellingPrice,
+          currentStock: product.available.toInt(),
+          isSelected: _selectedIds.contains(id),
+          onSelectionChanged: (_) => _toggleSelection(id),
+          isExpanded: _expandedProductId == id,
+          onExpandToggle: () => _toggleExpansion(id),
+          onEdit: () => context.push('/stock/manage/add', extra: {
+            'name': product.name,
+            'category': product.category,
+            'buyingPrice': product.buyingPrice,
+            'sellingPrice': product.sellingPrice,
+            'stock': product.available,
+          }),
           onHistory: () => ProductReportsHelper.exportHistoryPdf(
             context: context,
-            productName: product['name'],
+            productName: product.name,
           ),
           onStockPdf: () => ProductReportsHelper.exportStockPdf(
             context: context,
-            productName: product['name'],
-            buyingPrice: product['buyingPrice'],
+            productName: product.name,
+            buyingPrice: product.buyingPrice,
           ),
           onSalesPdf: () => ProductReportsHelper.exportSalesPdf(
             context: context,
-            productName: product['name'],
-            sellingPrice: product['sellingPrice'],
+            productName: product.name,
+            sellingPrice: product.sellingPrice,
           ),
           onPhotos: () => ProductReportsHelper.showPhotosDialog(
             context: context,
-            productName: product['name'],
+            productName: product.name,
           ),
-          onRestock: () => context.push('/stock/manage/purchase', extra: product),
+          onRestock: () =>
+              context.push('/stock/manage/purchase', extra: {
+                'name': product.name,
+                'category': product.category,
+                'buyingPrice': product.buyingPrice,
+                'sellingPrice': product.sellingPrice,
+                'stock': product.available,
+              }),
           onAdjust: () => context.push('/adjust'),
-          onDelete: () => _deleteProduct(index),
+          onDelete: () => _deleteProduct(product),
         );
-      }),
+      }).toList(),
     );
   }
 
-  void _editProduct(int index) {
-    context.push('/stock/manage/add', extra: _products[index]);
-  }
-
-  void _deleteProduct(int index) {
-    final product = _products[index];
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.radiusMD),
-        ),
-        title: Text(
-          'Delete Product',
-          style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
-        ),
-        content: Text(
-          'Are you sure you want to delete "${product['name']}"?',
-          style: AppTypography.bodyMedium.copyWith(
-            color: AppColors.textSecondary,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
-              ),
+  Widget _buildError(Object error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.wifi_off_rounded, size: 48, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(
+              'Imeshindwa kupakia stock',
+              style: AppTypography.bodyMedium
+                  .copyWith(color: AppColors.textPrimary),
             ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                _products.removeAt(index);
-                _expandedProductIndex = null;
-                _selectedProducts.remove(index);
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('${product['name']} deleted')),
-              );
-            },
-            child: Text(
-              'Delete',
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.danger,
-                fontWeight: FontWeight.w600,
-              ),
+            const SizedBox(height: 8),
+            Text(
+              error.toString(),
+              style: AppTypography.bodySmall
+                  .copyWith(color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
             ),
-          ),
-        ],
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: () => ref.read(stockProvider.notifier).refresh(),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Jaribu tena'),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  String _fmt(double v) {
+    if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
+    if (v >= 1000) return '${(v / 1000).toStringAsFixed(0)}K';
+    return v.toStringAsFixed(0);
   }
 }

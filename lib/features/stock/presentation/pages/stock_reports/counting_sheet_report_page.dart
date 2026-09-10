@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -10,6 +11,7 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _CountingItem {
@@ -28,41 +30,45 @@ class _CountingItem {
   });
 }
 
-class CountingSheetReportPage extends StatefulWidget {
+class CountingSheetReportPage extends ConsumerStatefulWidget {
   const CountingSheetReportPage({super.key});
 
   @override
-  State<CountingSheetReportPage> createState() =>
+  ConsumerState<CountingSheetReportPage> createState() =>
       _CountingSheetReportPageState();
 }
 
-class _CountingSheetReportPageState extends State<CountingSheetReportPage> {
+class _CountingSheetReportPageState extends ConsumerState<CountingSheetReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_CountingItem> _allItems = [
-    _CountingItem(sn: 1, name: 'AIR', available: 20, adjusted: 0, physical: 0),
-    _CountingItem(sn: 2, name: 'AIR FRESH', available: 100, adjusted: 2, physical: 0),
-    _CountingItem(sn: 3, name: 'APPLE JUICE', available: 25, adjusted: 0, physical: 0),
-    _CountingItem(sn: 4, name: 'BILIAN', available: 10, adjusted: -1, physical: 0),
-    _CountingItem(sn: 5, name: 'COCA COLA 600ML', available: 60, adjusted: 0, physical: 0),
-    _CountingItem(sn: 6, name: 'COKE', available: 20, adjusted: 1, physical: 0),
-    _CountingItem(sn: 7, name: 'DESPERADO', available: 12, adjusted: 0, physical: 0),
-    _CountingItem(sn: 8, name: 'ENERGY DRINK', available: 40, adjusted: -2, physical: 0),
-    _CountingItem(sn: 9, name: 'JACK DANIEL', available: 15, adjusted: 0, physical: 0),
-    _CountingItem(sn: 10, name: 'MANGO JUICE', available: 12, adjusted: 0, physical: 0),
-    _CountingItem(sn: 11, name: 'ORANGE JUICE', available: 8, adjusted: 1, physical: 0),
-    _CountingItem(sn: 12, name: 'SMIRNOFF VODKA', available: 10, adjusted: 0, physical: 0),
-    _CountingItem(sn: 13, name: 'FANTA', available: 30, adjusted: -1, physical: 0),
-    _CountingItem(sn: 14, name: 'SPRITE', available: 35, adjusted: 0, physical: 0),
-    _CountingItem(sn: 15, name: 'PILSNER', available: 50, adjusted: 3, physical: 0),
-    _CountingItem(sn: 16, name: 'TUSKER', available: 45, adjusted: 0, physical: 0),
-    _CountingItem(sn: 17, name: 'WHITE CAP', available: 40, adjusted: -1, physical: 0),
-    _CountingItem(sn: 18, name: 'CHIVAS REGAL', available: 5, adjusted: 0, physical: 0),
-    _CountingItem(sn: 19, name: 'JAMESON', available: 8, adjusted: 0, physical: 0),
-    _CountingItem(sn: 20, name: 'PATRÓN TEQUILA', available: 3, adjusted: 0, physical: 0),
-  ];
+  List<_CountingItem> _allItems = [];
+  bool _isLoading = true;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    setState(() => _isLoading = true);
+    try {
+      final stockState = ref.read(stockProvider);
+      final products = stockState.whenOrNull(data: (s) => s.products) ?? [];
+      final items = products.asMap().entries.map((e) {
+        final p = e.value;
+        return _CountingItem(sn: e.key + 1, name: p.name, available: p.available.toInt(), adjusted: 0, physical: 0);
+      }).toList();
+      if (mounted) setState(() => _allItems = items);
+    } catch (_) {
+      if (mounted) setState(() => _allItems = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  
   List<_CountingItem> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();
     if (query.isEmpty) return _allItems;
@@ -224,9 +230,11 @@ class _CountingSheetReportPageState extends State<CountingSheetReportPage> {
               const SizedBox(height: 12),
               _buildSearchField(),
               const SizedBox(height: 12),
-              items.isEmpty
-                  ? _buildEmptyState()
-                  : _buildTable(items),
+              _isLoading
+                  ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+                  : items.isEmpty
+                      ? _buildEmptyState()
+                      : _buildTable(items),
               const SizedBox(height: 24),
             ],
           ),

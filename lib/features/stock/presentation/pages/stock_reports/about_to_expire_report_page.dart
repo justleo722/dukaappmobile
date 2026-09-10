@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -10,6 +11,7 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _ExpiryItem {
@@ -21,27 +23,42 @@ class _ExpiryItem {
   const _ExpiryItem({required this.sn, required this.name, required this.quantity, required this.stockValue});
 }
 
-class AboutToExpireReportPage extends StatefulWidget {
+class AboutToExpireReportPage extends ConsumerStatefulWidget {
   const AboutToExpireReportPage({super.key});
 
   @override
-  State<AboutToExpireReportPage> createState() => _AboutToExpireReportPageState();
+  ConsumerState<AboutToExpireReportPage> createState() => _AboutToExpireReportPageState();
 }
 
-class _AboutToExpireReportPageState extends State<AboutToExpireReportPage> {
+class _AboutToExpireReportPageState extends ConsumerState<AboutToExpireReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_ExpiryItem> _allItems = [
-    _ExpiryItem(sn: 1, name: 'APPLE JUICE', quantity: 5, stockValue: 6000),
-    _ExpiryItem(sn: 2, name: 'MANGO JUICE', quantity: 3, stockValue: 3000),
-    _ExpiryItem(sn: 3, name: 'ORANGE JUICE', quantity: 4, stockValue: 4000),
-    _ExpiryItem(sn: 4, name: 'ENERGY DRINK', quantity: 8, stockValue: 12000),
-    _ExpiryItem(sn: 5, name: 'COCA COLA 600ML', quantity: 10, stockValue: 8000),
-    _ExpiryItem(sn: 6, name: 'DESPERADO', quantity: 2, stockValue: 5000),
-    _ExpiryItem(sn: 7, name: 'SMIRNOFF ICE', quantity: 6, stockValue: 18000),
-    _ExpiryItem(sn: 8, name: 'FANTA', quantity: 7, stockValue: 5600),
-  ];
+  List<_ExpiryItem> _allItems = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(stockRepositoryProvider);
+      final products = await repo.fetchExpiredStock();
+      final items = products.asMap().entries.map((e) {
+        final p = e.value;
+        return _ExpiryItem(sn: e.key + 1, name: p.name, quantity: p.available.toInt(), stockValue: p.buyingPrice * p.available);
+      }).toList();
+      if (mounted) setState(() => _allItems = items);
+    } catch (_) {
+      if (mounted) setState(() => _allItems = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   List<_ExpiryItem> get _filteredItems {
     final q = _searchController.text.toLowerCase().trim();
@@ -105,7 +122,10 @@ class _AboutToExpireReportPageState extends State<AboutToExpireReportPage> {
     return Scaffold(backgroundColor: const Color(0xFFF5F7FB), appBar: _buildAppBar(context),
       body: SafeArea(top: false, child: SingleChildScrollView(padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: Column(children: [_buildShopHeader(), _buildActionButtons(context), const SizedBox(height: 12), _buildSearchField(), const SizedBox(height: 12),
-          items.isEmpty ? _buildEmptyState() : _buildTable(items), const SizedBox(height: 24)]))));
+          _isLoading
+              ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+              : items.isEmpty ? _buildEmptyState() : _buildTable(items),
+          const SizedBox(height: 24)]))));
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {

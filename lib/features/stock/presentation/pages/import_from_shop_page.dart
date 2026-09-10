@@ -1,100 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/shop_dropdown.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/product_import_card.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/bottom_import_bar.dart';
 
-class ImportFromShopPage extends StatefulWidget {
+class ImportFromShopPage extends ConsumerStatefulWidget {
   const ImportFromShopPage({super.key});
 
   @override
-  State<ImportFromShopPage> createState() => _ImportFromShopPageState();
+  ConsumerState<ImportFromShopPage> createState() => _ImportFromShopPageState();
 }
 
-class _ImportFromShopPageState extends State<ImportFromShopPage> {
+class _ImportFromShopPageState extends ConsumerState<ImportFromShopPage> {
   String? _selectedShop;
   final TextEditingController _searchController = TextEditingController();
   final Set<int> _selectedProducts = {};
 
-  static const List<Map<String, dynamic>> _allProducts = [
-    {
-      'name': 'APPLE PUNCH',
-      'barcode': '000036240005',
-      'buyingPrice': 800.0,
-      'sellingPrice': 1000.0,
-      'wholesalePrice': 1000.0,
-      'stock': 4,
-    },
-    {
-      'name': 'COCA COLA 600ML',
-      'barcode': '00017330006',
-      'buyingPrice': 800.0,
-      'sellingPrice': 1000.0,
-      'wholesalePrice': 1000.0,
-      'stock': 3,
-    },
-    {
-      'name': 'FANTA ORANGE',
-      'barcode': '00017330013',
-      'buyingPrice': 800.0,
-      'sellingPrice': 1000.0,
-      'wholesalePrice': 1000.0,
-      'stock': 7,
-    },
-    {
-      'name': 'SPRITE 500ML',
-      'barcode': '00017330020',
-      'buyingPrice': 700.0,
-      'sellingPrice': 900.0,
-      'wholesalePrice': 900.0,
-      'stock': 2,
-    },
-    {
-      'name': 'KONYAGI 350ML',
-      'barcode': '00060200015',
-      'buyingPrice': 12000.0,
-      'sellingPrice': 15000.0,
-      'wholesalePrice': 14500.0,
-      'stock': 12,
-    },
-    {
-      'name': 'SMIRNOFF VODKA',
-      'barcode': '00060200022',
-      'buyingPrice': 18000.0,
-      'sellingPrice': 22000.0,
-      'wholesalePrice': 21000.0,
-      'stock': 5,
-    },
-    {
-      'name': 'SAFARI LAGER',
-      'barcode': '00080010003',
-      'buyingPrice': 1500.0,
-      'sellingPrice': 2000.0,
-      'wholesalePrice': 1900.0,
-      'stock': 24,
-    },
-    {
-      'name': 'KILIMANJARO PREMIUM',
-      'barcode': '00080010010',
-      'buyingPrice': 1800.0,
-      'sellingPrice': 2500.0,
-      'wholesalePrice': 2300.0,
-      'stock': 18,
-    },
-  ];
+  // Products loaded from the selected source shop
+  List<Map<String, dynamic>> _allProducts = [];
+  bool _loadingProducts = false;
+  bool _isSaving = false;
 
   List<Map<String, dynamic>> get _filteredProducts {
-    if (_selectedShop == null) return [];
-
+    if (_selectedShop == null || _allProducts.isEmpty) return [];
     final query = _searchController.text.toLowerCase().trim();
     if (query.isEmpty) return _allProducts;
-
-      return _allProducts.where((product) {
-      final name = (product['name'] as String).toLowerCase();
-      final barcode = (product['barcode'] as String).toLowerCase();
+    return _allProducts.where((product) {
+      final name = (product['name'] as String? ?? '').toLowerCase();
+      final barcode = (product['barcode'] as String? ?? '').toLowerCase();
       return name.contains(query) || barcode.contains(query);
     }).toList();
   }
@@ -103,6 +41,34 @@ class _ImportFromShopPageState extends State<ImportFromShopPage> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  /// Extract shop_id from label "Shop Name (shop_id)"
+  String? _extractShopId(String? label) {
+    if (label == null) return null;
+    final match = RegExp(r'\(([^)]+)\)$').firstMatch(label);
+    return match?.group(1);
+  }
+
+  Future<void> _loadShopProducts(String shopLabel) async {
+    final shopId = _extractShopId(shopLabel);
+    if (shopId == null) return;
+    setState(() {
+      _loadingProducts = true;
+      _allProducts = [];
+      _selectedProducts.clear();
+    });
+    try {
+      final repo = ref.read(stockRepositoryProvider);
+      final products = await repo.fetchProductsByShop(shopId);
+      if (mounted) {
+        setState(() => _allProducts = products);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _allProducts = []);
+    } finally {
+      if (mounted) setState(() => _loadingProducts = false);
+    }
   }
 
   void _toggleProductSelection(int index) {
@@ -116,13 +82,13 @@ class _ImportFromShopPageState extends State<ImportFromShopPage> {
   }
 
   void _toggleAllSelection(List<Map<String, dynamic>> products) {
-    final indices = products.map((p) => _allProducts.indexOf(p)).toSet();
-    final allSelected = indices.every((i) => _selectedProducts.contains(i));
+    final allIndices = List.generate(products.length, (i) => i).toSet();
+    final allSelected = allIndices.every((i) => _selectedProducts.contains(i));
     setState(() {
       if (allSelected) {
-        _selectedProducts.removeAll(indices);
+        _selectedProducts.removeAll(allIndices);
       } else {
-        _selectedProducts.addAll(indices);
+        _selectedProducts.addAll(allIndices);
       }
     });
   }
@@ -131,22 +97,57 @@ class _ImportFromShopPageState extends State<ImportFromShopPage> {
     context.pop();
   }
 
-  void _importSelected() {
-    if (_selectedProducts.isEmpty) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${_selectedProducts.length} product(s) imported successfully',
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+  Future<void> _importSelected() async {
+    if (_selectedProducts.isEmpty || _isSaving) return;
+    final shopId = _extractShopId(_selectedShop);
+    if (shopId == null) return;
+
+    final displayProducts = _filteredProducts;
+    final productIds = _selectedProducts
+        .where((i) => i < displayProducts.length)
+        .map((i) => displayProducts[i]['product_id'])
+        .where((id) => id != null)
+        .toList();
+
+    if (productIds.isEmpty) return;
+
+    setState(() => _isSaving = true);
+    try {
+      final repo = ref.read(stockRepositoryProvider);
+      final res = await repo.copyInProducts({
+        'from_shop_id': shopId,
+        'product_id': productIds,
+      });
+      final ok = res['status']?.toString() == '1' || res['status'] == true || res['status']?.toString() == 'success';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok ? '${productIds.length} product(s) imported successfully' : (res['message']?.toString() ?? 'Import failed'),
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+          ),
+          backgroundColor: ok ? AppColors.success : AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
         ),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.radiusSM),
+      );
+      if (ok) {
+        ref.read(stockProvider.notifier).refresh();
+        setState(() => _selectedProducts.clear());
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
         ),
-      ),
-    );
-    setState(() => _selectedProducts.clear());
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -170,18 +171,25 @@ class _ImportFromShopPageState extends State<ImportFromShopPage> {
                     const SizedBox(height: 16),
                     _buildShopSection(),
                     const SizedBox(height: 12),
-                    if (hasShop) ...[
-                      _buildSearchSection(),
-                      const SizedBox(height: 16),
-                      _buildProductCountLabel(products.length),
-                      const SizedBox(height: 8),
+                    if (hasShop && _loadingProducts)
+                      const Center(child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 60),
+                        child: CircularProgressIndicator(),
+                      ))
+                    else ...[
+                      if (hasShop) ...[
+                        _buildSearchSection(),
+                        const SizedBox(height: 16),
+                        _buildProductCountLabel(products.length),
+                        const SizedBox(height: 8),
+                      ],
+                      if (hasShop && products.isNotEmpty)
+                        _buildProductList(products)
+                      else if (hasShop && products.isEmpty)
+                        _buildEmptyState()
+                      else
+                        _buildSelectShopPrompt(),
                     ],
-                    if (hasShop && products.isNotEmpty)
-                      _buildProductList(products)
-                    else if (hasShop && products.isEmpty)
-                      _buildEmptyState()
-                    else
-                      _buildSelectShopPrompt(),
                     SizedBox(height: 24 + bottomPadding),
                   ],
                 ),
@@ -189,7 +197,7 @@ class _ImportFromShopPageState extends State<ImportFromShopPage> {
             ),
             BottomImportBar(
               onClose: _closePage,
-              onImport: _importSelected,
+              onImport: _isSaving ? null : _importSelected,
               selectedCount: _selectedProducts.length,
             ),
           ],
@@ -260,6 +268,7 @@ class _ImportFromShopPageState extends State<ImportFromShopPage> {
             _selectedShop = value;
             _selectedProducts.clear();
           });
+          if (value != null) _loadShopProducts(value);
         },
       ),
     );
@@ -323,7 +332,7 @@ class _ImportFromShopPageState extends State<ImportFromShopPage> {
 
   Widget _buildProductCountLabel(int count) {
     final displayProducts = _filteredProducts;
-    final indices = displayProducts.map((p) => _allProducts.indexOf(p)).toSet();
+    final indices = List.generate(displayProducts.length, (i) => i).toSet();
     final allSelected =
         indices.isNotEmpty && indices.every((i) => _selectedProducts.contains(i));
 
@@ -381,17 +390,16 @@ class _ImportFromShopPageState extends State<ImportFromShopPage> {
     return Column(
       children: List.generate(products.length, (index) {
         final product = products[index];
-        final globalIndex = _allProducts.indexOf(product);
         return ProductImportCard(
-          productName: product['name'] as String,
-          barcode: product['barcode'] as String,
-          buyingPrice: product['buyingPrice'] as double,
-          sellingPrice: product['sellingPrice'] as double,
-          wholesalePrice: product['wholesalePrice'] as double,
-          stock: product['stock'] as int,
-          isSelected: _selectedProducts.contains(globalIndex),
-          onTap: () => _toggleProductSelection(globalIndex),
-          onSelectionChanged: (_) => _toggleProductSelection(globalIndex),
+          productName: product['name'] as String? ?? '',
+          barcode: product['barcode'] as String? ?? '',
+          buyingPrice: (product['buyingPrice'] ?? product['buying_price'] ?? 0.0).toDouble(),
+          sellingPrice: (product['sellingPrice'] ?? product['selling_price'] ?? 0.0).toDouble(),
+          wholesalePrice: (product['wholesalePrice'] ?? product['wholesale_price'] ?? 0.0).toDouble(),
+          stock: (product['stock'] ?? product['available'] ?? 0).toInt(),
+          isSelected: _selectedProducts.contains(index),
+          onTap: () => _toggleProductSelection(index),
+          onSelectionChanged: (_) => _toggleProductSelection(index),
         );
       }),
     );

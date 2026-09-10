@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/adjust_product_card.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/adjustment_status_dropdown.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/adjustment_summary_card.dart';
@@ -12,41 +14,42 @@ import 'package:dukaapp/features/stock/presentation/widgets/adjust_bottom_bar.da
 class _AdjustItem {
   final String name;
   final int currentStock;
+  final dynamic productId;
   int adjustQuantity;
   AdjustmentStatus status;
 
   _AdjustItem({
     required this.name,
     required this.currentStock,
+    this.productId,
   })  : adjustQuantity = 0,
         status = AdjustmentStatus.none;
 }
 
-class AdjustStockPage extends StatefulWidget {
+class AdjustStockPage extends ConsumerStatefulWidget {
   const AdjustStockPage({super.key});
 
   @override
-  State<AdjustStockPage> createState() => _AdjustStockPageState();
+  ConsumerState<AdjustStockPage> createState() => _AdjustStockPageState();
 }
 
-class _AdjustStockPageState extends State<AdjustStockPage> {
+class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
   final TextEditingController _searchController = TextEditingController();
   final List<_AdjustItem> _items = [];
   final Set<int> _selectedProducts = {};
+  bool _isSaving = false;
 
-  static const List<Map<String, dynamic>> _dummyProducts = [
-    {'name': 'AIR', 'stock': 6},
-    {'name': 'AIR FRESH', 'stock': 93},
-    {'name': 'APPLE JUICE', 'stock': 0},
-    {'name': 'COCA COLA 600ML', 'stock': 53},
-    {'name': 'DESPERADO', 'stock': 6},
-    {'name': 'Energy Drink', 'stock': 35},
-  ];
-
-  List<Map<String, dynamic>> get _filteredProducts {
+  List<Map<String, dynamic>> _getFilteredProducts() {
+    final stockState = ref.read(stockProvider);
+    final allProducts = stockState.whenOrNull(
+          data: (s) => s.products
+              .map((p) => {'name': p.name, 'stock': p.available.toInt(), 'product_id': p.productId})
+              .toList(),
+        ) ??
+        [];
     final query = _searchController.text.toLowerCase().trim();
-    if (query.isEmpty) return _dummyProducts;
-    return _dummyProducts.where((p) {
+    if (query.isEmpty) return allProducts;
+    return allProducts.where((p) {
       final name = (p['name'] as String).toLowerCase();
       return name.contains(query);
     }).toList();
@@ -65,7 +68,7 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
   }
 
   void _addSelectedProducts() {
-    final products = _filteredProducts;
+    final products = _getFilteredProducts();
     int addedCount = 0;
     for (final index in _selectedProducts) {
       if (index >= products.length) continue;
@@ -75,6 +78,7 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
       _items.add(_AdjustItem(
         name: name,
         currentStock: product['stock'] as int,
+        productId: product['product_id'],
       ));
       addedCount++;
     }
@@ -107,7 +111,7 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
   }
 
   void _toggleAll() {
-    final products = _filteredProducts;
+    final products = _getFilteredProducts();
     final selectableIndices = products
         .asMap()
         .keys
@@ -121,6 +125,67 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
         _selectedProducts.addAll(selectableIndices);
       }
     });
+  }
+
+  Future<void> _saveAdjustments() async {
+    final repo = ref.read(stockRepositoryProvider);
+    final adjustedItems = _items
+        .where((item) => item.adjustQuantity != 0 && item.productId != null)
+        .map((item) => {
+              'product_id': item.productId,
+              'quantity': item.adjustQuantity,
+              'type': item.status.name, // 'add', 'remove', 'none'
+            })
+        .toList();
+
+    if (adjustedItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No quantities adjusted. Set quantity for at least one product.',
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+          ),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final res = await repo.adjustStockBalance({'adjustments': adjustedItems});
+      final ok = res['status']?.toString() == '1' || res['status'] == true || res['status']?.toString() == 'success';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok ? 'Adjustments saved successfully' : (res['message']?.toString() ?? 'Failed to save adjustments'),
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+          ),
+          backgroundColor: ok ? AppColors.success : AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+        ),
+      );
+      if (ok) {
+        ref.read(stockProvider.notifier).refresh();
+        context.pop();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -161,23 +226,7 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
             ),
             AdjustBottomBar(
               onClose: () => context.pop(),
-              onSave: _items.isNotEmpty
-                  ? () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Adjustments saved successfully',
-                            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-                          ),
-                          backgroundColor: AppColors.success,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-                          ),
-                        ),
-                      );
-                    }
-                  : null,
+              onSave: (_items.isNotEmpty && !_isSaving) ? _saveAdjustments : null,
             ),
           ],
         ),
@@ -343,7 +392,7 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
   }
 
   Widget _buildProductsHeader() {
-    final products = _filteredProducts;
+    final products = _getFilteredProducts();
     final selectableIndices = products
         .asMap()
         .keys
@@ -426,7 +475,7 @@ class _AdjustStockPageState extends State<AdjustStockPage> {
   }
 
   Widget _buildProductList() {
-    final products = _filteredProducts;
+    final products = _getFilteredProducts();
 
     if (_searchController.text.isNotEmpty && products.isEmpty) {
       return Center(

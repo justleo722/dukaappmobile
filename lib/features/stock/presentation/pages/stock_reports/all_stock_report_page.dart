@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -10,6 +11,7 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _StockItem {
@@ -41,31 +43,47 @@ class _StockItem {
   double get profitEstimate => sales - (bp * sold);
 }
 
-class AllStockReportPage extends StatefulWidget {
+class AllStockReportPage extends ConsumerStatefulWidget {
   const AllStockReportPage({super.key});
 
   @override
-  State<AllStockReportPage> createState() => _AllStockReportPageState();
+  ConsumerState<AllStockReportPage> createState() => _AllStockReportPageState();
 }
 
-class _AllStockReportPageState extends State<AllStockReportPage> {
+class _AllStockReportPageState extends ConsumerState<AllStockReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_StockItem> _allItems = [
-    _StockItem(sn: 1, name: 'AIR', bp: 4500, sp: 7000, inStock: 20, sold: 5, bad: 0, lost: 0, expired: 0),
-    _StockItem(sn: 2, name: 'AIR FRESH', bp: 3500, sp: 5500, inStock: 100, sold: 7, bad: 0, lost: 0, expired: 0),
-    _StockItem(sn: 3, name: 'APPLE JUICE', bp: 1200, sp: 2000, inStock: 25, sold: 5, bad: 0, lost: 0, expired: 0),
-    _StockItem(sn: 4, name: 'BILIAN', bp: 8000, sp: 12000, inStock: 10, sold: 9, bad: 0, lost: 0, expired: 0),
-    _StockItem(sn: 5, name: 'COCA COLA 600ML', bp: 800, sp: 1000, inStock: 60, sold: 7, bad: 0, lost: 0, expired: 0),
-    _StockItem(sn: 6, name: 'COKE', bp: 800, sp: 1000, inStock: 20, sold: 4, bad: 0, lost: 0, expired: 0),
-    _StockItem(sn: 7, name: 'DESPERADO', bp: 2500, sp: 4000, inStock: 12, sold: 6, bad: 0, lost: 0, expired: 0),
-    _StockItem(sn: 8, name: 'ENERGY DRINK', bp: 1500, sp: 2500, inStock: 40, sold: 5, bad: 0, lost: 0, expired: 0),
-    _StockItem(sn: 9, name: 'JACK DANIEL', bp: 45000, sp: 65000, inStock: 15, sold: 4, bad: 0, lost: 0, expired: 0),
-    _StockItem(sn: 10, name: 'MANGO JUICE', bp: 1000, sp: 1500, inStock: 12, sold: 3, bad: 0, lost: 0, expired: 0),
-    _StockItem(sn: 11, name: 'ORANGE JUICE', bp: 1000, sp: 1500, inStock: 8, sold: 7, bad: 0, lost: 0, expired: 0),
-    _StockItem(sn: 12, name: 'SMIRNOFF VODKA', bp: 18000, sp: 22000, inStock: 10, sold: 5, bad: 0, lost: 0, expired: 0),
-  ];
+  List<_StockItem> _allItems = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    setState(() => _isLoading = true);
+    try {
+      final stockState = ref.read(stockProvider);
+      final products = stockState.whenOrNull(data: (s) => s.products) ?? [];
+      final items = products.asMap().entries.map((e) {
+        final p = e.value;
+        return _StockItem(
+          sn: e.key + 1, name: p.name,
+          bp: p.buyingPrice, sp: p.sellingPrice,
+          inStock: p.available.toInt(),
+          sold: 0, bad: 0, lost: 0, expired: 0,
+        );
+      }).toList();
+      if (mounted) setState(() => _allItems = items);
+    } catch (_) {
+      if (mounted) setState(() => _allItems = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   List<_StockItem> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();
@@ -250,9 +268,11 @@ class _AllStockReportPageState extends State<AllStockReportPage> {
               const SizedBox(height: 12),
               _buildSearchField(),
               const SizedBox(height: 12),
-              items.isEmpty
-                  ? _buildEmptyState()
-                  : _buildTable(items),
+              _isLoading
+                  ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+                  : items.isEmpty
+                      ? _buildEmptyState()
+                      : _buildTable(items),
               const SizedBox(height: 24),
             ],
           ),

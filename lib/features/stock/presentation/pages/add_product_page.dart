@@ -1,24 +1,26 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/add_category_bottom_sheet.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/add_supplier_bottom_sheet.dart';
 import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 
-class AddProductPage extends StatefulWidget {
+class AddProductPage extends ConsumerStatefulWidget {
   final Map<String, dynamic>? product;
 
   const AddProductPage({super.key, this.product});
 
   @override
-  State<AddProductPage> createState() => _AddProductPageState();
+  ConsumerState<AddProductPage> createState() => _AddProductPageState();
 }
 
-class _AddProductPageState extends State<AddProductPage> {
+class _AddProductPageState extends ConsumerState<AddProductPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _quantityController = TextEditingController();
@@ -43,15 +45,11 @@ class _AddProductPageState extends State<AddProductPage> {
   final List<File> _selectedPhotos = [];
 
   final List<String> _types = ['Product', 'Service'];
-  final List<String> _categories = [
-    'Uncategorized',
-    'Cosmetics',
-    'Accessories',
-    'Electronics',
-    'Household',
-    'Beauty',
-  ];
+  final List<String> _categories = [];
   final List<String> _suppliers = [];
+  // Map category name → category_id for API call
+  final Map<String, dynamic> _categoryIds = {};
+  bool _isSaving = false;
   final List<String> _yesNoOptions = ['Yes', 'No'];
   final List<String> _units = [
     'Piece',
@@ -84,6 +82,27 @@ class _AddProductPageState extends State<AddProductPage> {
       _sellingPriceController.text = (p['sellingPrice'] ?? 0).toString();
       _selectedCategory = p['category'];
     }
+    // Load categories from cached stock state
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCategories());
+  }
+
+  void _loadCategories() {
+    final stockState = ref.read(stockProvider);
+    stockState.whenData((stock) {
+      if (!mounted) return;
+      setState(() {
+        _categories.clear();
+        _categoryIds.clear();
+        for (final c in stock.categories) {
+          _categories.add(c.name);
+          _categoryIds[c.name] = c.categoryId;
+        }
+        // Keep selected category valid
+        if (_selectedCategory != null && !_categories.contains(_selectedCategory)) {
+          _selectedCategory = null;
+        }
+      });
+    });
   }
 
   @override
@@ -102,12 +121,65 @@ class _AddProductPageState extends State<AddProductPage> {
     super.dispose();
   }
 
-  void _saveProduct() {
-    if (_formKey.currentState!.validate()) {
+  Future<void> _saveProduct() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+
+    try {
+      final repo = ref.read(stockRepositoryProvider);
+      final categoryId = _categoryIds[_selectedCategory];
+      final isEditing = _isEditing;
+
+      final body = {
+        'product_name': _nameController.text.trim(),
+        'type': (_selectedType ?? 'Product').toLowerCase(),
+        'category_id': categoryId?.toString() ?? '',
+        'bp': _buyingPriceController.text.trim(),
+        'sp': _sellingPriceController.text.trim(),
+        'wp': _wholesalePriceController.text.trim(),
+        'quantity': _quantityController.text.trim(),
+        'reorder_level': _reorderLevelController.text.trim(),
+        'barcode': _barcodeController.text.trim(),
+        'unit': _selectedUnit ?? '',
+        'description': _descriptionController.text.trim(),
+        'is_taxable': _selectedTaxable == 'Yes' ? '1' : '0',
+        'ecommerce_enabled': _selectedOnlineShop == 'Yes' ? '1' : '0',
+        'expiry_date': _expiryDateController.text.trim(),
+        if (isEditing) 'product_id': widget.product!['product_id']?.toString() ?? '',
+      };
+
+      final result = isEditing
+          ? await repo.updateProduct(body)
+          : await repo.createProduct(body);
+
+      final status = result['status']?.toString() ?? '';
+      final message = result['message']?.toString() ??
+          (isEditing ? 'Product updated' : 'Product added successfully');
+
+      if (!mounted) return;
+
+      if (status == 'success') {
+        // Refresh stock list in background
+        ref.read(stockProvider.notifier).refresh();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: AppColors.success),
+        );
+        context.pop();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: AppColors.danger),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Product added successfully')),
+        SnackBar(
+          content: Text('Error: ${e.toString().replaceFirst('Exception: ', '')}'),
+          backgroundColor: AppColors.danger,
+        ),
       );
-      context.pop();
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -121,11 +193,21 @@ class _AddProductPageState extends State<AddProductPage> {
     });
   }
 
-  void _addCategory(String name) {
+  Future<void> _addCategory(String name) async {
+    // Optimistically add to local list first
     setState(() {
-      _categories.add(name);
+      if (!_categories.contains(name)) _categories.add(name);
       _selectedCategory = name;
     });
+    try {
+      final result = await ref.read(stockRepositoryProvider).createCategory(name);
+      final categoryId = result['category_id'];
+      if (categoryId != null) {
+        setState(() => _categoryIds[name] = categoryId);
+      }
+      // Refresh categories in background
+      ref.read(stockProvider.notifier).refresh();
+    } catch (_) {}
   }
 
   void _addSupplier(String name) {
@@ -1630,7 +1712,7 @@ class _AddProductPageState extends State<AddProductPage> {
       width: double.infinity,
       height: AppConstants.buttonHeight,
       child: ElevatedButton(
-        onPressed: _saveProduct,
+        onPressed: _isSaving ? null : _saveProduct,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.textWhite,
@@ -1639,12 +1721,17 @@ class _AddProductPageState extends State<AddProductPage> {
             borderRadius: BorderRadius.circular(AppConstants.radiusLG),
           ),
         ),
-        child: Text(
-          _isEditing
-              ? 'Update ${_isService ? 'Service' : 'Product'}'
-              : 'Save ${_isService ? 'Service' : 'Product'}',
-          style: AppTypography.buttonLarge,
-        ),
+        child: _isSaving
+            ? const SizedBox(
+                width: 20, height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textWhite),
+              )
+            : Text(
+                _isEditing
+                    ? 'Update ${_isService ? 'Service' : 'Product'}'
+                    : 'Save ${_isService ? 'Service' : 'Product'}',
+                style: AppTypography.buttonLarge,
+              ),
       ),
     );
   }

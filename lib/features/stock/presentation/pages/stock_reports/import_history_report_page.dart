@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -10,10 +11,12 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _ImportRecord {
   final int sn;
+  final dynamic purchaseId;
   final DateTime date;
   final String title;
   final String category;
@@ -24,6 +27,7 @@ class _ImportRecord {
 
   const _ImportRecord({
     required this.sn,
+    this.purchaseId,
     required this.date,
     required this.title,
     required this.category,
@@ -34,27 +38,54 @@ class _ImportRecord {
   });
 }
 
-class ImportHistoryReportPage extends StatefulWidget {
+class ImportHistoryReportPage extends ConsumerStatefulWidget {
   const ImportHistoryReportPage({super.key});
 
   @override
-  State<ImportHistoryReportPage> createState() => _ImportHistoryReportPageState();
+  ConsumerState<ImportHistoryReportPage> createState() => _ImportHistoryReportPageState();
 }
 
-class _ImportHistoryReportPageState extends State<ImportHistoryReportPage> {
+class _ImportHistoryReportPageState extends ConsumerState<ImportHistoryReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static final List<_ImportRecord> _allImports = [
-    _ImportRecord(sn: 1, date: DateTime(2026, 7, 28, 14, 30), title: 'Weekly Restock', category: 'Beverages', importedBy: 'John Mwangi', items: 12, qty: 200, stockValue: 1500000),
-    _ImportRecord(sn: 2, date: DateTime(2026, 7, 27, 9, 15), title: 'Monthly Supply', category: 'Groceries', importedBy: 'Amina Hassan', items: 25, qty: 500, stockValue: 3200000),
-    _ImportRecord(sn: 3, date: DateTime(2026, 7, 26, 11, 0), title: 'Emergency Restock', category: 'Snacks', importedBy: 'Peter Ochieng', items: 8, qty: 120, stockValue: 650000),
-    _ImportRecord(sn: 4, date: DateTime(2026, 7, 25, 16, 45), title: 'Warehouse Transfer', category: 'Personal Care', importedBy: 'Jane Wambui', items: 15, qty: 300, stockValue: 1800000),
-    _ImportRecord(sn: 5, date: DateTime(2026, 7, 24, 10, 20), title: 'Weekly Restock', category: 'Beverages', importedBy: 'John Mwangi', items: 10, qty: 180, stockValue: 1200000),
-    _ImportRecord(sn: 6, date: DateTime(2026, 7, 23, 8, 0), title: 'New Product Launch', category: 'Electronics', importedBy: 'Amina Hassan', items: 5, qty: 50, stockValue: 4500000),
-    _ImportRecord(sn: 7, date: DateTime(2026, 7, 22, 13, 30), title: 'Weekly Restock', category: 'Dairy', importedBy: 'Peter Ochieng', items: 7, qty: 90, stockValue: 420000),
-    _ImportRecord(sn: 8, date: DateTime(2026, 7, 21, 15, 10), title: 'Supplier Delivery', category: 'Frozen Foods', importedBy: 'Jane Wambui', items: 6, qty: 80, stockValue: 350000),
-  ];
+  List<_ImportRecord> _allImports = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(stockRepositoryProvider);
+      final records = await repo.fetchImportHistory();
+      final items = records.asMap().entries.map((e) {
+        final r = e.value;
+        DateTime? date;
+        try { date = DateTime.parse(r['date']?.toString() ?? ''); } catch (_) {}
+        return _ImportRecord(
+          sn: e.key + 1,
+          purchaseId: r['purchase_id'] ?? r['id'],
+          date: date ?? DateTime.now(),
+          title: r['title']?.toString() ?? r['description']?.toString() ?? 'Import',
+          category: r['category']?.toString() ?? '',
+          importedBy: r['imported_by']?.toString() ?? r['created_by']?.toString() ?? '',
+          items: int.tryParse(r['items']?.toString() ?? r['item_count']?.toString() ?? '0') ?? 0,
+          qty: int.tryParse(r['qty']?.toString() ?? r['quantity']?.toString() ?? '0') ?? 0,
+          stockValue: double.tryParse(r['stock_value']?.toString() ?? r['total_value']?.toString() ?? '0') ?? 0.0,
+        );
+      }).toList();
+      if (mounted) setState(() => _allImports = items);
+    } catch (_) {
+      if (mounted) setState(() => _allImports = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   List<_ImportRecord> get _filteredItems {
     final q = _searchController.text.toLowerCase().trim();
@@ -147,7 +178,10 @@ class _ImportHistoryReportPageState extends State<ImportHistoryReportPage> {
     return Scaffold(backgroundColor: const Color(0xFFF5F7FB), appBar: _buildAppBar(context),
       body: SafeArea(top: false, child: SingleChildScrollView(padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: Column(children: [_buildShopHeader(), _buildActionButtons(context), const SizedBox(height: 12), _buildSearchField(), const SizedBox(height: 12),
-          items.isEmpty ? _buildEmptyState() : _buildTable(items), const SizedBox(height: 24)]))));
+          _isLoading
+              ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+              : items.isEmpty ? _buildEmptyState() : _buildTable(items),
+          const SizedBox(height: 24)]))));
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {

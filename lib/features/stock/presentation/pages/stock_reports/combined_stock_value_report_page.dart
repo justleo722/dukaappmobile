@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -10,6 +11,8 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _ShopStock {
@@ -30,31 +33,61 @@ class _ShopStock {
   });
 }
 
-class CombinedStockValueReportPage extends StatefulWidget {
+class CombinedStockValueReportPage extends ConsumerStatefulWidget {
   const CombinedStockValueReportPage({super.key});
 
   @override
-  State<CombinedStockValueReportPage> createState() =>
+  ConsumerState<CombinedStockValueReportPage> createState() =>
       _CombinedStockValueReportPageState();
 }
 
 class _CombinedStockValueReportPageState
-    extends State<CombinedStockValueReportPage> {
+    extends ConsumerState<CombinedStockValueReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_ShopStock> _allShops = [
-    _ShopStock(sn: 1, shopName: 'DukaApp Main Shop', shopId: 'SH-001', items: 45, availableQty: 1200, stockValue: 4850000),
-    _ShopStock(sn: 2, shopName: 'DukaApp Branch East', shopId: 'SH-002', items: 32, availableQty: 870, stockValue: 3200000),
-    _ShopStock(sn: 3, shopName: 'DukaApp Branch West', shopId: 'SH-003', items: 28, availableQty: 650, stockValue: 2750000),
-    _ShopStock(sn: 4, shopName: 'DukaApp Branch North', shopId: 'SH-004', items: 38, availableQty: 920, stockValue: 4100000),
-    _ShopStock(sn: 5, shopName: 'DukaApp Branch South', shopId: 'SH-005', items: 25, availableQty: 540, stockValue: 1980000),
-    _ShopStock(sn: 6, shopName: 'DukaApp Downtown', shopId: 'SH-006', items: 40, availableQty: 1100, stockValue: 5200000),
-    _ShopStock(sn: 7, shopName: 'DukaApp Mall Kiosk', shopId: 'SH-007', items: 18, availableQty: 380, stockValue: 1450000),
-    _ShopStock(sn: 8, shopName: 'DukaApp Express', shopId: 'SH-008', items: 15, availableQty: 290, stockValue: 980000),
-    _ShopStock(sn: 9, shopName: 'DukaApp Warehouse', shopId: 'SH-009', items: 52, availableQty: 2500, stockValue: 12500000),
-    _ShopStock(sn: 10, shopName: 'DukaApp Online Hub', shopId: 'SH-010', items: 35, availableQty: 780, stockValue: 3650000),
-  ];
+  List<_ShopStock> _allShops = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    setState(() => _isLoading = true);
+    try {
+      final authState = ref.read(authProvider);
+      final stockState = ref.read(stockProvider);
+      final summary = stockState.whenOrNull(data: (s) => s.summary);
+      final products = stockState.whenOrNull(data: (s) => s.products) ?? [];
+      final shops = authState.shops ?? [];
+
+      final activeId = authState.activeShop?.id?.toString() ?? '';
+      final items = shops.asMap().entries.map((e) {
+        final shop = e.value;
+        final id = shop.id?.toString() ?? '';
+        final isActive = id == activeId;
+        final qty = isActive ? products.fold<int>(0, (s, p) => s + p.available.toInt()) : 0;
+        final sv = isActive ? (summary?.stockValue ?? 0.0) : 0.0;
+        final itemCount = isActive ? products.length : 0;
+        return _ShopStock(
+          sn: e.key + 1,
+          shopName: shop.shopName ?? id,
+          shopId: id,
+          items: itemCount,
+          availableQty: qty,
+          stockValue: sv,
+        );
+      }).toList();
+      if (mounted) setState(() => _allShops = items);
+    } catch (_) {
+      if (mounted) setState(() => _allShops = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   List<_ShopStock> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();
@@ -226,9 +259,11 @@ class _CombinedStockValueReportPageState
               const SizedBox(height: 12),
               _buildSearchField(),
               const SizedBox(height: 12),
-              items.isEmpty
-                  ? _buildEmptyState()
-                  : _buildTable(items),
+              _isLoading
+                  ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+                  : items.isEmpty
+                      ? _buildEmptyState()
+                      : _buildTable(items),
               const SizedBox(height: 24),
             ],
           ),

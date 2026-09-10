@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/stock_product_card.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/stock_select_bar.dart';
 
-class CategoryProductsPage extends StatefulWidget {
+class CategoryProductsPage extends ConsumerStatefulWidget {
   final String categoryName;
   final List<Map<String, dynamic>> products;
 
@@ -17,10 +19,10 @@ class CategoryProductsPage extends StatefulWidget {
   });
 
   @override
-  State<CategoryProductsPage> createState() => _CategoryProductsPageState();
+  ConsumerState<CategoryProductsPage> createState() => _CategoryProductsPageState();
 }
 
-class _CategoryProductsPageState extends State<CategoryProductsPage> {
+class _CategoryProductsPageState extends ConsumerState<CategoryProductsPage> {
   final Set<int> _selectedProducts = {};
   int? _expandedProductIndex;
 
@@ -65,7 +67,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
   void _deleteSelected() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           'Delete Products',
@@ -79,7 +81,7 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: Text(
               'Cancel',
               style: AppTypography.bodyMedium.copyWith(
@@ -88,12 +90,41 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() => _selectedProducts.clear());
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Products deleted')),
-              );
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final filtered = _filteredProducts;
+              final ids = _selectedProducts
+                  .where((i) => i < filtered.length)
+                  .map((i) => filtered[i]['product_id'])
+                  .where((id) => id != null)
+                  .toList();
+              if (ids.isEmpty) return;
+              try {
+                final repo = ref.read(stockRepositoryProvider);
+                final res = await repo.bulkDeleteProducts(ids);
+                final ok = res['status']?.toString() == '1' || res['status'] == true;
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(
+                    ok ? 'Products deleted' : (res['message']?.toString() ?? 'Delete failed'),
+                    style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+                  ),
+                  backgroundColor: ok ? AppColors.success : AppColors.danger,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+                ));
+                if (ok) {
+                  ref.read(stockProvider.notifier).refresh();
+                  setState(() => _selectedProducts.clear());
+                }
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('Error: $e', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+                  backgroundColor: AppColors.danger,
+                  behavior: SnackBarBehavior.floating,
+                ));
+              }
             },
             child: Text(
               'Delete',

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -10,6 +11,7 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _CategoryStock {
@@ -32,32 +34,47 @@ class _CategoryStock {
   double get total => stockValue + sales + profit;
 }
 
-class StockByCategoryReportPage extends StatefulWidget {
+class StockByCategoryReportPage extends ConsumerStatefulWidget {
   const StockByCategoryReportPage({super.key});
 
   @override
-  State<StockByCategoryReportPage> createState() =>
+  ConsumerState<StockByCategoryReportPage> createState() =>
       _StockByCategoryReportPageState();
 }
 
-class _StockByCategoryReportPageState extends State<StockByCategoryReportPage> {
+class _StockByCategoryReportPageState extends ConsumerState<StockByCategoryReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_CategoryStock> _allCategories = [
-    _CategoryStock(sn: 1, category: 'Beverages', quantity: 450, stockValue: 2800000, sales: 1500000, profit: 650000),
-    _CategoryStock(sn: 2, category: 'Snacks & Confectionery', quantity: 320, stockValue: 1200000, sales: 850000, profit: 320000),
-    _CategoryStock(sn: 3, category: 'Household Cleaning', quantity: 180, stockValue: 950000, sales: 600000, profit: 210000),
-    _CategoryStock(sn: 4, category: 'Personal Care', quantity: 210, stockValue: 1100000, sales: 720000, profit: 280000),
-    _CategoryStock(sn: 5, category: 'Groceries & Staples', quantity: 380, stockValue: 2400000, sales: 1300000, profit: 480000),
-    _CategoryStock(sn: 6, category: 'Dairy & Eggs', quantity: 150, stockValue: 800000, sales: 520000, profit: 180000),
-    _CategoryStock(sn: 7, category: 'Frozen Foods', quantity: 120, stockValue: 650000, sales: 400000, profit: 140000),
-    _CategoryStock(sn: 8, category: 'Bakery', quantity: 90, stockValue: 400000, sales: 300000, profit: 110000),
-    _CategoryStock(sn: 9, category: 'Alcohol & Spirits', quantity: 200, stockValue: 5200000, sales: 2800000, profit: 1200000),
-    _CategoryStock(sn: 10, category: 'Stationery & Office', quantity: 160, stockValue: 550000, sales: 350000, profit: 125000),
-    _CategoryStock(sn: 11, category: 'Baby Products', quantity: 140, stockValue: 780000, sales: 480000, profit: 175000),
-    _CategoryStock(sn: 12, category: 'Electronics & Accessories', quantity: 80, stockValue: 3200000, sales: 1600000, profit: 750000),
-  ];
+  List<_CategoryStock> _allCategories = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    setState(() => _isLoading = true);
+    try {
+      final stockState = ref.read(stockProvider);
+      final categories = stockState.whenOrNull(data: (s) => s.categories) ?? [];
+      final products = stockState.whenOrNull(data: (s) => s.products) ?? [];
+      final items = categories.asMap().entries.map((e) {
+        final cat = e.value;
+        final catProducts = products.where((p) => p.category == cat.name).toList();
+        final qty = catProducts.fold<int>(0, (s, p) => s + p.available.toInt());
+        final sv = catProducts.fold<double>(0, (s, p) => s + p.buyingPrice * p.available);
+        return _CategoryStock(sn: e.key + 1, category: cat.name, quantity: qty, stockValue: sv, sales: 0, profit: 0);
+      }).toList();
+      if (mounted) setState(() => _allCategories = items);
+    } catch (_) {
+      if (mounted) setState(() => _allCategories = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   List<_CategoryStock> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();
@@ -231,9 +248,11 @@ class _StockByCategoryReportPageState extends State<StockByCategoryReportPage> {
               const SizedBox(height: 12),
               _buildSearchField(),
               const SizedBox(height: 12),
-              items.isEmpty
-                  ? _buildEmptyState()
-                  : _buildTable(items),
+              _isLoading
+                  ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+                  : items.isEmpty
+                      ? _buildEmptyState()
+                      : _buildTable(items),
               const SizedBox(height: 24),
             ],
           ),

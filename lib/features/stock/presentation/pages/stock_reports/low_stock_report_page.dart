@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -10,6 +11,7 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _LowStockItem {
@@ -26,27 +28,44 @@ class _LowStockItem {
   });
 }
 
-class LowStockReportPage extends StatefulWidget {
+class LowStockReportPage extends ConsumerStatefulWidget {
   const LowStockReportPage({super.key});
 
   @override
-  State<LowStockReportPage> createState() => _LowStockReportPageState();
+  ConsumerState<LowStockReportPage> createState() => _LowStockReportPageState();
 }
 
-class _LowStockReportPageState extends State<LowStockReportPage> {
+class _LowStockReportPageState extends ConsumerState<LowStockReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<_LowStockItem> _allItems = [
-    _LowStockItem(sn: 1, name: 'BILIAN', quantity: 2, profitEstimate: 8000),
-    _LowStockItem(sn: 2, name: 'JACK DANIEL', quantity: 3, profitEstimate: 60000),
-    _LowStockItem(sn: 3, name: 'CHIVAS REGAL', quantity: 1, profitEstimate: 40000),
-    _LowStockItem(sn: 4, name: 'PATRÓN TEQUILA', quantity: 1, profitEstimate: 50000),
-    _LowStockItem(sn: 5, name: 'JAMESON', quantity: 2, profitEstimate: 36000),
-    _LowStockItem(sn: 6, name: 'DESPERADO', quantity: 3, profitEstimate: 4500),
-    _LowStockItem(sn: 7, name: 'MANGO JUICE', quantity: 4, profitEstimate: 2000),
-    _LowStockItem(sn: 8, name: 'ORANGE JUICE', quantity: 2, profitEstimate: 1000),
-  ];
+  List<_LowStockItem> _allItems = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
+  }
+
+  Future<void> _loadItems() async {
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(stockRepositoryProvider);
+      final products = await repo.fetchLowStock();
+      final items = products.asMap().entries.map((e) {
+        final i = e.key + 1;
+        final p = e.value;
+        final profit = (p.sellingPrice - p.buyingPrice) * p.available;
+        return _LowStockItem(sn: i, name: p.name, quantity: p.available.toInt(), profitEstimate: profit);
+      }).toList();
+      if (mounted) setState(() => _allItems = items);
+    } catch (_) {
+      if (mounted) setState(() => _allItems = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   List<_LowStockItem> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();
@@ -137,7 +156,9 @@ class _LowStockReportPageState extends State<LowStockReportPage> {
         child: Column(children: [
           _buildShopHeader(), _buildActionButtons(context),
           const SizedBox(height: 12), _buildSearchField(), const SizedBox(height: 12),
-          items.isEmpty ? _buildEmptyState() : _buildTable(items),
+          _isLoading
+              ? const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+              : items.isEmpty ? _buildEmptyState() : _buildTable(items),
           const SizedBox(height: 24),
         ]),
       )),

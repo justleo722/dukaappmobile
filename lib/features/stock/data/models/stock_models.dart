@@ -1,0 +1,179 @@
+/// Product row returned by GET getdata/stock
+class StockProduct {
+  final dynamic productId;
+  final String name;
+  final String? category;
+  final dynamic categoryId;
+  final String? type;       // 'product' | 'service'
+  final double buyingPrice;
+  final double sellingPrice;
+  final double wholesalePrice;
+  final double available;   // current stock qty
+  final double reorderLevel;
+  final String? unit;
+  final String? barcode;
+  final String? expiryDate;
+  final String? status;     // 'active' | 'deleted'
+  final String? imageUrl;
+
+  const StockProduct({
+    required this.productId,
+    required this.name,
+    this.category,
+    this.categoryId,
+    this.type,
+    this.buyingPrice = 0,
+    this.sellingPrice = 0,
+    this.wholesalePrice = 0,
+    this.available = 0,
+    this.reorderLevel = 0,
+    this.unit,
+    this.barcode,
+    this.expiryDate,
+    this.status,
+    this.imageUrl,
+  });
+
+  bool get isLowStock =>
+      reorderLevel > 0 && available <= reorderLevel;
+
+  bool get isOutOfStock => available <= 0;
+
+  factory StockProduct.fromJson(Map<String, dynamic> j) {
+    return StockProduct(
+      productId: j['product_id'] ?? j['id'],
+      name: (j['product_name'] ?? j['name'] ?? '').toString(),
+      category: j['category']?.toString(),
+      categoryId: j['category_id'],
+      type: j['type']?.toString(),
+      buyingPrice: _d(j['buying_price'] ?? j['cost_price']),
+      sellingPrice: _d(j['selling_price'] ?? j['price']),
+      wholesalePrice: _d(j['wholesale_price']),
+      available: _d(j['available'] ?? j['quantity'] ?? j['qty']),
+      reorderLevel: _d(j['reorder_level']),
+      unit: j['unit']?.toString(),
+      barcode: j['barcode']?.toString(),
+      expiryDate: j['expiry_date']?.toString(),
+      status: j['record_status']?.toString(),
+      imageUrl: j['image']?.toString() ?? j['image_url']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'product_id': productId,
+        'product_name': name,
+        'category': category,
+        'category_id': categoryId,
+        'type': type,
+        'buying_price': buyingPrice,
+        'selling_price': sellingPrice,
+        'wholesale_price': wholesalePrice,
+        'available': available,
+        'reorder_level': reorderLevel,
+        'unit': unit,
+        'barcode': barcode,
+        'expiry_date': expiryDate,
+        'record_status': status,
+        'image': imageUrl,
+      };
+
+  static double _d(dynamic v) {
+    if (v == null) return 0;
+    return double.tryParse(v.toString()) ?? 0;
+  }
+}
+
+/// Category row from GET getdata/stock_category
+class StockCategory {
+  final dynamic categoryId;
+  final String name;
+  final int productCount;
+
+  const StockCategory({
+    required this.categoryId,
+    required this.name,
+    this.productCount = 0,
+  });
+
+  factory StockCategory.fromJson(Map<String, dynamic> j) {
+    return StockCategory(
+      categoryId: j['category_id'] ?? j['id'],
+      name: (j['category'] ?? j['name'] ?? '').toString(),
+      productCount: int.tryParse((j['products'] ?? j['product_count'] ?? 0).toString()) ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'category_id': categoryId,
+        'category': name,
+        'products': productCount,
+      };
+}
+
+/// Summary from GET getdata/stock_value_summary
+class StockValueSummary {
+  final String currency;
+  final int itemsCount;
+  final double available;
+  final double stockValue;
+
+  const StockValueSummary({
+    this.currency = 'Tsh',
+    this.itemsCount = 0,
+    this.available = 0,
+    this.stockValue = 0,
+  });
+
+  factory StockValueSummary.fromJson(Map<String, dynamic> j) {
+    return StockValueSummary(
+      currency: (j['currency'] ?? 'Tsh').toString(),
+      itemsCount: int.tryParse((j['items_count'] ?? 0).toString()) ?? 0,
+      available: double.tryParse((j['available'] ?? 0).toString()) ?? 0,
+      stockValue: double.tryParse((j['stock_value'] ?? 0).toString()) ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'currency': currency,
+        'items_count': itemsCount,
+        'available': available,
+        'stock_value': stockValue,
+      };
+
+  /// Estimated profit = (selling_value - buying_value). Backend only returns
+  /// stock_value (buying). We expose stockValue for display; profit comes from
+  /// individual product margins computed on the client if needed.
+  static const StockValueSummary empty = StockValueSummary();
+}
+
+/// Full stock state exposed to the UI
+class StockState {
+  final List<StockProduct> products;
+  final List<StockCategory> categories;
+  final StockValueSummary summary;
+
+  const StockState({
+    this.products = const [],
+    this.categories = const [],
+    this.summary = StockValueSummary.empty,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'products': products.map((p) => p.toJson()).toList(),
+        'categories': categories.map((c) => c.toJson()).toList(),
+        'summary': summary.toJson(),
+      };
+
+  factory StockState.fromCache(Map<String, dynamic> j) {
+    final p = (j['products'] as List? ?? [])
+        .map((e) => StockProduct.fromJson(e as Map<String, dynamic>))
+        .toList();
+    final c = (j['categories'] as List? ?? [])
+        .map((e) => StockCategory.fromJson(e as Map<String, dynamic>))
+        .toList();
+    final s = j['summary'] is Map<String, dynamic>
+        ? StockValueSummary.fromJson(j['summary'] as Map<String, dynamic>)
+        : StockValueSummary.empty;
+    return StockState(products: p, categories: c, summary: s);
+  }
+}
