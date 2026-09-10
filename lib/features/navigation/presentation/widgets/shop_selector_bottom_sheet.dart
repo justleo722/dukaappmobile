@@ -111,7 +111,7 @@ class ShopSelectorBottomSheet extends StatelessWidget {
                 final isActive = shop['id'] == activeShopId;
                 return ShopListTile(
                   shopName: shop['name'],
-                  shopId: shop['name'] as String,
+                  shopId: shop['id'],
                   isActive: isActive,
                   onTap: () {
                     onShopSelected(shop);
