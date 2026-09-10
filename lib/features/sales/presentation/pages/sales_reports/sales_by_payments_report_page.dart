@@ -13,6 +13,7 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class _PaymentData {
   final int sn;
@@ -46,10 +47,10 @@ class _SalesByPaymentsReportPageState extends ConsumerState<SalesByPaymentsRepor
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
   }
 
-  Future<void> _loadItems() async {
+  Future<void> _loadItems({String? from, String? to}) async {
     try {
       final repo = ref.read(salesRepositoryProvider);
-      final data = await repo.fetchReportSalesByPayment();
+      final data = await repo.fetchReportSalesByPayment(from: from, to: to);
       if (!mounted) return;
       setState(() {
         _allItems = data.map((r) => _PaymentData(sn: r.sn, mode: r.mode, total: r.total)).toList();
@@ -200,6 +201,7 @@ class _SalesByPaymentsReportPageState extends ConsumerState<SalesByPaymentsRepor
   // ─── UI ──────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, f) => _loadItems(from: f.from, to: f.to));
     final items = _filteredItems;
 
     return Scaffold(

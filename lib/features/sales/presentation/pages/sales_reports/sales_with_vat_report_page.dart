@@ -13,6 +13,7 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class _VatSaleData {
   final int sn;
@@ -53,10 +54,10 @@ class _SalesWithVatReportPageState extends ConsumerState<SalesWithVatReportPage>
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
   }
 
-  Future<void> _loadItems() async {
+  Future<void> _loadItems({String? from, String? to}) async {
     try {
       final repo = ref.read(salesRepositoryProvider);
-      final data = await repo.fetchReportSalesWithVat();
+      final data = await repo.fetchReportSalesWithVat(from: from, to: to);
       if (!mounted) return;
       setState(() {
         _allItems = data.map((r) => _VatSaleData(sn: r.sn, date: r.date, type: r.type, vat: r.vat, total: r.total, paid: r.paid, balance: r.balance)).toList();
@@ -217,6 +218,7 @@ class _SalesWithVatReportPageState extends ConsumerState<SalesWithVatReportPage>
   // ─── UI ──────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, f) => _loadItems(from: f.from, to: f.to));
     final items = _filteredItems;
 
     return Scaffold(

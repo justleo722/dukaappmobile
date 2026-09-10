@@ -12,6 +12,7 @@ import 'package:dukaapp/features/sales/presentation/widgets/sale_product_tile.da
 import 'package:dukaapp/features/sales/presentation/widgets/payment_summary_card.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/sales_bottom_actions.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class InvoicesPage extends ConsumerStatefulWidget {
   const InvoicesPage({super.key});
@@ -35,12 +36,12 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadInvoices());
   }
 
-  Future<void> _loadInvoices() async {
+  Future<void> _loadInvoices({String? from, String? to}) async {
     try {
       final repo = ref.read(salesRepositoryProvider);
       final results = await Future.wait([
-        repo.fetchInvoices(),
-        repo.fetchInvoiceSummary(),
+        repo.fetchInvoices(from: from, to: to),
+        repo.fetchInvoiceSummary(from: from, to: to),
       ]);
       if (!mounted) return;
       final records = results[0] as List<SaleRecord>;
@@ -1076,6 +1077,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, f) => _loadInvoices(from: f.from, to: f.to));
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(

@@ -13,6 +13,7 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class _SaleItem {
   final int sn;
@@ -53,10 +54,10 @@ class _TotalSalesReportPageState extends ConsumerState<TotalSalesReportPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
   }
 
-  Future<void> _loadItems() async {
+  Future<void> _loadItems({String? from, String? to}) async {
     try {
       final repo = ref.read(salesRepositoryProvider);
-      final data = await repo.fetchReportTotalSales();
+      final data = await repo.fetchReportTotalSales(from: from, to: to);
       if (!mounted) return;
       setState(() {
         _allItems = data.map((r) => _SaleItem(
@@ -212,6 +213,7 @@ class _TotalSalesReportPageState extends ConsumerState<TotalSalesReportPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, f) => _loadItems(from: f.from, to: f.to));
     final items = _filteredItems;
 
     return Scaffold(

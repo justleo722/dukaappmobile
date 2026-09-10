@@ -13,28 +13,22 @@ class SalesRemoteDatasource {
 
   Future<SalesSummary> fetchSalesSummary({String? from, String? to}) async {
     final res = await _api.getSalesSummary(from: from, to: to);
-    final raw = res.data;
-    if (raw == null) return SalesSummary.empty;
-    final j = raw is List ? (raw.isNotEmpty ? raw[0] : null) : raw;
-    if (j is! Map<String, dynamic>) return SalesSummary.empty;
+    final j = _unwrapSingle(res.data);
+    if (j == null) return SalesSummary.empty;
     return SalesSummary.fromJson(j);
   }
 
   Future<OrderSummary> fetchOrderSummary({String? from, String? to}) async {
     final res = await _api.getOrderSummary(from: from, to: to);
-    final raw = res.data;
-    if (raw == null) return OrderSummary.empty;
-    final j = raw is List ? (raw.isNotEmpty ? raw[0] : null) : raw;
-    if (j is! Map<String, dynamic>) return OrderSummary.empty;
+    final j = _unwrapSingle(res.data);
+    if (j == null) return OrderSummary.empty;
     return OrderSummary.fromJson(j);
   }
 
   Future<InvoiceSummary> fetchInvoiceSummary({String? from, String? to}) async {
     final res = await _api.getInvoiceSummary(from: from, to: to);
-    final raw = res.data;
-    if (raw == null) return InvoiceSummary.empty;
-    final j = raw is List ? (raw.isNotEmpty ? raw[0] : null) : raw;
-    if (j is! Map<String, dynamic>) return InvoiceSummary.empty;
+    final j = _unwrapSingle(res.data);
+    if (j == null) return InvoiceSummary.empty;
     return InvoiceSummary.fromJson(j);
   }
 
@@ -167,17 +161,48 @@ class SalesRemoteDatasource {
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
+  /// Unwraps API envelope `{data:[...]}` or a bare list, then maps to T.
   List<T> _parseList<T>(dynamic raw, T Function(Map<String, dynamic>) fromJson) {
-    if (raw is! List) return [];
-    return raw
-        .whereType<Map<String, dynamic>>()
-        .map(fromJson)
-        .toList();
+    final list = _unwrapList(raw);
+    return list.map(fromJson).toList();
   }
 
+  /// Same but passes a 1-based index to [fromJson].
   List<T> _parseIndexed<T>(dynamic raw, T Function(int, Map<String, dynamic>) fromJson) {
-    if (raw is! List) return [];
-    final list = raw.whereType<Map<String, dynamic>>().toList();
+    final list = _unwrapList(raw);
     return List.generate(list.length, (i) => fromJson(i + 1, list[i]));
+  }
+
+  /// Handles both a bare `List` and an envelope `{status, data:[...]}`.
+  List<Map<String, dynamic>> _unwrapList(dynamic raw) {
+    if (raw is List) {
+      return raw.whereType<Map<String, dynamic>>().toList();
+    }
+    if (raw is Map<String, dynamic>) {
+      final v = raw['data'] ?? raw['result'] ?? raw['items'];
+      if (v is List) return v.whereType<Map<String, dynamic>>().toList();
+      if (v is Map<String, dynamic>) return [v];
+    }
+    return [];
+  }
+
+  /// Unwraps a single-object response — handles envelope `{data:{...}}`,
+  /// `{data:[{...}]}` (first element), or a bare `Map`.
+  Map<String, dynamic>? _unwrapSingle(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is Map<String, dynamic>) {
+      // Envelope with data key
+      final v = raw['data'] ?? raw['result'];
+      if (v is Map<String, dynamic>) return v;
+      if (v is List && v.isNotEmpty && v[0] is Map<String, dynamic>) {
+        return v[0] as Map<String, dynamic>;
+      }
+      // bare map that IS the object
+      return raw;
+    }
+    if (raw is List && raw.isNotEmpty && raw[0] is Map<String, dynamic>) {
+      return raw[0] as Map<String, dynamic>;
+    }
+    return null;
   }
 }

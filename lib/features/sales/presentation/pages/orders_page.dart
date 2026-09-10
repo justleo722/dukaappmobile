@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
-import 'package:dukaapp/features/sales/data/models/sales_models.dart';
 import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/sales_action_button.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/sale_product_tile.dart';
@@ -13,6 +12,7 @@ import 'package:dukaapp/features/sales/presentation/widgets/payment_summary_card
 import 'package:dukaapp/features/sales/presentation/widgets/sales_bottom_actions.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/receipt_widget.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class OrdersPage extends ConsumerStatefulWidget {
   const OrdersPage({super.key});
@@ -36,10 +36,10 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadOrders());
   }
 
-  Future<void> _loadOrders() async {
+  Future<void> _loadOrders({String? from, String? to}) async {
     try {
       final repo = ref.read(salesRepositoryProvider);
-      final records = await repo.fetchOrders();
+      final records = await repo.fetchOrders(from: from, to: to);
       if (!mounted) return;
       setState(() {
         _orders = records.map((r) => {
@@ -274,6 +274,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, f) => _loadOrders(from: f.from, to: f.to));
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(

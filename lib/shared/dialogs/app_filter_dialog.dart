@@ -1,12 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/app/typography.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 import 'package:dukaapp/shared/widgets/filter_option_button.dart';
 import 'package:dukaapp/shared/widgets/date_input_field.dart';
 
-class AppFilterDialog extends StatefulWidget {
+/// Global filter dialog.
+///
+/// On Apply it updates [filterProvider] so every page that
+/// `ref.listen(filterProvider, …)` automatically reloads with new dates.
+///
+/// Call it the same way as before:
+/// ```dart
+/// AppFilterDialog.show(context);
+/// ```
+/// No callbacks needed — state flows via [filterProvider].
+class AppFilterDialog extends ConsumerStatefulWidget {
+  // Legacy optional callbacks kept for backward compatibility
   final String? selectedFilter;
   final ValueChanged<String>? onFilterSelected;
   final VoidCallback? onApply;
@@ -41,10 +54,10 @@ class AppFilterDialog extends StatefulWidget {
   }
 
   @override
-  State<AppFilterDialog> createState() => _AppFilterDialogState();
+  ConsumerState<AppFilterDialog> createState() => _AppFilterDialogState();
 }
 
-class _AppFilterDialogState extends State<AppFilterDialog>
+class _AppFilterDialogState extends ConsumerState<AppFilterDialog>
     with SingleTickerProviderStateMixin {
   late String? _selectedFilter;
   bool _isCustomExpanded = false;
@@ -63,16 +76,28 @@ class _AppFilterDialogState extends State<AppFilterDialog>
     {'label': 'Last Month', 'value': 'last_month'},
     {'label': 'Last 3 Months', 'value': 'last_3_months'},
     {'label': 'This Year', 'value': 'this_year'},
+    {'label': 'All Time', 'value': 'all_time'},
   ];
 
   @override
   void initState() {
     super.initState();
-    _selectedFilter = widget.selectedFilter;
+    // Initialise from global state
+    final current = ref.read(filterProvider);
+    _selectedFilter = widget.selectedFilter ?? current.key;
     _expandController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 250),
     );
+    // If global filter is custom, expand the section
+    if (current.key == 'custom') {
+      _isCustomExpanded = true;
+      _expandController.value = 1.0;
+      try {
+        _fromDate = DateTime.parse(current.from);
+        _toDate = DateTime.parse(current.to);
+      } catch (_) {}
+    }
   }
 
   @override
@@ -85,6 +110,7 @@ class _AppFilterDialogState extends State<AppFilterDialog>
     setState(() {
       _isCustomExpanded = !_isCustomExpanded;
       if (_isCustomExpanded) {
+        _selectedFilter = null; // deselect preset when opening custom
         _expandController.forward();
       } else {
         _expandController.reverse();
@@ -95,6 +121,11 @@ class _AppFilterDialogState extends State<AppFilterDialog>
   void _onFilterTap(String value) {
     setState(() {
       _selectedFilter = value;
+      // Collapse custom panel when a preset is selected
+      if (_isCustomExpanded) {
+        _isCustomExpanded = false;
+        _expandController.reverse();
+      }
     });
     widget.onFilterSelected?.call(value);
   }
@@ -103,18 +134,16 @@ class _AppFilterDialogState extends State<AppFilterDialog>
     final initial = isFrom
         ? (_fromDate ?? DateTime.now())
         : (_toDate ?? DateTime.now());
-    final firstDate = DateTime(2000);
-    final lastDate = DateTime(2100);
 
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: firstDate,
-      lastDate: lastDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
+            colorScheme: const ColorScheme.light(
               primary: AppColors.primary,
               onPrimary: AppColors.textWhite,
               surface: AppColors.card,
@@ -137,8 +166,33 @@ class _AppFilterDialogState extends State<AppFilterDialog>
     }
   }
 
+  void _apply() {
+    if (_isCustomExpanded) {
+      // Custom range
+      final from = _fromDate;
+      final to = _toDate;
+      if (from == null || to == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select both From and To dates')),
+        );
+        return;
+      }
+      // Update global filter
+      ref.read(filterProvider.notifier).applyCustom(from, to);
+      widget.onCustomApply?.call();
+    } else {
+      // Preset
+      final key = _selectedFilter ?? 'today';
+      ref.read(filterProvider.notifier).applyPreset(key);
+      widget.onApply?.call();
+    }
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Read current global filter to show active label badge
+    final currentFilter = ref.watch(filterProvider);
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 360;
 
@@ -173,7 +227,7 @@ class _AppFilterDialogState extends State<AppFilterDialog>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildHeader(),
+                  _buildHeader(currentFilter),
                   const SizedBox(height: 20),
                   _buildFilterGrid(isSmallScreen),
                   const SizedBox(height: 16),
@@ -190,16 +244,30 @@ class _AppFilterDialogState extends State<AppFilterDialog>
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(FilterState current) {
     return Row(
       children: [
         Expanded(
-          child: Text(
-            'Select filter to proceed',
-            style: AppTypography.h5.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w600,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Select filter to proceed',
+                style: AppTypography.h5.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              // Show currently active filter
+              Text(
+                'Active: ${current.label}  (${current.from} → ${current.to})',
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ),
         IconButton(
@@ -326,14 +394,7 @@ class _AppFilterDialogState extends State<AppFilterDialog>
       width: double.infinity,
       height: AppConstants.buttonHeight,
       child: ElevatedButton(
-        onPressed: () {
-          if (_isCustomExpanded) {
-            widget.onCustomApply?.call();
-          } else {
-            widget.onApply?.call();
-          }
-          Navigator.of(context).pop();
-        },
+        onPressed: _apply,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.textWhite,
@@ -343,7 +404,7 @@ class _AppFilterDialogState extends State<AppFilterDialog>
           ),
         ),
         child: Text(
-          'Apply',
+          'Apply Filter',
           style: AppTypography.buttonLarge,
         ),
       ),

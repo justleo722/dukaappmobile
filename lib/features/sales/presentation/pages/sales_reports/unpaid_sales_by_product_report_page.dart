@@ -13,6 +13,7 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class _UnpaidProductData {
   final int sn;
@@ -57,10 +58,10 @@ class _UnpaidSalesByProductReportPageState
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
   }
 
-  Future<void> _loadItems() async {
+  Future<void> _loadItems({String? from, String? to}) async {
     try {
       final repo = ref.read(salesRepositoryProvider);
-      final data = await repo.fetchReportUnpaidSalesByProduct();
+      final data = await repo.fetchReportUnpaidSalesByProduct(from: from, to: to);
       if (!mounted) return;
       setState(() {
         _allItems = data.map((r) => _UnpaidProductData(sn: r.sn, product: r.product, category: r.category, lastSale: r.lastSale, total: r.total, paid: r.paid, balance: r.balance, profit: r.profit)).toList();
@@ -225,6 +226,7 @@ class _UnpaidSalesByProductReportPageState
   // ─── UI ──────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, f) => _loadItems(from: f.from, to: f.to));
     final items = _filteredItems;
 
     return Scaffold(

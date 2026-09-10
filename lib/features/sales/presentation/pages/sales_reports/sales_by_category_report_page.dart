@@ -13,6 +13,7 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class _CategoryData {
   final int sn;
@@ -50,10 +51,10 @@ class _SalesByCategoryReportPageState extends ConsumerState<SalesByCategoryRepor
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadItems());
   }
 
-  Future<void> _loadItems() async {
+  Future<void> _loadItems({String? from, String? to}) async {
     try {
       final repo = ref.read(salesRepositoryProvider);
-      final data = await repo.fetchReportSalesByCategory();
+      final data = await repo.fetchReportSalesByCategory(from: from, to: to);
       if (!mounted) return;
       setState(() {
         _allItems = data.map((r) => _CategoryData(sn: r.sn, category: r.category, lastSale: r.lastSale, total: r.total, profit: r.profit)).toList();
@@ -211,6 +212,7 @@ class _SalesByCategoryReportPageState extends ConsumerState<SalesByCategoryRepor
   // ─── UI ──────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, f) => _loadItems(from: f.from, to: f.to));
     final items = _filteredItems;
 
     return Scaffold(

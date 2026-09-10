@@ -107,10 +107,10 @@ class SaleProduct {
   });
 
   factory SaleProduct.fromJson(Map<String, dynamic> j) => SaleProduct(
-        name: (j['name'] ?? j['product_name'] ?? '').toString(),
-        quantity: _i(j['quantity'] ?? j['qty']),
-        price: _d(j['price'] ?? j['selling_price']),
-        total: _d(j['total'] ?? j['subtotal']),
+        name: (j['product_name'] ?? j['name'] ?? '').toString(),
+        quantity: _i(j['qty'] ?? j['quantity']),
+        price: _d(j['price_per_unit'] ?? j['unit_price'] ?? j['price'] ?? j['selling_price']),
+        total: _d(j['subtotal'] ?? j['total'] ?? j['total_amount']),
         discount: _d(j['discount']),
       );
 }
@@ -149,11 +149,12 @@ class SaleRecord {
   });
 
   factory SaleRecord.fromJson(Map<String, dynamic> j) {
-    // parse products
-    final rawProducts = j['products'];
+    // API returns items/products as key 'items' (from sales_table_data) or 'products'
+    final rawProducts = j['items'] ?? j['products'];
     final List<SaleProduct> prods = rawProducts is List
         ? rawProducts
-            .map((p) => SaleProduct.fromJson(p as Map<String, dynamic>))
+            .whereType<Map<String, dynamic>>()
+            .map(SaleProduct.fromJson)
             .toList()
         : [];
 

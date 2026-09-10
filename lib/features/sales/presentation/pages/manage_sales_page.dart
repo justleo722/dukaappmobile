@@ -15,6 +15,7 @@ import 'package:dukaapp/features/sales/presentation/widgets/sales_list_item.dart
 import 'package:dukaapp/features/sales/presentation/widgets/payment_badge.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/receipt_widget.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class ManageSalesPage extends ConsumerStatefulWidget {
   const ManageSalesPage({super.key});
@@ -40,12 +41,12 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadSales());
   }
 
-  Future<void> _loadSales() async {
+  Future<void> _loadSales({String? from, String? to}) async {
     try {
       final repo = ref.read(salesRepositoryProvider);
       final results = await Future.wait([
-        repo.fetchSales(),
-        repo.fetchSalesSummary(),
+        repo.fetchSales(from: from, to: to),
+        repo.fetchSalesSummary(from: from, to: to),
       ]);
       if (!mounted) return;
       final records = results[0] as List<SaleRecord>;
@@ -53,7 +54,9 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
         _summary = results[1] as SalesSummary;
         _sales = records.map(_saleRecordToMap).toList();
       });
-    } catch (_) {/* silently fail — show empty list */}
+    } catch (e, st) {
+      debugPrint('[ManageSalesPage] _loadSales error: $e\n$st');
+    }
   }
 
   /// Convert [SaleRecord] to the map shape the existing UI expects.
@@ -267,6 +270,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, f) => _loadSales(from: f.from, to: f.to));
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
