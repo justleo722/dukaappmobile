@@ -287,6 +287,29 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
   }
 
+  /// Create a new shop for the current user.
+  /// Updates the shops list in state on success.
+  Future<void> addShop({
+    required String shopName,
+    required String shopType,
+    required dynamic lobId,
+  }) async {
+    final result = await _authRepository.addShop(
+      shopName: shopName,
+      shopType: shopType,
+      lobId: lobId,
+    );
+
+    // Update shops list if server returned one
+    if (result.shops != null && result.shops!.isNotEmpty) {
+      state = state.copyWith(shops: result.shops);
+    } else {
+      // Fetch fresh shops list so the new shop appears in the switcher
+      final fresh = await _authRepository.fetchMyShops();
+      if (fresh.isNotEmpty) state = state.copyWith(shops: fresh);
+    }
+  }
+
   void clearError() {
     state = state.copyWith(errorMessage: null);
   }

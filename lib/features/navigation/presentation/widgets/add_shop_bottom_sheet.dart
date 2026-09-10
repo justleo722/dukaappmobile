@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/app/typography.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 
-class AddShopBottomSheet extends StatefulWidget {
+class AddShopBottomSheet extends ConsumerStatefulWidget {
   final ValueChanged<Map<String, dynamic>> onShopCreated;
 
   const AddShopBottomSheet({
@@ -26,29 +28,30 @@ class AddShopBottomSheet extends StatefulWidget {
   }
 
   @override
-  State<AddShopBottomSheet> createState() => _AddShopBottomSheetState();
+  ConsumerState<AddShopBottomSheet> createState() => _AddShopBottomSheetState();
 }
 
-class _AddShopBottomSheetState extends State<AddShopBottomSheet> {
+class _AddShopBottomSheetState extends ConsumerState<AddShopBottomSheet> {
   final _nameController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  String _selectedShopType = 'Product & Service';
-  String _selectedBusinessCategory = 'Default';
+  String _selectedShopType = 'Product & Services';
+  int _selectedLobId = 1;
+  bool _isLoading = false;
+  String? _error;
 
-  final List<String> _shopTypes = [
-    'Product & Service',
-    'Product Only',
-    'Service Only',
+  // Lobs from backend (lob_id, lob_name)
+  final List<Map<String, dynamic>> _lobs = [
+    {'lob_id': 1, 'lob_name': 'Product & Services'},
+    {'lob_id': 2, 'lob_name': 'Manufacturing'},
+    {'lob_id': 3, 'lob_name': 'Online Shop'},
+    {'lob_id': 4, 'lob_name': 'Microfinance'},
   ];
 
-  final List<String> _businessCategories = [
-    'Default',
-    'Retail',
-    'Wholesale',
-    'Manufacturing',
-    'Service',
-    'Other',
+  final List<String> _shopTypes = [
+    'Product & Services',
+    'Product Only',
+    'Service Only',
   ];
 
   @override
@@ -57,15 +60,34 @@ class _AddShopBottomSheetState extends State<AddShopBottomSheet> {
     super.dispose();
   }
 
-  void _createShop() {
-    if (_formKey.currentState!.validate()) {
-      final shopData = {
+  Future<void> _createShop() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      await ref.read(authProvider.notifier).addShop(
+        shopName: _nameController.text.trim(),
+        shopType: _selectedShopType,
+        lobId: _selectedLobId,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context);
+      widget.onShopCreated({
         'name': _nameController.text.trim(),
         'shopType': _selectedShopType,
-        'businessCategory': _selectedBusinessCategory,
-      };
-      widget.onShopCreated(shopData);
-      Navigator.pop(context);
+        'lobId': _selectedLobId,
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -125,7 +147,7 @@ class _AddShopBottomSheetState extends State<AddShopBottomSheet> {
                     ),
                   ),
                   IconButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _isLoading ? null : () => Navigator.pop(context),
                     icon: const Icon(
                       Icons.close_rounded,
                       color: AppColors.textSecondary,
@@ -204,24 +226,33 @@ class _AddShopBottomSheetState extends State<AddShopBottomSheet> {
                       _buildDropdown<String>(
                         value: _selectedShopType,
                         items: _shopTypes,
+                        labelOf: (v) => v,
                         onChanged: (value) {
-                          setState(() {
-                            _selectedShopType = value!;
-                          });
+                          setState(() => _selectedShopType = value!);
                         },
                       ),
                       const SizedBox(height: 16),
                       _buildLabel('Business Category'),
                       const SizedBox(height: 8),
-                      _buildDropdown<String>(
-                        value: _selectedBusinessCategory,
-                        items: _businessCategories,
+                      _buildDropdown<Map<String, dynamic>>(
+                        value: _lobs.firstWhere((l) => l['lob_id'] == _selectedLobId),
+                        items: _lobs,
+                        labelOf: (l) => l['lob_name'] as String,
                         onChanged: (value) {
-                          setState(() {
-                            _selectedBusinessCategory = value!;
-                          });
+                          if (value != null) {
+                            setState(() => _selectedLobId = value['lob_id'] as int);
+                          }
                         },
                       ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          _error!,
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.danger,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 24),
                       Row(
                         children: [
@@ -229,7 +260,7 @@ class _AddShopBottomSheetState extends State<AddShopBottomSheet> {
                             child: SizedBox(
                               height: AppConstants.buttonHeight,
                               child: OutlinedButton(
-                                onPressed: () => Navigator.pop(context),
+                                onPressed: _isLoading ? null : () => Navigator.pop(context),
                                 style: OutlinedButton.styleFrom(
                                   side: const BorderSide(
                                     color: AppColors.inputBorder,
@@ -254,7 +285,7 @@ class _AddShopBottomSheetState extends State<AddShopBottomSheet> {
                             child: SizedBox(
                               height: AppConstants.buttonHeight,
                               child: ElevatedButton(
-                                onPressed: _createShop,
+                                onPressed: _isLoading ? null : _createShop,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.primary,
                                   foregroundColor: AppColors.textWhite,
@@ -265,10 +296,19 @@ class _AddShopBottomSheetState extends State<AddShopBottomSheet> {
                                     ),
                                   ),
                                 ),
-                                child: Text(
-                                  'Create Shop',
-                                  style: AppTypography.buttonLarge,
-                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AppColors.textWhite,
+                                        ),
+                                      )
+                                    : Text(
+                                        'Create Shop',
+                                        style: AppTypography.buttonLarge,
+                                      ),
                               ),
                             ),
                           ),
@@ -299,6 +339,7 @@ class _AddShopBottomSheetState extends State<AddShopBottomSheet> {
   Widget _buildDropdown<T>({
     required T value,
     required List<T> items,
+    required String Function(T) labelOf,
     required ValueChanged<T?> onChanged,
   }) {
     return Container(
@@ -320,7 +361,7 @@ class _AddShopBottomSheetState extends State<AddShopBottomSheet> {
             return DropdownMenuItem<T>(
               value: item,
               child: Text(
-                item.toString(),
+                labelOf(item),
                 style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.textPrimary,
                 ),

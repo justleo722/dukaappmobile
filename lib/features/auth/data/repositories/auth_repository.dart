@@ -184,11 +184,29 @@ class AuthRepository {
           }
         }
 
+        // Enrich activeShop with shopName from shops list if missing
+        var activeShop = result.shop;
+        final allShops = shops.isEmpty ? (result.shops ?? []) : shops;
+        if (activeShop != null && (activeShop.shopName == null || activeShop.shopName!.isEmpty)) {
+          final match = allShops.firstWhere(
+            (s) => s.id?.toString() == activeShop!.id?.toString(),
+            orElse: () => activeShop!,
+          );
+          if (match.shopName != null && match.shopName!.isNotEmpty) {
+            activeShop = Shop(
+              id: activeShop.id,
+              shopName: match.shopName,
+              shopType: match.shopType ?? activeShop.shopType,
+            );
+            await _secureStorage.saveActiveShop(activeShop.toJson());
+          }
+        }
+
         return AuthResult(
           success: result.success,
           user: result.user,
-          shop: result.shop,
-          shops: shops.isEmpty ? result.shops : shops,
+          shop: activeShop,
+          shops: allShops.isEmpty ? result.shops : allShops,
           token: result.token,
           roleId: result.roleId,
           message: result.message,
@@ -243,7 +261,7 @@ class AuthRepository {
     return const AuthConstants();
   }
 
-  Future<void> addShop({
+  Future<AuthResult> addShop({
     required String shopName,
     required String shopType,
     required dynamic lobId,
@@ -257,6 +275,18 @@ class AuthRepository {
     if (!response.success) {
       throw Exception(response.message ?? 'Failed to add shop.');
     }
+
+    final result = response.data ?? const AuthResult(success: true);
+
+    // Save updated shops list returned by backend
+    if (result.shops != null && result.shops!.isNotEmpty) {
+      await _localStorage.saveString(
+        'available_shops',
+        jsonEncode(result.shops!.map((s) => s.toJson()).toList()),
+      );
+    }
+
+    return result;
   }
 
   /// Switch the active shop on the server, then update local caches.
@@ -288,6 +318,11 @@ class AuthRepository {
     await _cacheManager.invalidateAll(['active_shop', 'session_user', 'dashboard']);
 
     return result;
+  }
+
+  /// Fetch the current user's shops directly from the API.
+  Future<List<Shop>> fetchMyShops() async {
+    return _remoteDatasource.fetchMyShops();
   }
 
   Future<bool> isAuthenticated() async {
