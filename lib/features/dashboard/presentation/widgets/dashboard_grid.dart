@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dukaapp/features/dashboard/data/models/session_user_model.dart';
 import 'package:dukaapp/features/dashboard/presentation/constants/dashboard_constants.dart';
 import 'package:dukaapp/features/dashboard/presentation/widgets/dashboard_module_card.dart';
 
 class DashboardGrid extends StatelessWidget {
-  const DashboardGrid({super.key});
+  const DashboardGrid({super.key, required this.sessionUser});
+
+  final SessionUserModel sessionUser;
 
   void _handleModuleTap(BuildContext context, String title) {
     switch (title) {
@@ -43,9 +46,46 @@ class DashboardGrid extends StatelessWidget {
     }
   }
 
+  /// Returns only the modules the current user is allowed to see.
+  List<Map<String, dynamic>> _visibleModules() {
+    final u = sessionUser;
+    final all = DashboardConstants.moduleCards;
+    return all.where((module) {
+      switch (module['title']) {
+        case 'Add Product':
+          return u.canSeeStock;
+        case 'Add Sale':
+          return u.canSeeSales;
+        case 'Purchase':
+          return u.canSeePurchases;
+        case 'Profit & Expenses':
+          return u.canSeeProfitExpenses;
+        case 'Accounts & Cashflow':
+          return u.canSeeCashflow;
+        case 'Staff':
+          return u.canSeeStaff;
+        case 'Manufacturing':
+          return u.canSeeManufacturing;
+        case 'Online Shop':
+          return u.canSeeOnlineShop;
+        case 'Shop Settings':
+          return u.canSeeSettings;
+        case 'Renew':
+          // Always show Renew to owners; hide for attendants.
+          return u.isOwner;
+        case 'TMS Loans':
+        case 'Microfinance':
+          // Show only to owners / managers for now.
+          return u.isOwner || u.isManager;
+        default:
+          return u.isOwner;
+      }
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final modules = DashboardConstants.moduleCards;
+    final modules = _visibleModules();
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth > 600;
 
