@@ -43,19 +43,25 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
 
   Future<void> _loadSales({String? from, String? to}) async {
     try {
+      debugPrint('[Sales] _loadSales called from=$from to=$to');
       final repo = ref.read(salesRepositoryProvider);
-      final results = await Future.wait([
-        repo.fetchSales(from: from, to: to),
-        repo.fetchSalesSummary(from: from, to: to),
-      ]);
+
+      // Fetch separately so we can log each step
+      final sales = await repo.fetchSales(from: from, to: to);
+      debugPrint('[Sales] fetchSales returned ${sales.length} records');
+      if (sales.isNotEmpty) debugPrint('[Sales] first record: ${sales.first.saleId} | ${sales.first.date} | ${sales.first.customer}');
+
+      final summary = await repo.fetchSalesSummary(from: from, to: to);
+      debugPrint('[Sales] summary: total=${summary.total} paid=${summary.paid} unpaid=${summary.unpaid}');
+
       if (!mounted) return;
-      final records = results[0] as List<SaleRecord>;
       setState(() {
-        _summary = results[1] as SalesSummary;
-        _sales = records.map(_saleRecordToMap).toList();
+        _summary = summary;
+        _sales = sales.map(_saleRecordToMap).toList();
       });
+      debugPrint('[Sales] setState done, _sales.length=${_sales.length}');
     } catch (e, st) {
-      debugPrint('[ManageSalesPage] _loadSales error: $e\n$st');
+      debugPrint('[Sales] _loadSales ERROR: $e\n$st');
     }
   }
 

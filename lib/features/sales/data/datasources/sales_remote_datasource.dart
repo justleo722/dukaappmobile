@@ -36,7 +36,14 @@ class SalesRemoteDatasource {
 
   Future<List<SaleRecord>> fetchSales({String? from, String? to}) async {
     final res = await _api.getSales(from: from, to: to);
-    return _parseList(res.data, SaleRecord.fromJson);
+    // ignore: avoid_print
+    print('[SalesDatasource] fetchSales raw type=${res.data.runtimeType} '
+        'isMap=${res.data is Map} isList=${res.data is List} '
+        'preview=${res.data.toString().length > 200 ? res.data.toString().substring(0, 200) : res.data}');
+    final list = _parseList(res.data, SaleRecord.fromJson);
+    // ignore: avoid_print
+    print('[SalesDatasource] fetchSales parsed ${list.length} records');
+    return list;
   }
 
   Future<List<SaleRecord>> fetchOrders({String? from, String? to}) async {
@@ -175,14 +182,23 @@ class SalesRemoteDatasource {
 
   /// Handles both a bare `List` and an envelope `{status, data:[...]}`.
   List<Map<String, dynamic>> _unwrapList(dynamic raw) {
+    // ignore: avoid_print
+    print('[_unwrapList] type=${raw.runtimeType} isList=${raw is List} isMap=${raw is Map}');
     if (raw is List) {
-      return raw.whereType<Map<String, dynamic>>().toList();
+      final result = raw.whereType<Map<String, dynamic>>().toList();
+      // ignore: avoid_print
+      print('[_unwrapList] bare list → ${result.length} items');
+      return result;
     }
     if (raw is Map<String, dynamic>) {
       final v = raw['data'] ?? raw['result'] ?? raw['items'];
+      // ignore: avoid_print
+      print('[_unwrapList] envelope, data key type=${v.runtimeType}');
       if (v is List) return v.whereType<Map<String, dynamic>>().toList();
       if (v is Map<String, dynamic>) return [v];
     }
+    // ignore: avoid_print
+    print('[_unwrapList] returning empty — could not parse: ${raw.toString().substring(0, raw.toString().length > 100 ? 100 : raw.toString().length)}');
     return [];
   }
 
