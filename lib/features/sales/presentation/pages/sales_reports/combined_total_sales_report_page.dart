@@ -14,6 +14,7 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 
 class _StaffItem {
   final int sn;
@@ -43,6 +44,10 @@ class CombinedTotalSalesReportPage extends ConsumerStatefulWidget {
 
 class _CombinedTotalSalesReportPageState
     extends ConsumerState<CombinedTotalSalesReportPage> {
+
+  String get _shopName =>
+      ref.read(authProvider).activeShop?.shopName ?? 'My Shop';
+
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
@@ -117,7 +122,7 @@ class _CombinedTotalSalesReportPageState
           children: [
             pw.Text('Combined Total Sales Report', style: pw.TextStyle(font: pw.Font.helveticaBold(), fontSize: 16)),
             pw.SizedBox(height: 2),
-            pw.Text('SON COLLECTION  •  $now',
+            pw.Text('\$_shopName  •  \$now',
                 style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
             pw.SizedBox(height: 4),
             pw.Divider(),
@@ -272,7 +277,7 @@ class _CombinedTotalSalesReportPageState
           ),
           const SizedBox(height: 2),
           Text(
-            'SON COLLECTION',
+            _shopName,
             style: AppTypography.caption.copyWith(
               color: AppColors.textSecondary,
               fontSize: 10,
@@ -305,7 +310,7 @@ class _CombinedTotalSalesReportPageState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'SON COLLECTION',
+                  _shopName,
                   style: AppTypography.bodyMedium.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,

@@ -13,6 +13,7 @@ import 'package:dukaapp/features/sales/presentation/widgets/sales_bottom_actions
 import 'package:dukaapp/features/sales/presentation/widgets/receipt_widget.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 
 class OrdersPage extends ConsumerStatefulWidget {
   const OrdersPage({super.key});
@@ -22,6 +23,10 @@ class OrdersPage extends ConsumerStatefulWidget {
 }
 
 class _OrdersPageState extends ConsumerState<OrdersPage> {
+
+  String get _shopName =>
+      ref.read(authProvider).activeShop?.shopName ?? 'My Shop';
+
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   int? _expandedOrderIndex;
@@ -347,7 +352,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
             ),
           ),
           Text(
-            'SON COLLECTION',
+            _shopName,
             style: AppTypography.caption.copyWith(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w500,

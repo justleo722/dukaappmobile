@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 
-class ReceiptWidget extends StatelessWidget {
+class ReceiptWidget extends ConsumerWidget {
   final String title;
   final String receiptNumber;
   final String date;
@@ -86,7 +88,8 @@ class ReceiptWidget extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final shopName = ref.read(authProvider).activeShop?.shopName ?? 'My Shop';
     return Container(
       width: 320,
       constraints: BoxConstraints(
@@ -105,7 +108,7 @@ class ReceiptWidget extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildStoreHeader(),
+                  _buildStoreHeader(shopName),
                   const SizedBox(height: 16),
                   _buildDashedDivider(),
                   const SizedBox(height: 12),
@@ -134,7 +137,7 @@ class ReceiptWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildStoreHeader() {
+  Widget _buildStoreHeader(String shopName) {
     return Column(
       children: [
         Center(
@@ -155,7 +158,7 @@ class ReceiptWidget extends StatelessWidget {
         const SizedBox(height: 10),
         Center(
           child: Text(
-            'SON COLLECTION',
+            shopName,
             style: AppTypography.h5.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,

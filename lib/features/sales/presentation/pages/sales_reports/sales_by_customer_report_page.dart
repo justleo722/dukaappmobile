@@ -14,6 +14,7 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 
 class _CustomerSale {
   final int sn;
@@ -41,6 +42,10 @@ class SalesByCustomerReportPage extends ConsumerStatefulWidget {
 }
 
 class _SalesByCustomerReportPageState extends ConsumerState<SalesByCustomerReportPage> {
+
+  String get _shopName =>
+      ref.read(authProvider).activeShop?.shopName ?? 'My Shop';
+
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
@@ -116,7 +121,7 @@ class _SalesByCustomerReportPageState extends ConsumerState<SalesByCustomerRepor
           children: [
             pw.Text('Sales by Customer Report', style: pw.TextStyle(font: pw.Font.helveticaBold(), fontSize: 16)),
             pw.SizedBox(height: 2),
-            pw.Text('SON COLLECTION  •  $now',
+            pw.Text('\$_shopName  •  \$now',
                 style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
             pw.SizedBox(height: 4),
             pw.Divider(),
@@ -271,7 +276,7 @@ class _SalesByCustomerReportPageState extends ConsumerState<SalesByCustomerRepor
           ),
           const SizedBox(height: 2),
           Text(
-            'SON COLLECTION',
+            _shopName,
             style: AppTypography.caption.copyWith(
               color: AppColors.textSecondary,
               fontSize: 10,
@@ -304,7 +309,7 @@ class _SalesByCustomerReportPageState extends ConsumerState<SalesByCustomerRepor
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'SON COLLECTION',
+                  _shopName,
                   style: AppTypography.bodyMedium.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,

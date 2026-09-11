@@ -13,6 +13,7 @@ import 'package:dukaapp/features/sales/presentation/widgets/payment_summary_card
 import 'package:dukaapp/features/sales/presentation/widgets/sales_bottom_actions.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 
 class InvoicesPage extends ConsumerStatefulWidget {
   const InvoicesPage({super.key});
@@ -22,6 +23,10 @@ class InvoicesPage extends ConsumerStatefulWidget {
 }
 
 class _InvoicesPageState extends ConsumerState<InvoicesPage> {
+
+  String get _shopName =>
+      ref.read(authProvider).activeShop?.shopName ?? 'My Shop';
+
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   int? _expandedIndex;
@@ -678,7 +683,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'SON COLLECTION',
+                  _shopName,
                   style: AppTypography.h5.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w800,
@@ -1149,7 +1154,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
             ),
           ),
           Text(
-            'SON COLLECTION',
+            _shopName,
             style: AppTypography.caption.copyWith(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w500,
