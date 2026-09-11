@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_constructors_over_static_methods
+
 class Customer {
   final String id;
   final String name;
@@ -52,6 +54,45 @@ class Customer {
       createdAt: createdAt ?? this.createdAt,
     );
   }
+
+  /// Build a [Customer] from an API JSON object.
+  ///
+  /// Field mapping:
+  ///  - customer_id → id
+  ///  - name, phone, email
+  ///  - customer_tin → tinNumber
+  ///  - address → location
+  ///  - credit_limit → creditLimit
+  ///  - wallet_balance (attached by wallet_model) → creditBalance
+  ///  - record_date → createdAt
+  static Customer fromJson(Map<String, dynamic> j) {
+    double _d(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
+    return Customer(
+      id: j['customer_id']?.toString() ?? '',
+      name: j['name']?.toString() ?? '',
+      phone: j['phone']?.toString() ?? '',
+      email: j['email']?.toString(),
+      tinNumber: j['customer_tin']?.toString(),
+      location: j['address']?.toString(),
+      creditLimit: _d(j['credit_limit']),
+      totalSpent: _d(j['total_spent'] ?? j['totalSpent']),
+      creditBalance: _d(j['wallet_balance'] ?? j['credit_balance']),
+      totalPurchases: int.tryParse(j['total_purchases']?.toString() ?? '') ?? 0,
+      createdAt: DateTime.tryParse(j['record_date']?.toString() ?? '') ?? DateTime.now(),
+    );
+  }
+
+  /// Serialize back for display / legacy use.
+  Map<String, dynamic> toJson() => {
+    'customer_id': id,
+    'name': name,
+    'phone': phone,
+    if (email != null) 'email': email,
+    if (tinNumber != null) 'customer_tin': tinNumber,
+    if (location != null) 'address': location,
+    'credit_limit': creditLimit,
+    'wallet_balance': creditBalance,
+  };
 
   static List<Customer> sampleCustomers() {
     return [

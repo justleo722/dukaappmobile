@@ -11,6 +11,9 @@ import 'package:dukaapp/features/navigation/presentation/widgets/drawer_header.d
 import 'package:dukaapp/features/navigation/presentation/widgets/drawer_menu_item.dart';
 import 'package:dukaapp/features/navigation/presentation/widgets/shop_selector_bottom_sheet.dart';
 import 'package:dukaapp/features/dashboard/presentation/providers/dashboard_provider.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
+import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
   final VoidCallback? onRefresh;
@@ -30,7 +33,19 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
     Navigator.pop(context);
     try {
       await ref.read(authProvider.notifier).switchShop(shopId);
+
+      // Reset filter to today for the new shop
+      ref.read(filterProvider.notifier).reset();
+
+      // Invalidate all data providers so they reload with new shop's data
       ref.invalidate(dashboardProvider);
+      ref.invalidate(stockProvider);
+      ref.invalidate(salesProvider);
+      ref.invalidate(ordersProvider);
+      ref.invalidate(invoicesProvider);
+
+      // Navigate to dashboard so user sees fresh data
+      if (mounted) context.go('/dashboard');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

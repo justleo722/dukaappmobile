@@ -301,6 +301,11 @@ class AuthRepository {
 
     final result = response.data!;
 
+    // Save new token (backend generates one with new shop_id in JWT payload)
+    if (result.token != null && result.token!.isNotEmpty) {
+      await _secureStorage.saveToken(result.token!);
+    }
+
     // Persist the new active shop
     if (result.shop != null) {
       await _secureStorage.saveActiveShop(result.shop!.toJson());

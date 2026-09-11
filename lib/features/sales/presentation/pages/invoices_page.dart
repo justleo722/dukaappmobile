@@ -28,6 +28,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   final Set<int> _selectedInvoices = {};
 
   List<Map<String, dynamic>> _invoices = [];
+  bool _isLoading = false;
   InvoiceSummary _invoiceSummary = InvoiceSummary.empty;
 
   @override
@@ -37,6 +38,8 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   }
 
   Future<void> _loadInvoices({String? from, String? to}) async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
     try {
       final repo = ref.read(salesRepositoryProvider);
       final results = await Future.wait([
@@ -66,7 +69,9 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
           }).toList(),
         }).toList();
       });
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
 
@@ -1402,6 +1407,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   }
 
   Widget _buildInvoicesList() {
+    if (_isLoading) return _buildSkeleton();
     if (_filteredInvoices.isEmpty) {
       return Container(
         width: double.infinity,
@@ -1726,6 +1732,64 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSkeleton() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
+      child: Column(
+        children: List.generate(6, (i) => _InvoiceSkeletonCard(key: ValueKey(i))),
+      ),
+    );
+  }
+
+}
+
+class _InvoiceSkeletonCard extends StatefulWidget {
+  const _InvoiceSkeletonCard({super.key});
+  @override
+  State<_InvoiceSkeletonCard> createState() => _InvoiceSkeletonCardState();
+}
+
+class _InvoiceSkeletonCardState extends State<_InvoiceSkeletonCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.3, end: 0.7).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, _c) {
+        final c = Color.lerp(const Color(0xFFE0E0E0), const Color(0xFFF5F5F5), _anim.value)!;
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFEEEEEE))),
+          child: Row(children: [
+            Container(width: 4, height: 52, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(width: 130, height: 13, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(6))),
+              const SizedBox(height: 8),
+              Container(width: 90, height: 10, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(6))),
+            ])),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Container(width: 70, height: 13, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(6))),
+              const SizedBox(height: 8),
+              Container(width: 50, height: 10, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(6))),
+            ]),
+          ]),
+        );
+      },
     );
   }
 }

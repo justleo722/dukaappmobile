@@ -29,6 +29,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   String _activeFilter = 'all';
 
   List<Map<String, dynamic>> _orders = [];
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -37,11 +38,14 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   }
 
   Future<void> _loadOrders({String? from, String? to}) async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
     try {
       final repo = ref.read(salesRepositoryProvider);
       final records = await repo.fetchOrders(from: from, to: to);
       if (!mounted) return;
       setState(() {
+        _isLoading = false;
         _orders = records.map((r) => {
           'sale_id': r.saleId,
           'date': r.date,
@@ -60,7 +64,9 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
           }).toList(),
         }).toList();
       });
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
 
@@ -620,6 +626,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   }
 
   Widget _buildOrdersList() {
+    if (_isLoading) return _buildSkeleton();
     if (_filteredOrders.isEmpty) {
       return Container(
         width: double.infinity,
@@ -1558,6 +1565,64 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
       subtotal: totalAmount,
       totalPaid: order['paid'],
       amountReceived: order['paid'],
+    );
+  }
+
+  Widget _buildSkeleton() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
+      child: Column(
+        children: List.generate(6, (i) => _OrderSkeletonCard(key: ValueKey(i))),
+      ),
+    );
+  }
+
+}
+
+class _OrderSkeletonCard extends StatefulWidget {
+  const _OrderSkeletonCard({super.key});
+  @override
+  State<_OrderSkeletonCard> createState() => _OrderSkeletonCardState();
+}
+
+class _OrderSkeletonCardState extends State<_OrderSkeletonCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.3, end: 0.7).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, _c) {
+        final c = Color.lerp(const Color(0xFFE0E0E0), const Color(0xFFF5F5F5), _anim.value)!;
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(AppConstants.radiusMD), border: Border.all(color: const Color(0xFFEEEEEE))),
+          child: Row(children: [
+            Container(width: 4, height: 52, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(width: 120, height: 13, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(6))),
+              const SizedBox(height: 8),
+              Container(width: 80, height: 10, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(6))),
+            ])),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Container(width: 70, height: 13, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(6))),
+              const SizedBox(height: 8),
+              Container(width: 50, height: 10, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(6))),
+            ]),
+          ]),
+        );
+      },
     );
   }
 }

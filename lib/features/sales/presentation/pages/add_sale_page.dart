@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
@@ -214,8 +216,11 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
     } else {
       setState(() {
         _items.add({
+          'product_id': product['product_id'],
+          'stock_id': product['stock_id'],
           'name': product['name'],
           'sellingPrice': product['sellingPrice'],
+          'wholesalePrice': product['wholesalePrice'] ?? product['sellingPrice'],
           'quantity': 1,
           'stock': product['stock'],
           'discount': 0.0,
@@ -559,7 +564,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
             ),
           ),
           Text(
-            'SON COLLECTION',
+            ref.watch(authProvider).activeShop?.shopName ?? 'My Shop',
             style: AppTypography.caption.copyWith(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w500,
@@ -1194,15 +1199,21 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   }
 
   Widget _buildItemPickerSheet(ScrollController scrollController) {
-    final List<Map<String, dynamic>> allProducts = [
-      {'name': 'AIR', 'sellingPrice': 125000.0, 'stock': 5},
-      {'name': 'AIR FRESH', 'sellingPrice': 7000.0, 'stock': 15},
-      {'name': 'BEAUTY CREAM', 'sellingPrice': 18000.0, 'stock': 8},
-      {'name': 'FACE MASK', 'sellingPrice': 9000.0, 'stock': 12},
-      {'name': 'DISH SOAP', 'sellingPrice': 3500.0, 'stock': 20},
-      {'name': 'CAR PHONE HOLDER', 'sellingPrice': 15000.0, 'stock': 6},
-      {'name': 'CHARGER CABLE', 'sellingPrice': 6000.0, 'stock': 10},
-    ];
+    // Load products from stockProvider (already fetched on stock page load)
+    final stockAsync = ref.watch(stockProvider);
+    final allProducts = stockAsync.maybeWhen(
+      data: (state) => state.products
+          .map((p) => {
+                'product_id': p.productId,
+                'stock_id': p.stockId,
+                'name': p.name,
+                'sellingPrice': p.sellingPrice,
+                'wholesalePrice': p.wholesalePrice,
+                'stock': p.available.toInt(),
+              })
+          .toList(),
+      orElse: () => <Map<String, dynamic>>[],
+    );
 
     return _ItemPickerContent(
       allProducts: allProducts,

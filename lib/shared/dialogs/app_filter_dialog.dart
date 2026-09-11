@@ -42,6 +42,7 @@ class AppFilterDialog extends ConsumerStatefulWidget {
   }) {
     return showDialog(
       context: context,
+      useRootNavigator: true,
       barrierDismissible: true,
       barrierColor: AppColors.overlay,
       builder: (_) => AppFilterDialog(
@@ -186,7 +187,9 @@ class _AppFilterDialogState extends ConsumerState<AppFilterDialog>
       ref.read(filterProvider.notifier).applyPreset(key);
       widget.onApply?.call();
     }
-    Navigator.of(context).pop();
+    // Use rootNavigator: true to ensure we pop the dialog overlay,
+    // not a nested go_router route.
+    if (mounted) Navigator.of(context, rootNavigator: true).pop();
   }
 
   @override
@@ -271,7 +274,7 @@ class _AppFilterDialogState extends ConsumerState<AppFilterDialog>
           ),
         ),
         IconButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
           icon: const Icon(
             Icons.close_rounded,
             color: AppColors.textSecondary,

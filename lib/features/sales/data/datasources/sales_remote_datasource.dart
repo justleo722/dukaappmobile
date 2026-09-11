@@ -191,11 +191,29 @@ class SalesRemoteDatasource {
       return result;
     }
     if (raw is Map<String, dynamic>) {
+      // Standard envelope: {data: [...], result: [...], items: [...]}
       final v = raw['data'] ?? raw['result'] ?? raw['items'];
-      // ignore: avoid_print
-      print('[_unwrapList] envelope, data key type=${v.runtimeType}');
-      if (v is List) return v.whereType<Map<String, dynamic>>().toList();
+      if (v is List) {
+        // ignore: avoid_print
+        print('[_unwrapList] envelope list → ${v.length} items');
+        return v.whereType<Map<String, dynamic>>().toList();
+      }
       if (v is Map<String, dynamic>) return [v];
+
+      // Grouped response from backend team/customer/waiter mode:
+      // {"Staff A": [{...}], "Staff B": [{...}]}
+      // All values are Lists → flatten them into one list.
+      final allValues = raw.values.toList();
+      final isGrouped = allValues.isNotEmpty && allValues.every((e) => e is List);
+      if (isGrouped) {
+        final flat = <Map<String, dynamic>>[];
+        for (final group in allValues) {
+          flat.addAll((group as List).whereType<Map<String, dynamic>>());
+        }
+        // ignore: avoid_print
+        print('[_unwrapList] grouped response → flattened ${flat.length} items');
+        return flat;
+      }
     }
     // ignore: avoid_print
     print('[_unwrapList] returning empty — could not parse: ${raw.toString().substring(0, raw.toString().length > 100 ? 100 : raw.toString().length)}');

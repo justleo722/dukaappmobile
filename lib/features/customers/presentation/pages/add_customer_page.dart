@@ -1,22 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/customers/data/models/customer_model.dart';
+import 'package:dukaapp/features/customers/presentation/providers/customer_provider.dart';
 
-class AddCustomerPage extends StatefulWidget {
+class AddCustomerPage extends ConsumerStatefulWidget {
   final Customer? customer;
 
   const AddCustomerPage({super.key, this.customer});
 
   @override
-  State<AddCustomerPage> createState() => _AddCustomerPageState();
+  ConsumerState<AddCustomerPage> createState() => _AddCustomerPageState();
 }
 
-class _AddCustomerPageState extends State<AddCustomerPage> {
+class _AddCustomerPageState extends ConsumerState<AddCustomerPage> {
   final _formKey = GlobalKey<FormState>();
+  bool _isSaving = false;
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
@@ -52,33 +55,40 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
     super.dispose();
   }
 
-  void _saveCustomer() {
+  Future<void> _saveCustomer() async {
     if (!_formKey.currentState!.validate()) return;
-
-    final customer = Customer(
-      id: _isEditing
-          ? widget.customer!.id
-          : DateTime.now().millisecondsSinceEpoch.toString(),
-      name: _nameController.text.trim(),
-      phone: _phoneController.text.trim(),
-      email:
-          _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
-      tinNumber:
-          _tinController.text.trim().isEmpty ? null : _tinController.text.trim(),
-      location: _locationController.text.trim().isEmpty
-          ? null
-          : _locationController.text.trim(),
-      creditLimit: _creditLimitController.text.trim().isEmpty
-          ? 0
-          : double.tryParse(_creditLimitController.text.trim()) ?? 0,
-      totalSpent: _isEditing ? widget.customer!.totalSpent : 0,
-      creditBalance: _isEditing ? widget.customer!.creditBalance : 0,
-      totalPurchases: _isEditing ? widget.customer!.totalPurchases : 0,
-      createdAt: _isEditing ? widget.customer!.createdAt : DateTime.now(),
-    );
-
-    Navigator.pop(context, customer);
+    setState(() => _isSaving = true);
+    try {
+      final repo = ref.read(customerRepositoryProvider);
+      final result = await repo.saveCustomer(
+        customerId: _isEditing ? widget.customer!.id : null,
+        name: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
+        tinNumber: _tinController.text.trim().isEmpty ? null : _tinController.text.trim(),
+        address: _locationController.text.trim().isEmpty ? null : _locationController.text.trim(),
+        creditLimit: double.tryParse(_creditLimitController.text.trim()) ?? 0,
+      );
+      if (!mounted) return;
+      final status = result['status']?.toString() ?? '';
+      if (status == 'success') {
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result['message']?.toString() ?? 'Failed to save customer')),
+        );
+        setState(() => _isSaving = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -397,7 +407,7 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
             child: SizedBox(
               height: AppConstants.buttonHeight,
               child: ElevatedButton(
-                onPressed: _saveCustomer,
+                onPressed: _isSaving ? null : _saveCustomer,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.textWhite,
@@ -408,12 +418,21 @@ class _AddCustomerPageState extends State<AddCustomerPage> {
                     ),
                   ),
                 ),
-                child: Text(
-                  _isEditing ? 'Update Customer' : 'Save Customer',
-                  style: AppTypography.buttonLarge.copyWith(
-                    color: AppColors.textWhite,
-                  ),
-                ),
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Text(
+                        _isEditing ? 'Update Customer' : 'Save Customer',
+                        style: AppTypography.buttonLarge.copyWith(
+                          color: AppColors.textWhite,
+                        ),
+                      ),
               ),
             ),
           ),

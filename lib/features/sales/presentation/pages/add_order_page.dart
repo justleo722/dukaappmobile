@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/app/colors.dart' show AppColors;
 import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
@@ -364,7 +365,7 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
             ),
           ),
           Text(
-            'SON COLLECTION',
+            ref.watch(authProvider).activeShop?.shopName ?? 'My Shop',
             style: AppTypography.caption.copyWith(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w500,

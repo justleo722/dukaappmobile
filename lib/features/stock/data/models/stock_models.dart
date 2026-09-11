@@ -1,6 +1,7 @@
 /// Product row returned by GET getdata/stock
 class StockProduct {
   final dynamic productId;
+  final dynamic stockId;    // latest stock batch id (null for services)
   final String name;
   final String? category;
   final dynamic categoryId;
@@ -18,6 +19,7 @@ class StockProduct {
 
   const StockProduct({
     required this.productId,
+    this.stockId,
     required this.name,
     this.category,
     this.categoryId,
@@ -42,6 +44,7 @@ class StockProduct {
   factory StockProduct.fromJson(Map<String, dynamic> j) {
     return StockProduct(
       productId: j['product_id'] ?? j['id'],
+      stockId: j['stock_id'],
       name: (j['product_name'] ?? j['name'] ?? '').toString(),
       category: j['category']?.toString(),
       categoryId: j['category_id'],
@@ -61,6 +64,7 @@ class StockProduct {
 
   Map<String, dynamic> toJson() => {
         'product_id': productId,
+        'stock_id': stockId,
         'product_name': name,
         'category': category,
         'category_id': categoryId,

@@ -2,14 +2,14 @@ class ApiConfig {
   ApiConfig._();
 
   // ── Base URL ────────────────────────────────────────────────────────────────
-  // Local dev  → http://192.168.0.107  (LAMPP on this machine)
-  // Production → https://dukaapp.net
- // static const String baseUrl = 'https://dukaapp.net';
-    static const String baseUrl = 'http://192.168.0.107';
-  // Local dev: app lives at /dukaapp/ subfolder
-  // Production: served from root (no subfolder prefix)
-  static const String _subFolder = '/dukaapp'; // ← change to '' on production
-  static const String appApiBase = '$_subFolder/api/v1/app';
+  // Local dev  → http://192.168.0.107  (LAMPP on this machine, subfolder /dukaapp)
+  // Production → https://dukaapp.net   (root, no subfolder)
+  static const String baseUrl = 'http://localhost';
+  static const String _subFolder = '/dukaapp';
+  // static const String baseUrl = 'https://dukaapp.net';
+  // static const String _subFolder = ''; // production: root
+
+  static const String appApiBase = '$baseUrl$_subFolder/api/v1/app';
 
   static const Duration connectTimeout = Duration(seconds: 30);
   static const Duration receiveTimeout = Duration(seconds: 30);

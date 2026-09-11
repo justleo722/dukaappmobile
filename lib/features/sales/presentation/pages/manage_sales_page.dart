@@ -34,6 +34,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
   // Live data loaded from salesProvider
   List<Map<String, dynamic>> _sales = [];
   SalesSummary _summary = SalesSummary.empty;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -42,26 +43,27 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
   }
 
   Future<void> _loadSales({String? from, String? to}) async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
     try {
       debugPrint('[Sales] _loadSales called from=$from to=$to');
       final repo = ref.read(salesRepositoryProvider);
 
-      // Fetch separately so we can log each step
       final sales = await repo.fetchSales(from: from, to: to);
       debugPrint('[Sales] fetchSales returned ${sales.length} records');
-      if (sales.isNotEmpty) debugPrint('[Sales] first record: ${sales.first.saleId} | ${sales.first.date} | ${sales.first.customer}');
 
       final summary = await repo.fetchSalesSummary(from: from, to: to);
-      debugPrint('[Sales] summary: total=${summary.total} paid=${summary.paid} unpaid=${summary.unpaid}');
+      debugPrint('[Sales] summary: total=${summary.total}');
 
       if (!mounted) return;
       setState(() {
         _summary = summary;
         _sales = sales.map(_saleRecordToMap).toList();
+        _isLoading = false;
       });
-      debugPrint('[Sales] setState done, _sales.length=${_sales.length}');
     } catch (e, st) {
       debugPrint('[Sales] _loadSales ERROR: $e\n$st');
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -293,10 +295,10 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                   children: [
                     const SizedBox(height: 12),
                     SalesSummaryCard(
-                      totalSales: '${_summary.currency} ${_fmt(_summary.total)}',
-                      totalCredits: '${_summary.currency} ${_fmt(_summary.unpaid)}',
-                      totalOrders: _sales.length,
-                      profit: '${_summary.currency} ${_fmt(_summary.paid)}',
+                      totalSales: _isLoading ? '...' : '${_summary.currency} ${_fmt(_summary.total)}',
+                      totalCredits: _isLoading ? '...' : '${_summary.currency} ${_fmt(_summary.unpaid)}',
+                      totalOrders: _isLoading ? 0 : _sales.length,
+                      profit: _isLoading ? '...' : '${_summary.currency} ${_fmt(_summary.paid)}',
                     ),
                     const SizedBox(height: 16),
                     _buildActionButtons(),
@@ -450,6 +452,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
   }
 
   Widget _buildAccordionView() {
+    if (_isLoading) return _buildSkeleton();
     return Column(
       children: [
         if (_selectedSales.isNotEmpty) _buildDeleteBar(),
@@ -551,6 +554,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
   }
 
   Widget _buildListView() {
+    if (_isLoading) return _buildSkeleton();
     return Column(
       children: [
         ...List.generate(_sales.length, (index) {
@@ -583,6 +587,16 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
           );
         }),
       ],
+    );
+  }
+
+  /// Skeleton loading cards shown while sales are being fetched.
+  Widget _buildSkeleton() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
+      child: Column(
+        children: List.generate(6, (i) => _SkeletonCard(key: ValueKey(i))),
+      ),
     );
   }
 
@@ -780,6 +794,110 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
       subtotal: totalAmount,
       totalPaid: sale['paid'],
       amountReceived: sale['paid'],
+    );
+  }
+}
+
+// ── Skeleton card ─────────────────────────────────────────────────────────────
+
+class _SkeletonCard extends StatefulWidget {
+  const _SkeletonCard({super.key});
+
+  @override
+  State<_SkeletonCard> createState() => _SkeletonCardState();
+}
+
+class _SkeletonCardState extends State<_SkeletonCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.3, end: 0.7).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, _child) {
+        final base = Color.lerp(
+          const Color(0xFFE0E0E0),
+          const Color(0xFFF5F5F5),
+          _anim.value,
+        )!;
+        final highlight = Color.lerp(
+          const Color(0xFFEEEEEE),
+          const Color(0xFFFAFAFA),
+          _anim.value,
+        )!;
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(AppConstants.radiusMD),
+            border: Border.all(color: const Color(0xFFEEEEEE)),
+          ),
+          child: Row(
+            children: [
+              // Left colour stripe
+              Container(
+                width: 4,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: base,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _bone(highlight, width: 120, height: 13),
+                    const SizedBox(height: 8),
+                    _bone(highlight, width: 80, height: 10),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  _bone(highlight, width: 70, height: 13),
+                  const SizedBox(height: 8),
+                  _bone(highlight, width: 50, height: 10),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _bone(Color color, {required double width, required double height}) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(6),
+      ),
     );
   }
 }

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/customers/data/models/customer_model.dart';
+import 'package:dukaapp/features/customers/presentation/providers/customer_provider.dart';
 import 'package:dukaapp/features/customers/presentation/widgets/add_cash_dialog.dart';
 import 'package:dukaapp/features/customers/presentation/widgets/clear_wallet_dialog.dart';
 
@@ -17,23 +19,44 @@ class _CustomerWallet {
   });
 }
 
-class CustomersWalletPage extends StatefulWidget {
+class CustomersWalletPage extends ConsumerStatefulWidget {
   const CustomersWalletPage({super.key});
 
   @override
-  State<CustomersWalletPage> createState() => _CustomersWalletPageState();
+  ConsumerState<CustomersWalletPage> createState() => _CustomersWalletPageState();
 }
 
-class _CustomersWalletPageState extends State<CustomersWalletPage> {
+class _CustomersWalletPageState extends ConsumerState<CustomersWalletPage> {
   final TextEditingController _searchController = TextEditingController();
   List<_CustomerWallet> _wallets = [];
   List<_CustomerWallet> _filteredWallets = [];
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _wallets = _generateSampleWallets();
-    _filteredWallets = List.from(_wallets);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadWallets());
+  }
+
+  Future<void> _loadWallets() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(customerRepositoryProvider);
+      final customers = await repo.fetchCustomers();
+      if (!mounted) return;
+      final wallets = customers
+          .where((c) => c.creditBalance > 0 || c.totalSpent > 0)
+          .map((c) => _CustomerWallet(customer: c, walletBalance: c.creditBalance))
+          .toList();
+      setState(() {
+        _wallets = wallets;
+        _filteredWallets = List.from(wallets);
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -76,7 +99,9 @@ class _CustomersWalletPageState extends State<CustomersWalletPage> {
           _buildSearchBar(),
           _buildSummarySection(),
           Expanded(
-            child: _filteredWallets.isEmpty
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _filteredWallets.isEmpty
                 ? _buildEmptyState()
                 : ListView.builder(
                     padding: EdgeInsets.only(
@@ -461,17 +486,6 @@ class _CustomersWalletPageState extends State<CustomersWalletPage> {
         ],
       ),
     );
-  }
-
-  List<_CustomerWallet> _generateSampleWallets() {
-    return Customer.sampleCustomers().map((c) {
-      double balance = 0;
-      if (c.id == '1') balance = 150000;
-      if (c.id == '3') balance = 75000;
-      if (c.id == '5') balance = 200000;
-      if (c.id == '7') balance = 50000;
-      return _CustomerWallet(customer: c, walletBalance: balance);
-    }).toList();
   }
 
   void _showComingSoon(String feature) {

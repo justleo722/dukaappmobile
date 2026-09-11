@@ -1,28 +1,47 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/customers/data/models/customer_model.dart';
+import 'package:dukaapp/features/customers/presentation/providers/customer_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
-class CustomersPage extends StatefulWidget {
+class CustomersPage extends ConsumerStatefulWidget {
   const CustomersPage({super.key});
 
   @override
-  State<CustomersPage> createState() => _CustomersPageState();
+  ConsumerState<CustomersPage> createState() => _CustomersPageState();
 }
 
-class _CustomersPageState extends State<CustomersPage> {
+class _CustomersPageState extends ConsumerState<CustomersPage> {
   final TextEditingController _searchController = TextEditingController();
   List<Customer> _customers = [];
   List<Customer> _filteredCustomers = [];
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _customers = Customer.sampleCustomers();
-    _filteredCustomers = List.from(_customers);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCustomers());
+  }
+
+  Future<void> _loadCustomers() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(customerRepositoryProvider);
+      final customers = await repo.fetchCustomers();
+      if (!mounted) return;
+      setState(() {
+        _customers = customers;
+        _filteredCustomers = List.from(customers);
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -45,24 +64,34 @@ class _CustomersPageState extends State<CustomersPage> {
     });
   }
 
-  void _deleteCustomer(Customer customer) {
-    setState(() {
-      _customers.removeWhere((c) => c.id == customer.id);
-      _filteredCustomers.removeWhere((c) => c.id == customer.id);
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${customer.name} removed',
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+  Future<void> _deleteCustomer(Customer customer) async {
+    try {
+      final repo = ref.read(customerRepositoryProvider);
+      await repo.deleteCustomers([customer.id]);
+      if (!mounted) return;
+      setState(() {
+        _customers.removeWhere((c) => c.id == customer.id);
+        _filteredCustomers.removeWhere((c) => c.id == customer.id);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${customer.name} removed',
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+          ),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppConstants.radiusSM),
+          ),
         ),
-        backgroundColor: AppColors.danger,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-        ),
-      ),
-    );
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to delete customer')),
+      );
+    }
   }
 
   @override
@@ -77,7 +106,9 @@ class _CustomersPageState extends State<CustomersPage> {
           _buildActionButtons(),
           _buildSearchBar(),
           Expanded(
-            child: _filteredCustomers.isEmpty
+            child: _isLoading
+                ? _buildSkeleton()
+                : _filteredCustomers.isEmpty
                 ? _buildEmptyState()
                 : ListView.builder(
                     padding: EdgeInsets.only(
@@ -187,7 +218,10 @@ class _CustomersPageState extends State<CustomersPage> {
             icon: Icons.person_add_rounded,
             label: 'New Customer',
             color: AppColors.primary,
-            onTap: () => context.push('/customers/add'),
+            onTap: () async {
+              await context.push('/customers/add');
+              _loadCustomers();
+            },
           ),
         ],
       ),
@@ -354,7 +388,10 @@ class _CustomersPageState extends State<CustomersPage> {
             _buildActionButton(
               icon: Icons.edit_rounded,
               color: AppColors.success,
-              onTap: () => context.push('/customers/add', extra: customer),
+              onTap: () async {
+                await context.push('/customers/add', extra: customer);
+                _loadCustomers();
+              },
             ),
             const SizedBox(width: 4),
             _buildActionButton(
@@ -438,6 +475,14 @@ class _CustomersPageState extends State<CustomersPage> {
     );
   }
 
+  Widget _buildSkeleton() {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG, vertical: 8),
+      itemCount: 6,
+      itemBuilder: (_, i) => _CustomerSkeletonCard(key: ValueKey(i)),
+    );
+  }
+
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -473,6 +518,50 @@ class _CustomersPageState extends State<CustomersPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CustomerSkeletonCard extends StatefulWidget {
+  const _CustomerSkeletonCard({super.key});
+  @override
+  State<_CustomerSkeletonCard> createState() => _CustomerSkeletonCardState();
+}
+
+class _CustomerSkeletonCardState extends State<_CustomerSkeletonCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.3, end: 0.7).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, _c) {
+        final c = Color.lerp(const Color(0xFFE0E0E0), const Color(0xFFF5F5F5), _anim.value)!;
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFEEEEEE))),
+          child: Row(children: [
+            CircleAvatar(backgroundColor: c, radius: 22),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Container(width: 140, height: 13, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(6))),
+              const SizedBox(height: 8),
+              Container(width: 90, height: 10, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(6))),
+            ])),
+            Container(width: 60, height: 13, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(6))),
+          ]),
+        );
+      },
     );
   }
 }
