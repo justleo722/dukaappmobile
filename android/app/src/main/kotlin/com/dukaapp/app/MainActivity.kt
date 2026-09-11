@@ -1,4 +1,4 @@
-package com.dukaapp.app
+package com.dukaapps.app
 
 import android.content.ContentValues
 import android.os.Build

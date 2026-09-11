@@ -4,10 +4,10 @@ class ApiConfig {
   // ── Base URL ────────────────────────────────────────────────────────────────
   // Local dev  → http://192.168.0.107  (LAMPP on this machine, subfolder /dukaapp)
   // Production → https://dukaapp.net   (root, no subfolder)
-  static const String baseUrl = 'http://localhost';
-  static const String _subFolder = '/dukaapp';
-  // static const String baseUrl = 'https://dukaapp.net';
-  // static const String _subFolder = ''; // production: root
+  // static const String baseUrl = 'http://localhost';
+  // static const String _subFolder = '/dukaapp';
+  static const String baseUrl = 'https://dukaapp.net';
+  static const String _subFolder = ''; // production: root
 
   static const String appApiBase = '$baseUrl$_subFolder/api/v1/app';
 
@@ -15,7 +15,7 @@ class ApiConfig {
   static const Duration receiveTimeout = Duration(seconds: 30);
   static const Duration sendTimeout = Duration(seconds: 30);
 
-  static bool enableLogging = true;
+  static bool enableLogging = false;
 
   // Auth endpoints
   static const String authSignin = '$appApiBase/auth/signin';
