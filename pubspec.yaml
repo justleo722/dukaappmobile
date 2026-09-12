@@ -56,7 +56,7 @@ dependencies:
   # Camera & Media
   mobile_scanner: ^7.4.0
   image_picker: ^1.2.3
-  file_picker: ^5.5.0
+  file_picker: ^8.0.0
 
   # PDF Preview & Printing
   printing: ^5.13.4

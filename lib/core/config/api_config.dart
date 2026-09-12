@@ -6,7 +6,7 @@ class ApiConfig {
   // Production → https://dukaapp.net   (root, no subfolder)
   // static const String baseUrl = 'http://localhost';
   // static const String _subFolder = '/dukaapp';
-  static const String baseUrl = 'https://dukaapp.net';
+  static const String baseUrl = 'https://dukaapp.com';
   static const String _subFolder = ''; // production: root
 
   static const String appApiBase = '$baseUrl$_subFolder/api/v1/app';
