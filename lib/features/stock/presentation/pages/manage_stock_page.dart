@@ -111,12 +111,24 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              setState(() => _selectedIds.clear());
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Products deleted')),
-              );
+              final ids = _selectedIds.toList();
+              try {
+                final repo = ref.read(stockRepositoryProvider);
+                await repo.bulkDeleteProducts(ids);
+                if (!mounted) return;
+                setState(() => _selectedIds.clear());
+                ref.read(stockProvider.notifier).refresh();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Products deleted')),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Delete failed: $e')),
+                );
+              }
             },
             child: Text(
               'Delete',
@@ -159,11 +171,22 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('${product.name} deleted')),
-              );
+              try {
+                final repo = ref.read(stockRepositoryProvider);
+                await repo.bulkDeleteProducts([product.productId]);
+                if (!mounted) return;
+                ref.read(stockProvider.notifier).refresh();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('${product.name} deleted')),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Delete failed: $e')),
+                );
+              }
             },
             child: Text(
               'Delete',

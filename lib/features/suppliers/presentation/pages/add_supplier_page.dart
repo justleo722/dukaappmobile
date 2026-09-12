@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/suppliers/data/models/supplier_model.dart';
+import 'package:dukaapp/features/suppliers/presentation/providers/supplier_provider.dart';
 
-class AddSupplierPage extends StatefulWidget {
+class AddSupplierPage extends ConsumerStatefulWidget {
   final Supplier? supplier;
 
   const AddSupplierPage({super.key, this.supplier});
 
   @override
-  State<AddSupplierPage> createState() => _AddSupplierPageState();
+  ConsumerState<AddSupplierPage> createState() => _AddSupplierPageState();
 }
 
-class _AddSupplierPageState extends State<AddSupplierPage> {
+class _AddSupplierPageState extends ConsumerState<AddSupplierPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -50,34 +52,31 @@ class _AddSupplierPageState extends State<AddSupplierPage> {
     super.dispose();
   }
 
-  void _saveSupplier() {
+  Future<void> _saveSupplier() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final supplier = Supplier(
-      id: _isEditing
-          ? widget.supplier!.id
-          : DateTime.now().millisecondsSinceEpoch.toString(),
-      name: _nameController.text.trim(),
-      phone: _phoneController.text.trim(),
-      email: _emailController.text.trim().isEmpty
-          ? null
-          : _emailController.text.trim(),
-      companyName: _companyController.text.trim().isEmpty
-          ? null
-          : _companyController.text.trim(),
-      address: _addressController.text.trim().isEmpty
-          ? null
-          : _addressController.text.trim(),
-      tinNumber: _tinController.text.trim().isEmpty
-          ? null
-          : _tinController.text.trim(),
-      creditBalance: _isEditing ? widget.supplier!.creditBalance : 0,
-      totalPurchases: _isEditing ? widget.supplier!.totalPurchases : 0,
-      totalOrders: _isEditing ? widget.supplier!.totalOrders : 0,
-      createdAt: _isEditing ? widget.supplier!.createdAt : DateTime.now(),
-    );
-
-    Navigator.pop(context, supplier);
+    try {
+      final repo = ref.read(supplierRepositoryProvider);
+      await repo.addSupplier({
+        'name': _nameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        if (_emailController.text.trim().isNotEmpty) 'email': _emailController.text.trim(),
+        if (_companyController.text.trim().isNotEmpty) 'company': _companyController.text.trim(),
+        if (_addressController.text.trim().isNotEmpty) 'address': _addressController.text.trim(),
+        if (_tinController.text.trim().isNotEmpty) 'tin': _tinController.text.trim(),
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isEditing ? 'Supplier updated' : 'Supplier added', style: const TextStyle(color: Colors.white)),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.danger));
+    }
   }
 
   @override

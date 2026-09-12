@@ -1298,21 +1298,38 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       final amount = double.tryParse(amountController.text) ?? 0;
                       if (amount > 0) {
-                        setState(() {
-                          _orders[orderIndex]['paid'] = (_orders[orderIndex]['paid'] as double) + amount;
-                          _orders[orderIndex]['balance'] = balance - amount;
-                          if ((_orders[orderIndex]['balance'] as double) <= 0) {
-                            _orders[orderIndex]['status'] = 'PAID';
-                            _orders[orderIndex]['balance'] = 0.0;
-                          }
-                        });
+                        final saleId = _orders[orderIndex]['sale_id']?.toString() ?? '';
+                        final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Payment recorded successfully')),
-                        );
+                        try {
+                          final repo = ref.read(salesRepositoryProvider);
+                          await repo.addPayment({
+                            'sale_id': saleId,
+                            'amount': amount,
+                            'date': dateStr,
+                            'account': selectedAccount,
+                          });
+                          if (!mounted) return;
+                          setState(() {
+                            _orders[orderIndex]['paid'] = (_orders[orderIndex]['paid'] as double) + amount;
+                            _orders[orderIndex]['balance'] = balance - amount;
+                            if ((_orders[orderIndex]['balance'] as double) <= 0) {
+                              _orders[orderIndex]['status'] = 'PAID';
+                              _orders[orderIndex]['balance'] = 0.0;
+                            }
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Payment recorded successfully')),
+                          );
+                        } catch (e) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Payment failed: $e')),
+                          );
+                        }
                       }
                     },
                     style: ElevatedButton.styleFrom(
@@ -1504,14 +1521,28 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _orders[orderIndex]['status'] = selectedStatus;
-                      });
+                    onPressed: () async {
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Order status updated')),
-                      );
+                      final saleId = _orders[orderIndex]['sale_id']?.toString() ?? '';
+                      try {
+                        final repo = ref.read(salesRepositoryProvider);
+                        await repo.updateOrderStatus({
+                          'sale_id': saleId,
+                          'status': selectedStatus,
+                        });
+                        if (!mounted) return;
+                        setState(() {
+                          _orders[orderIndex]['status'] = selectedStatus;
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Order status updated')),
+                        );
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Update failed: $e')),
+                        );
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,

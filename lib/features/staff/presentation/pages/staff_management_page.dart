@@ -1,55 +1,51 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/staff/data/models/staff_models.dart';
+import 'package:dukaapp/features/staff/presentation/providers/staff_provider.dart';
 
-class _Attendant {
-  final int id;
-  final String name;
-  final String phone;
-  final String role;
-  final bool isActive;
-
-  const _Attendant({
-    required this.id,
-    required this.name,
-    required this.phone,
-    required this.role,
-    this.isActive = true,
-  });
-}
-
-class StaffManagementPage extends StatefulWidget {
+class StaffManagementPage extends ConsumerStatefulWidget {
   const StaffManagementPage({super.key});
 
   @override
-  State<StaffManagementPage> createState() => _StaffManagementPageState();
+  ConsumerState<StaffManagementPage> createState() => _StaffManagementPageState();
 }
 
-class _StaffManagementPageState extends State<StaffManagementPage> {
+class _StaffManagementPageState extends ConsumerState<StaffManagementPage> {
   final TextEditingController _searchController = TextEditingController();
 
-  static const List<_Attendant> _allAttendants = [
-    _Attendant(id: 1, name: 'Amina Juma', phone: '0712345678', role: 'Manager', isActive: true),
-    _Attendant(id: 2, name: 'John Mwangi', phone: '0756789012', role: 'Normal Attendant', isActive: true),
-    _Attendant(id: 3, name: 'Fatima Hassan', phone: '0789012345', role: 'Normal Attendant', isActive: false),
-    _Attendant(id: 4, name: 'David Kimaro', phone: '0723456789', role: 'Manager', isActive: true),
-    _Attendant(id: 5, name: 'Grace Mushi', phone: '0745678901', role: 'Normal Attendant', isActive: true),
-  ];
-
-  late Map<int, bool> _activeStates;
+  List<Attendant> _attendants = [];
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _activeStates = {for (final a in _allAttendants) a.id: a.isActive};
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadTeam());
   }
 
-  List<_Attendant> get _filteredAttendants {
+  Future<void> _loadTeam() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(staffRepositoryProvider);
+      final list = await repo.fetchTeam();
+      if (!mounted) return;
+      setState(() {
+        _attendants = list;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  List<Attendant> get _filteredAttendants {
     final query = _searchController.text.toLowerCase().trim();
-    if (query.isEmpty) return _allAttendants;
-    return _allAttendants.where((a) => a.name.toLowerCase().contains(query) || a.phone.contains(query)).toList();
+    if (query.isEmpty) return _attendants;
+    return _attendants.where((a) => a.name.toLowerCase().contains(query) || a.phone.contains(query)).toList();
   }
 
   @override
@@ -58,13 +54,14 @@ class _StaffManagementPageState extends State<StaffManagementPage> {
     super.dispose();
   }
 
-  Future<void> _confirmDelete(_Attendant attendant) async {
+  Future<void> _confirmDelete(Attendant attendant) async {
     final result = await showDialog<bool>(
       context: context,
+      useRootNavigator: true,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Delete Attendant', style: AppTypography.h6.copyWith(fontWeight: FontWeight.w700)),
-        content: Text('Are you sure you want to delete "${attendant.name}"? This action cannot be undone.',
+        content: Text('Are you sure you want to delete "${attendant.name}"?',
           style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel', style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary))),
@@ -73,7 +70,21 @@ class _StaffManagementPageState extends State<StaffManagementPage> {
       ),
     );
     if (result == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${attendant.name} deleted'), backgroundColor: AppColors.danger));
+      try {
+        final repo = ref.read(staffRepositoryProvider);
+        // Soft-delete only — backend marks record_status = 'deleted', never hard DELETE
+        await repo.deleteAttendant({'role_id': attendant.roleId.toString()});
+        if (!mounted) return;
+        await _loadTeam();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${attendant.name} deleted'), backgroundColor: AppColors.danger),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Delete failed: $e'), backgroundColor: AppColors.danger),
+        );
+      }
     }
   }
 
@@ -134,7 +145,7 @@ class _StaffManagementPageState extends State<StaffManagementPage> {
     ));
   }
 
-  Widget _buildAttendantList(List<_Attendant> attendants) {
+  Widget _buildAttendantList(List<Attendant> attendants) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       itemCount: attendants.length,
@@ -142,7 +153,7 @@ class _StaffManagementPageState extends State<StaffManagementPage> {
     );
   }
 
-  Widget _buildAttendantCard(_Attendant attendant) {
+  Widget _buildAttendantCard(Attendant attendant) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -156,11 +167,17 @@ class _StaffManagementPageState extends State<StaffManagementPage> {
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(attendant.name, style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
-            Text('ID: ${attendant.id.toString().padLeft(4, '0')}  •  ${attendant.role}', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11)),
+            Text('ID: ${attendant.roleId.toString().padLeft(4, '0')}  •  ${attendant.isManager ? 'Manager' : 'Attendant'}', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11)),
           ])),
           Switch(
-            value: _activeStates[attendant.id] ?? attendant.isActive,
-            onChanged: (v) => setState(() => _activeStates[attendant.id] = v),
+            value: attendant.isActive,
+            onChanged: (v) async {
+              try {
+                final repo = ref.read(staffRepositoryProvider);
+                await repo.updateStatus({'role_id': attendant.roleId.toString(), 'status': v == true ? 'active' : 'inactive'});
+                if (mounted) await _loadTeam();
+              } catch (_) {}
+            },
             activeThumbColor: AppColors.primary,
           ),
         ]),

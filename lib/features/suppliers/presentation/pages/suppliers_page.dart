@@ -1,28 +1,29 @@
 // features/suppliers/presentation/pages/suppliers_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/suppliers/data/models/supplier_model.dart';
+import 'package:dukaapp/features/suppliers/presentation/providers/supplier_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/features/suppliers/presentation/pages/credit_purchases_page.dart';
 import 'package:dukaapp/features/suppliers/presentation/pages/cash_purchases_page.dart';
-// PDF/printing helpers removed from this page; handled in dedicated purchase pages
 
-class SuppliersPage extends StatefulWidget {
+class SuppliersPage extends ConsumerStatefulWidget {
   const SuppliersPage({super.key});
 
   @override
-  State<SuppliersPage> createState() => _SuppliersPageState();
+  ConsumerState<SuppliersPage> createState() => _SuppliersPageState();
 }
 
-class _SuppliersPageState extends State<SuppliersPage> {
+class _SuppliersPageState extends ConsumerState<SuppliersPage> {
   final TextEditingController _searchController = TextEditingController();
   List<Supplier> _suppliers = [];
   List<Supplier> _filteredSuppliers = [];
   final Set<String> _selectedSupplierIds = {};
-  // Note: per updated UX, On-Credit and On-Cash open separate pages.
+  bool _isLoading = false;
 
   bool get _selectAll =>
       _filteredSuppliers.isNotEmpty &&
@@ -31,8 +32,24 @@ class _SuppliersPageState extends State<SuppliersPage> {
   @override
   void initState() {
     super.initState();
-    _suppliers = Supplier.sampleSuppliers();
-    _filteredSuppliers = List.from(_suppliers);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadSuppliers());
+  }
+
+  Future<void> _loadSuppliers() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(supplierRepositoryProvider);
+      final list = await repo.fetchSuppliers();
+      if (!mounted) return;
+      setState(() {
+        _suppliers = list;
+        _filteredSuppliers = List.from(list);
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -79,25 +96,35 @@ class _SuppliersPageState extends State<SuppliersPage> {
     });
   }
 
-  void _deleteSupplier(Supplier supplier) {
-    setState(() {
-      _suppliers.removeWhere((s) => s.id == supplier.id);
-      _filteredSuppliers.removeWhere((s) => s.id == supplier.id);
-      _selectedSupplierIds.remove(supplier.id);
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '${supplier.name} removed',
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+  Future<void> _deleteSupplier(Supplier supplier) async {
+    try {
+      final repo = ref.read(supplierRepositoryProvider);
+      await repo.bulkDeleteSuppliers([supplier.id]);
+      if (!mounted) return;
+      setState(() {
+        _suppliers.removeWhere((s) => s.id == supplier.id);
+        _filteredSuppliers.removeWhere((s) => s.id == supplier.id);
+        _selectedSupplierIds.remove(supplier.id);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${supplier.name} removed',
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+          ),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppConstants.radiusSM),
+          ),
         ),
-        backgroundColor: AppColors.danger,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-        ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Delete failed: $e'), backgroundColor: AppColors.danger),
+      );
+    }
   }
 
   @override

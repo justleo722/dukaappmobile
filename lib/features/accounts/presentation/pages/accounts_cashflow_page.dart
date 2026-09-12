@@ -1,61 +1,66 @@
 // features/accounts/presentation/pages/accounts_cashflow_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/features/accounts/data/models/cashflow_models.dart';
+import 'package:dukaapp/features/accounts/presentation/providers/cashflow_provider.dart';
+import 'package:dukaapp/features/sales/presentation/providers/filter_provider.dart';
 
-class _CashflowItem {
-  final int sn;
-  final String date;
-  final String name;
-  final double cashIn;
-  final double cashOut;
-  final double balance;
-
-  const _CashflowItem({
-    required this.sn,
-    required this.date,
-    required this.name,
-    required this.cashIn,
-    required this.cashOut,
-    required this.balance,
-  });
-}
-
-class AccountsCashflowPage extends StatefulWidget {
+class AccountsCashflowPage extends ConsumerStatefulWidget {
   const AccountsCashflowPage({super.key});
 
   @override
-  State<AccountsCashflowPage> createState() => _AccountsCashflowPageState();
+  ConsumerState<AccountsCashflowPage> createState() => _AccountsCashflowPageState();
 }
 
-class _AccountsCashflowPageState extends State<AccountsCashflowPage> {
+class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
   final TextEditingController _searchController = TextEditingController();
 
-  static const List<_CashflowItem> _allItems = [
-    _CashflowItem(sn: 1, date: '13 Aug 2026', name: 'Capital Injection', cashIn: 500000, cashOut: 0, balance: 500000),
-    _CashflowItem(sn: 2, date: '13 Aug 2026', name: 'Sales Revenue', cashIn: 350000, cashOut: 0, balance: 850000),
-    _CashflowItem(sn: 3, date: '12 Aug 2026', name: 'Rent Payment', cashIn: 0, cashOut: 200000, balance: 650000),
-    _CashflowItem(sn: 4, date: '12 Aug 2026', name: 'Supplier Payment', cashIn: 0, cashOut: 150000, balance: 500000),
-    _CashflowItem(sn: 5, date: '11 Aug 2026', name: 'Customer Payment', cashIn: 120000, cashOut: 0, balance: 620000),
-    _CashflowItem(sn: 6, date: '11 Aug 2026', name: 'Electricity Bill', cashIn: 0, cashOut: 85000, balance: 535000),
-    _CashflowItem(sn: 7, date: '10 Aug 2026', name: 'Sales Revenue', cashIn: 280000, cashOut: 0, balance: 815000),
-    _CashflowItem(sn: 8, date: '10 Aug 2026', name: 'Staff Salaries', cashIn: 0, cashOut: 320000, balance: 495000),
-  ];
+  List<CashflowItem> _allItems = [];
+  CashflowSummary? _summary;
+  bool _isLoading = false;
 
-  List<_CashflowItem> get _filteredItems {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCashflow());
+  }
+
+  Future<void> _loadCashflow({String? from, String? to}) async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(cashflowRepositoryProvider);
+      final results = await Future.wait([
+        repo.fetchCashflow(from: from, to: to),
+        repo.fetchCashflowSummary(from: from, to: to),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _allItems = results[0] as List<CashflowItem>;
+        _summary = results[1] as CashflowSummary;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  List<CashflowItem> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();
     if (query.isEmpty) return _allItems;
     return _allItems.where((e) => e.name.toLowerCase().contains(query)).toList();
   }
 
-  double get _totalCashIn => _allItems.fold(0, (s, e) => s + e.cashIn);
-  double get _totalCashOut => _allItems.fold(0, (s, e) => s + e.cashOut);
-  double get _cashInHand => _totalCashIn - _totalCashOut;
-  double get _customerWallet => 185000;
+  double get _totalCashIn => _summary?.totalCashIn ?? _allItems.fold(0, (s, e) => s + e.cashIn);
+  double get _totalCashOut => _summary?.totalCashOut ?? _allItems.fold(0, (s, e) => s + e.cashOut);
+  double get _cashInHand => _summary?.cashInHand ?? (_totalCashIn - _totalCashOut);
+  double get _customerWallet => 0;
 
   String _fmt(double v) {
     final fmt = NumberFormat('#,###');
@@ -66,6 +71,41 @@ class _AccountsCashflowPageState extends State<AccountsCashflowPage> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (prev, next) {
+      if (prev?.from != next.from || prev?.to != next.to) {
+        _loadCashflow(from: next.from, to: next.to);
+      }
+    });
+    final items = _filteredItems;
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FB),
+      appBar: _buildAppBar(context),
+      body: SafeArea(
+        top: false,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+                children: [
+                  const SizedBox(height: 12),
+                  _buildSummaryCards(),
+                  const SizedBox(height: 14),
+                  _buildActionButtons(),
+                  const SizedBox(height: 14),
+                  _buildSearchField(),
+                  const SizedBox(height: 14),
+                  _buildSectionHeader(),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: items.isEmpty ? _buildEmptyState() : _buildCashflowList(items),
+                  ),
+                ],
+              ),
+      ),
+    );
   }
 
   void _showAddCashInDialog() {
@@ -108,9 +148,9 @@ class _AccountsCashflowPageState extends State<AccountsCashflowPage> {
                       const SizedBox(height: 6),
                       _buildDropdown(ctx, setDialogState, selectedCategory, categories, (v) { setDialogState(() => selectedCategory = v); }),
                       const SizedBox(height: 16),
-                      _fieldLabel('Status'),
+                      _fieldLabel('Note'),
                       const SizedBox(height: 6),
-                      _buildTextInput(statusController, 'e.g. Capital'),
+                      _buildTextInput(statusController, 'e.g. Capital injection'),
                       const SizedBox(height: 16),
                       _fieldLabel('Amount'),
                       const SizedBox(height: 6),
@@ -123,12 +163,26 @@ class _AccountsCashflowPageState extends State<AccountsCashflowPage> {
                   ),
                 ),
               ),
-              _buildDialogActions(ctx, () {
-                if (amountController.text.isNotEmpty) {
-                  Navigator.pop(ctx);
+              _buildDialogActions(ctx, () async {
+                final amount = double.tryParse(amountController.text) ?? 0;
+                if (amount <= 0) return;
+                Navigator.pop(ctx);
+                try {
+                  final repo = ref.read(cashflowRepositoryProvider);
+                  await repo.addFund({
+                    'title': statusController.text.isNotEmpty ? statusController.text : (selectedCategory ?? 'Fund'),
+                    'amount': amount,
+                    'record_date': DateFormat('yyyy-MM-dd').format(selectedDate),
+                    if (selectedCategory != null) 'category': selectedCategory,
+                  });
+                  if (!mounted) return;
+                  await _loadCashflow();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Cash In recorded', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)), backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))),
                   );
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.danger));
                 }
               }, AppColors.primary, 'Save'),
             ],
@@ -178,9 +232,9 @@ class _AccountsCashflowPageState extends State<AccountsCashflowPage> {
                       const SizedBox(height: 6),
                       _buildDropdown(ctx, setDialogState, selectedCategory, categories, (v) { setDialogState(() => selectedCategory = v); }),
                       const SizedBox(height: 16),
-                      _fieldLabel('Status'),
+                      _fieldLabel('Note'),
                       const SizedBox(height: 6),
-                      _buildTextInput(statusController, 'e.g. Capital'),
+                      _buildTextInput(statusController, 'e.g. Rent payment'),
                       const SizedBox(height: 16),
                       _fieldLabel('Amount'),
                       const SizedBox(height: 6),
@@ -193,12 +247,26 @@ class _AccountsCashflowPageState extends State<AccountsCashflowPage> {
                   ),
                 ),
               ),
-              _buildDialogActions(ctx, () {
-                if (amountController.text.isNotEmpty) {
-                  Navigator.pop(ctx);
+              _buildDialogActions(ctx, () async {
+                final amount = double.tryParse(amountController.text) ?? 0;
+                if (amount <= 0) return;
+                Navigator.pop(ctx);
+                try {
+                  final repo = ref.read(cashflowRepositoryProvider);
+                  await repo.addExpense({
+                    'title': statusController.text.isNotEmpty ? statusController.text : (selectedCategory ?? 'Expense'),
+                    'amount': amount,
+                    'record_date': DateFormat('yyyy-MM-dd').format(selectedDate),
+                    if (selectedCategory != null) 'note': selectedCategory,
+                  });
+                  if (!mounted) return;
+                  await _loadCashflow();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Cash Out recorded', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)), backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))),
                   );
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.danger));
                 }
               }, AppColors.primary, 'Save'),
             ],
@@ -291,7 +359,7 @@ class _AccountsCashflowPageState extends State<AccountsCashflowPage> {
     );
   }
 
-  Widget _buildDialogActions(BuildContext ctx, VoidCallback onSave, Color saveColor, String saveLabel) {
+  Widget _buildDialogActions(BuildContext ctx, Future<void> Function() onSave, Color saveColor, String saveLabel) {
     return Container(
       padding: EdgeInsets.only(left: AppConstants.paddingLG, right: AppConstants.paddingLG, top: 12, bottom: MediaQuery.of(ctx).padding.bottom + 12),
       decoration: const BoxDecoration(color: AppColors.card, border: Border(top: BorderSide(color: AppColors.divider, width: 1))),
@@ -311,37 +379,6 @@ class _AccountsCashflowPageState extends State<AccountsCashflowPage> {
           ),
         ),
       ]),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final items = _filteredItems;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
-      appBar: _buildAppBar(context),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            _buildSummaryCards(),
-            const SizedBox(height: 14),
-            _buildActionButtons(),
-            const SizedBox(height: 14),
-            _buildSearchField(),
-            const SizedBox(height: 14),
-            _buildSectionHeader(),
-            const SizedBox(height: 8),
-            Expanded(
-              child: items.isEmpty
-                  ? _buildEmptyState()
-                  : _buildCashflowList(items),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -509,7 +546,7 @@ class _AccountsCashflowPageState extends State<AccountsCashflowPage> {
     );
   }
 
-  Widget _buildCashflowList(List<_CashflowItem> items) {
+  Widget _buildCashflowList(List<CashflowItem> items) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       itemCount: items.length,
@@ -517,7 +554,7 @@ class _AccountsCashflowPageState extends State<AccountsCashflowPage> {
     );
   }
 
-  Widget _buildCashflowCard(_CashflowItem item) {
+  Widget _buildCashflowCard(CashflowItem item) {
     final hasCashIn = item.cashIn > 0;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),

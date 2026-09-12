@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/staff/presentation/providers/staff_provider.dart';
 
-class AddAttendantPage extends StatefulWidget {
+class AddAttendantPage extends ConsumerStatefulWidget {
   const AddAttendantPage({super.key});
 
   @override
-  State<AddAttendantPage> createState() => _AddAttendantPageState();
+  ConsumerState<AddAttendantPage> createState() => _AddAttendantPageState();
 }
 
-class _AddAttendantPageState extends State<AddAttendantPage> {
+class _AddAttendantPageState extends ConsumerState<AddAttendantPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -218,7 +220,25 @@ class _AddAttendantPageState extends State<AddAttendantPage> {
       ))),
       const SizedBox(width: 12),
       Expanded(flex: 2, child: SizedBox(height: AppConstants.buttonHeight, child: ElevatedButton.icon(
-        onPressed: () { if (_formKey.currentState?.validate() ?? false) context.pop(); },
+        onPressed: () async {
+          if (!(_formKey.currentState?.validate() ?? false)) return;
+          try {
+            final repo = ref.read(staffRepositoryProvider);
+            await repo.addStaff({
+              'username': _nameController.text.trim(),
+              'phone': _phoneController.text.trim(),
+              'password': _passwordController.text,
+              'role': _roleController.text.trim(),
+              'is_manager': (_selectedAccessLevel == 'Manager Access') ? '1' : '0',
+            });
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Attendant added'), backgroundColor: Colors.green));
+            context.pop();
+          } catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red));
+          }
+        },
         icon: const Icon(Icons.check_rounded, size: 18, color: AppColors.textWhite),
         label: Text('Save Attendant', style: AppTypography.buttonLarge.copyWith(color: AppColors.textWhite)),
         style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, elevation: 0,

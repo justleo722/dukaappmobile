@@ -1,6 +1,7 @@
 // features/purchase/presentation/pages/purchases_page.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -15,78 +16,57 @@ import 'package:dukaapp/features/sales/presentation/widgets/sale_product_tile.da
 import 'package:dukaapp/features/sales/presentation/widgets/payment_summary_card.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/receipt_widget.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/features/purchase/presentation/providers/purchase_provider.dart';
 
-class PurchasesPage extends StatefulWidget {
+class PurchasesPage extends ConsumerStatefulWidget {
   const PurchasesPage({super.key});
 
   @override
-  State<PurchasesPage> createState() => _PurchasesPageState();
+  ConsumerState<PurchasesPage> createState() => _PurchasesPageState();
 }
 
-class _PurchasesPageState extends State<PurchasesPage> {
+class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   int? _expandedIndex;
   final Set<int> _selectedPurchases = {};
+  bool _isLoading = false;
 
-  final List<Map<String, dynamic>> _purchases = [
-    {
-      'date': 'Jul 31, 2026 14:29',
-      'status': 'PAID',
-      'createdBy': 'SON',
-      'supplier': 'JUMA SUPPLIERS',
-      'products': [
-        {'name': 'AIR', 'quantity': 20, 'price': 4500.0, 'total': 90000.0},
-        {'name': 'AIR FRESH', 'quantity': 10, 'price': 3500.0, 'total': 35000.0},
-      ],
-      'discount': 0.0,
-      'paid': 125000.0,
-      'balance': 0.0,
-      'paymentMode': 'Cash',
-    },
-    {
-      'date': 'Jul 30, 2026 11:15',
-      'status': 'PAID',
-      'createdBy': 'MKE',
-      'supplier': 'AMINA TRADERS',
-      'products': [
-        {'name': 'BEAUTY CREAM', 'quantity': 15, 'price': 12000.0, 'total': 180000.0},
-        {'name': 'FACE MASK', 'quantity': 20, 'price': 5000.0, 'total': 100000.0},
-      ],
-      'discount': 5000.0,
-      'paid': 275000.0,
-      'balance': 0.0,
-      'paymentMode': 'Mobile Money',
-    },
-    {
-      'date': 'Jul 29, 2026 09:45',
-      'status': 'PENDING',
-      'createdBy': 'JUM',
-      'supplier': 'HASSAN WHOLESALE',
-      'products': [
-        {'name': 'CAR PHONE HOLDER', 'quantity': 30, 'price': 8000.0, 'total': 240000.0},
-        {'name': 'CHARGER CABLE', 'quantity': 50, 'price': 3500.0, 'total': 175000.0},
-      ],
-      'discount': 10000.0,
-      'paid': 200000.0,
-      'balance': 205000.0,
-      'paymentMode': 'Credit',
-    },
-    {
-      'date': 'Jul 28, 2026 16:00',
-      'status': 'PENDING',
-      'createdBy': 'SON',
-      'supplier': 'FATIMA ENTERPRISES',
-      'products': [
-        {'name': 'DISH SOAP', 'quantity': 100, 'price': 2000.0, 'total': 200000.0},
-        {'name': 'AIR FRESH', 'quantity': 25, 'price': 3500.0, 'total': 87500.0},
-      ],
-      'discount': 0.0,
-      'paid': 0.0,
-      'balance': 287500.0,
-      'paymentMode': 'Credit',
-    },
-  ];
+  List<Map<String, dynamic>> _purchases = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadPurchases());
+  }
+
+  Future<void> _loadPurchases({String? from, String? to}) async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(purchaseRepositoryProvider);
+      final list = await repo.fetchPurchases(from: from, to: to);
+      if (!mounted) return;
+      setState(() {
+        _purchases = list.map((p) => {
+          'purchase_id': p.purchaseId,
+          'date': p.date,
+          'status': p.paymentStatus.toUpperCase() == 'PAID' ? 'PAID' : 'PENDING',
+          'createdBy': p.createdBy,
+          'supplier': p.supplier,
+          'products': p.items,
+          'discount': 0.0,
+          'paid': p.paidAmount,
+          'balance': p.balance,
+          'paymentMode': p.purchaseType == 'credit' ? 'Credit' : 'Cash',
+        }).toList();
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -200,15 +180,26 @@ class _PurchasesPageState extends State<PurchasesPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              setState(() {
-                _purchases.removeAt(index);
-                _expandedIndex = null;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Purchase deleted')),
-              );
+              final purchaseId = _purchases[index]['purchase_id']?.toString() ?? '';
+              try {
+                final repo = ref.read(purchaseRepositoryProvider);
+                if (purchaseId.isNotEmpty) await repo.bulkDelete({'purchase_ids': [purchaseId]});
+                if (!mounted) return;
+                setState(() {
+                  _purchases.removeAt(index);
+                  _expandedIndex = null;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Purchase deleted')),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Delete failed: $e')),
+                );
+              }
             },
             child: Text(
               'Delete',
@@ -251,19 +242,26 @@ class _PurchasesPageState extends State<PurchasesPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
               final sorted = _selectedPurchases.toList()..sort((a, b) => b.compareTo(a));
-              setState(() {
-                for (final i in sorted) {
-                  _purchases.removeAt(i);
-                }
-                _selectedPurchases.clear();
-                _expandedIndex = null;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Purchases deleted')),
-              );
+              final ids = sorted.map((i) => _purchases[i]['purchase_id']?.toString() ?? '').where((id) => id.isNotEmpty).toList();
+              try {
+                final repo = ref.read(purchaseRepositoryProvider);
+                if (ids.isNotEmpty) await repo.bulkDelete({'purchase_ids': ids});
+                if (!mounted) return;
+                setState(() {
+                  for (final i in sorted) { _purchases.removeAt(i); }
+                  _selectedPurchases.clear();
+                  _expandedIndex = null;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Purchases deleted')),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+              }
             },
             child: Text(
               'Delete',
@@ -526,26 +524,38 @@ class _PurchasesPageState extends State<PurchasesPage> {
                       Expanded(
                         flex: 2,
                         child: ElevatedButton(
-                          onPressed: () {
+                          onPressed: () async {
                             final amount = double.tryParse(amountController.text) ?? 0;
-                            if (amount <= 0 || selectedAccount == null) {
+                            if (amount <= 0) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Please fill all fields')),
+                                const SnackBar(content: Text('Please enter a valid amount')),
                               );
                               return;
                             }
+                            final purchaseId = _purchases[index]['purchase_id']?.toString() ?? '';
                             Navigator.pop(context);
-                            setState(() {
-                              final newPaid = amount.clamp(0, balance);
-                              _purchases[index]['paid'] = (_purchases[index]['paid'] as double) + newPaid;
-                              _purchases[index]['balance'] = balance - newPaid;
-                              if (_purchases[index]['balance'] <= 0) {
-                                _purchases[index]['status'] = 'PAID';
-                              }
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Payment recorded')),
-                            );
+                            try {
+                              final repo = ref.read(purchaseRepositoryProvider);
+                              await repo.addPayment({
+                                'purchase_id': purchaseId,
+                                'amount': amount,
+                                'date': DateFormat('yyyy-MM-dd').format(selectedDate),
+                                if (selectedAccount != null) 'account': selectedAccount,
+                              });
+                              if (!mounted) return;
+                              setState(() {
+                                final newPaid = amount.clamp(0, balance);
+                                _purchases[index]['paid'] = (_purchases[index]['paid'] as double) + newPaid;
+                                _purchases[index]['balance'] = balance - newPaid;
+                                if (_purchases[index]['balance'] <= 0) _purchases[index]['status'] = 'PAID';
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Payment recorded')),
+                              );
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Payment failed: $e')));
+                            }
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,

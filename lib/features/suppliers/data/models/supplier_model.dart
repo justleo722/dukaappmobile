@@ -53,6 +53,43 @@ class Supplier {
     );
   }
 
+  factory Supplier.fromJson(Map<String, dynamic> j) {
+    return Supplier(
+      id: j['supplier_id']?.toString() ?? j['id']?.toString() ?? '',
+      name: j['name']?.toString() ?? j['supplier_name']?.toString() ?? '',
+      phone: j['phone']?.toString() ?? '',
+      email: j['email']?.toString(),
+      companyName: j['company_name']?.toString() ?? j['name']?.toString(),
+      address: j['address']?.toString(),
+      tinNumber: j['tin_number']?.toString() ?? j['supplier_tin']?.toString(),
+      creditBalance: _toDouble(j['credit_balance'] ?? j['balance'] ?? j['wallet_balance']),
+      totalPurchases: _toDouble(j['total_purchases'] ?? j['total_amount']),
+      totalOrders: (j['total_orders'] as num?)?.toInt() ?? (j['purchase_count'] as num?)?.toInt() ?? 0,
+      createdAt: _parseDate(j['record_date'] ?? j['created_at']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'supplier_id': id,
+        'name': name,
+        'phone': phone,
+        if (email != null) 'email': email,
+        if (companyName != null) 'company_name': companyName,
+        if (address != null) 'address': address,
+        if (tinNumber != null) 'tin_number': tinNumber,
+      };
+
+  static double _toDouble(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0.0;
+  }
+
+  static DateTime _parseDate(dynamic v) {
+    if (v == null) return DateTime.now();
+    try { return DateTime.parse(v.toString()); } catch (_) { return DateTime.now(); }
+  }
+
   static List<Supplier> sampleSuppliers() {
     return [
       Supplier(

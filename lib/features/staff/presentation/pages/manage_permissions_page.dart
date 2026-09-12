@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/staff/presentation/providers/staff_provider.dart';
 
 class _PermissionGroup {
   final String title;
@@ -10,14 +12,15 @@ class _PermissionGroup {
   const _PermissionGroup({required this.title, required this.permissions});
 }
 
-class ManagePermissionsPage extends StatefulWidget {
-  const ManagePermissionsPage({super.key});
+class ManagePermissionsPage extends ConsumerStatefulWidget {
+  final String? roleId;
+  const ManagePermissionsPage({super.key, this.roleId});
 
   @override
-  State<ManagePermissionsPage> createState() => _ManagePermissionsPageState();
+  ConsumerState<ManagePermissionsPage> createState() => _ManagePermissionsPageState();
 }
 
-class _ManagePermissionsPageState extends State<ManagePermissionsPage> {
+class _ManagePermissionsPageState extends ConsumerState<ManagePermissionsPage> {
   static const List<_PermissionGroup> _groups = [
     _PermissionGroup(title: 'Management', permissions: [
       'Can Delete Record', 'Can edit profile', 'Can edit password',
@@ -165,7 +168,18 @@ class _ManagePermissionsPageState extends State<ManagePermissionsPage> {
       padding: EdgeInsets.only(left: AppConstants.paddingLG, right: AppConstants.paddingLG, top: 12, bottom: MediaQuery.of(context).padding.bottom + 12),
       decoration: const BoxDecoration(color: AppColors.card, border: Border(top: BorderSide(color: AppColors.divider, width: 1))),
       child: SizedBox(width: double.infinity, height: AppConstants.buttonHeight, child: ElevatedButton.icon(
-        onPressed: () => context.pop(),
+        onPressed: () async {
+          try {
+            final repo = ref.read(staffRepositoryProvider);
+            final perms = _permissionValues.entries.where((e) => e.value).map((e) => e.key).toList();
+            await repo.updatePermission({
+              if (widget.roleId != null) 'role_id': widget.roleId,
+              'permissions': perms.join(','),
+            });
+            if (!mounted) return;
+          } catch (_) {}
+          context.pop();
+        },
         icon: const Icon(Icons.check_rounded, size: 18, color: AppColors.textWhite),
         label: Text('Done', style: AppTypography.buttonLarge.copyWith(color: AppColors.textWhite)),
         style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, elevation: 0,

@@ -1,73 +1,76 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/expenses/data/models/expense_models.dart';
+import 'package:dukaapp/features/expenses/presentation/providers/expense_provider.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
-class _ExpenseItem {
-  final int sn;
-  final String date;
-  final String title;
-  final String category;
-  final double amount;
-  final String status;
-
-  const _ExpenseItem({
-    required this.sn,
-    required this.date,
-    required this.title,
-    required this.category,
-    required this.amount,
-    required this.status,
-  });
-}
-
-class ProfitExpensesPage extends StatefulWidget {
+class ProfitExpensesPage extends ConsumerStatefulWidget {
   const ProfitExpensesPage({super.key});
 
   @override
-  State<ProfitExpensesPage> createState() => _ProfitExpensesPageState();
+  ConsumerState<ProfitExpensesPage> createState() => _ProfitExpensesPageState();
 }
 
-class _ProfitExpensesPageState extends State<ProfitExpensesPage> {
+class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
   final TextEditingController _searchController = TextEditingController();
 
-  static const List<_ExpenseItem> _allExpenses = [
-    _ExpenseItem(sn: 1, date: '13 Aug 2026', title: 'Rent Payment', category: 'Utilities', amount: 500000, status: 'Paid'),
-    _ExpenseItem(sn: 2, date: '13 Aug 2026', title: 'Electricity Bill', category: 'Utilities', amount: 85000, status: 'Paid'),
-    _ExpenseItem(sn: 3, date: '12 Aug 2026', title: 'Staff Lunch', category: 'Food', amount: 25000, status: 'Paid'),
-    _ExpenseItem(sn: 4, date: '12 Aug 2026', title: 'Transport Fare', category: 'Transport', amount: 15000, status: 'Pending'),
-    _ExpenseItem(sn: 5, date: '11 Aug 2026', title: 'Cleaning Supplies', category: 'Maintenance', amount: 12000, status: 'Paid'),
-    _ExpenseItem(sn: 6, date: '10 Aug 2026', title: 'Internet Subscription', category: 'Utilities', amount: 45000, status: 'Paid'),
-    _ExpenseItem(sn: 7, date: '09 Aug 2026', title: 'Packaging Materials', category: 'Operations', amount: 30000, status: 'Paid'),
-    _ExpenseItem(sn: 8, date: '08 Aug 2026', title: 'Water Bill', category: 'Utilities', amount: 18000, status: 'Pending'),
-  ];
+  List<ExpenseItem> _expenses = [];
+  List<ExpenseAccount> _expenseAccounts = [];
+  bool _isLoading = false;
+  ExpenseSummary _summary = ExpenseSummary.empty;
 
-  List<_ExpenseItem> get _filteredExpenses {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadExpenses());
+  }
+
+  Future<void> _loadExpenses({String? from, String? to}) async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(expenseRepositoryProvider);
+      final results = await Future.wait([
+        repo.fetchExpenses(from: from, to: to),
+        repo.fetchExpenseSummary(from: from, to: to),
+        repo.fetchExpenseAccounts(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _expenses = results[0] as List<ExpenseItem>;
+        _summary = results[1] as ExpenseSummary;
+        _expenseAccounts = results[2] as List<ExpenseAccount>;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  List<ExpenseItem> get _filteredExpenses {
     final query = _searchController.text.toLowerCase().trim();
-    if (query.isEmpty) return _allExpenses;
-    return _allExpenses
+    if (query.isEmpty) return _expenses;
+    return _expenses
         .where((e) =>
             e.title.toLowerCase().contains(query) ||
-            e.category.toLowerCase().contains(query) ||
-            e.status.toLowerCase().contains(query))
+            e.category.toLowerCase().contains(query))
         .toList();
   }
 
-  double get _todayExpenses => _allExpenses
-      .where((e) => e.date == DateFormat('dd MMM yyyy').format(DateTime.now()))
-      .fold(0, (s, e) => s + e.amount);
+  double get _totalExpenses => _expenses.fold(0, (s, e) => s + e.amount);
+  double get _todayExpenses => _summary.todayExpenses;
+  double get _todayNetProfit => _summary.grossProfit - _todayExpenses;
 
-  double get _totalExpenses => _allExpenses.fold(0, (s, e) => s + e.amount);
-
-  double get _todayNetProfit => 125000 - _todayExpenses;
-
-  double get _totalSales => 2450000;
-  double get _grossProfit => 680000;
-  double get _badStock => 45000;
-  double get _netProfit => _totalSales - _totalExpenses - _badStock;
-  double get _cashInHand => 380000;
+  double get _totalSales => _summary.totalSales;
+  double get _grossProfit => _summary.grossProfit;
+  double get _badStock => 0.0;
+  double get _netProfit => _summary.netProfit > 0 ? _summary.netProfit : (_totalSales - _totalExpenses);
+  double get _cashInHand => 0.0;
 
   String _fmt(double v) {
     final fmt = NumberFormat('#,###');
@@ -81,14 +84,15 @@ class _ProfitExpensesPageState extends State<ProfitExpensesPage> {
   }
 
   void _showAddExpenseDialog() {
-    String? selectedCategory;
-    String? selectedAccount;
+    String? selectedCategoryId;   // to_account_id (expense category account)
+    String? selectedAccountId;    // from_account_id (cashbook/cash account)
     final nameController = TextEditingController();
     final amountController = TextEditingController();
     final notesController = TextEditingController();
     DateTime selectedDate = DateTime.now();
 
-    final categories = ['Purchases', 'Salaries', 'Utilities', 'Food', 'Transport', 'Maintenance', 'Operations', 'Miscellaneous'];
+    // Use API accounts; fallback labels only
+    final expenseAccounts = _expenseAccounts;
     final accounts = ['Bank', 'Cash', 'Mobile Money'];
 
     showModalBottomSheet(
@@ -153,19 +157,21 @@ class _ProfitExpensesPageState extends State<ProfitExpensesPage> {
                             Expanded(
                               child: DropdownButtonHideUnderline(
                                 child: DropdownButton<String>(
-                                  value: selectedCategory,
+                                  value: selectedCategoryId,
                                   hint: Text(
                                     'Select category',
                                     style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
                                   ),
                                   isExpanded: true,
-                                  items: categories.map((c) {
-                                    return DropdownMenuItem(
-                                      value: c,
-                                      child: Text(c, style: AppTypography.bodyMedium),
-                                    );
-                                  }).toList(),
-                                  onChanged: (v) => setDialogState(() => selectedCategory = v),
+                                  items: expenseAccounts.isNotEmpty
+                                      ? expenseAccounts.map((a) => DropdownMenuItem(
+                                            value: a.accountId,
+                                            child: Text(a.name, style: AppTypography.bodyMedium),
+                                          )).toList()
+                                      : ['Rent', 'Salaries', 'Utilities', 'Food', 'Transport', 'Maintenance', 'Operations', 'Miscellaneous']
+                                          .map((c) => DropdownMenuItem(value: c, child: Text(c, style: AppTypography.bodyMedium)))
+                                          .toList(),
+                                  onChanged: (v) => setDialogState(() => selectedCategoryId = v),
                                 ),
                               ),
                             ),
@@ -192,13 +198,7 @@ class _ProfitExpensesPageState extends State<ProfitExpensesPage> {
                                       ),
                                       TextButton(
                                         onPressed: () {
-                                          if (newCatController.text.isNotEmpty) {
-                                            setDialogState(() {
-                                              categories.add(newCatController.text);
-                                              selectedCategory = newCatController.text;
-                                            });
-                                            Navigator.pop(ctx2);
-                                          }
+                                          Navigator.pop(ctx2);
                                         },
                                         child: const Text('Add'),
                                       ),
@@ -329,7 +329,7 @@ class _ProfitExpensesPageState extends State<ProfitExpensesPage> {
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
-                            value: selectedAccount,
+                            value: selectedAccountId,
                             hint: Text(
                               'Select account',
                               style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
@@ -341,7 +341,7 @@ class _ProfitExpensesPageState extends State<ProfitExpensesPage> {
                                 child: Text(a, style: AppTypography.bodyMedium),
                               );
                             }).toList(),
-                            onChanged: (v) => setDialogState(() => selectedAccount = v),
+                            onChanged: (v) => setDialogState(() => selectedAccountId = v),
                           ),
                         ),
                       ),
@@ -415,22 +415,40 @@ class _ProfitExpensesPageState extends State<ProfitExpensesPage> {
                       child: SizedBox(
                         height: AppConstants.buttonHeight,
                         child: ElevatedButton.icon(
-                          onPressed: () {
+                          onPressed: () async {
                             if (nameController.text.isNotEmpty && amountController.text.isNotEmpty) {
                               Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Expense saved successfully',
-                                    style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+                              try {
+                                final repo = ref.read(expenseRepositoryProvider);
+                                await repo.addExpense({
+                                  'title': nameController.text.trim(),
+                                  'amount': double.tryParse(amountController.text) ?? 0,
+                                  'record_date': DateFormat('yyyy-MM-dd').format(selectedDate),
+                                  'note': notesController.text.trim(),
+                                  if (selectedCategoryId != null) 'to_account_id': selectedCategoryId,
+                                  if (selectedAccountId != null) 'from_account_id': selectedAccountId,
+                                });
+                                if (!mounted) return;
+                                await _loadExpenses();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Expense saved successfully',
+                                      style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+                                    ),
+                                    backgroundColor: AppColors.success,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(AppConstants.radiusSM),
+                                    ),
                                   ),
-                                  backgroundColor: AppColors.success,
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-                                  ),
-                                ),
-                              );
+                                );
+                              } catch (e) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.danger),
+                                );
+                              }
                             }
                           },
                           icon: const Icon(Icons.check_rounded, size: 18, color: AppColors.textWhite),
@@ -468,7 +486,7 @@ class _ProfitExpensesPageState extends State<ProfitExpensesPage> {
     );
   }
 
-  void _showDeleteDialog(_ExpenseItem expense) {
+  void _showDeleteDialog(ExpenseItem expense) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -507,22 +525,32 @@ class _ProfitExpensesPageState extends State<ProfitExpensesPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              setState(() {});
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    '${expense.title} deleted',
-                    style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+              try {
+                final repo = ref.read(expenseRepositoryProvider);
+                await repo.deleteExpense({'flow_id': expense.flowId});
+                if (!mounted) return;
+                await _loadExpenses();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      '${expense.title} deleted',
+                      style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+                    ),
+                    backgroundColor: AppColors.danger,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppConstants.radiusSM),
+                    ),
                   ),
-                  backgroundColor: AppColors.danger,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-                  ),
-                ),
-              );
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Delete failed: $e'), backgroundColor: AppColors.danger),
+                );
+              }
             },
             child: Text(
               'Delete',
@@ -537,6 +565,7 @@ class _ProfitExpensesPageState extends State<ProfitExpensesPage> {
   // ─── UI ──────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, f) => _loadExpenses(from: f.from, to: f.to));
     final expenses = _filteredExpenses;
 
     return Scaffold(
@@ -931,9 +960,8 @@ class _ProfitExpensesPageState extends State<ProfitExpensesPage> {
     );
   }
 
-  Widget _buildExpenseCard(_ExpenseItem expense) {
-    final isPaid = expense.status == 'Paid';
-    final statusColor = isPaid ? AppColors.success : AppColors.warning;
+  Widget _buildExpenseCard(ExpenseItem expense) {
+    const statusColor = AppColors.success;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -1001,7 +1029,7 @@ class _ProfitExpensesPageState extends State<ProfitExpensesPage> {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        expense.status,
+                        'Paid',
                         style: AppTypography.caption.copyWith(
                           color: statusColor,
                           fontWeight: FontWeight.w600,

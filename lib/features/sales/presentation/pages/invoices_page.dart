@@ -145,6 +145,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   void _deleteInvoice(int index) {
     showDialog(
       context: context,
+      useRootNavigator: true,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radiusMD),
@@ -161,7 +162,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
             child: Text(
               'Cancel',
               style: AppTypography.bodyMedium.copyWith(
@@ -170,15 +171,26 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                _invoices.removeAt(index);
-                _expandedIndex = null;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Invoice deleted')),
-              );
+            onPressed: () async {
+              Navigator.of(context, rootNavigator: true).pop();
+              final saleId = _invoices[index]['sale_id']?.toString() ?? '';
+              try {
+                final repo = ref.read(salesRepositoryProvider);
+                await repo.deleteRecord({'sale_id': saleId});
+                if (!mounted) return;
+                setState(() {
+                  _invoices.removeAt(index);
+                  _expandedIndex = null;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Invoice deleted')),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Delete failed: $e')),
+                );
+              }
             },
             child: Text(
               'Delete',
@@ -221,20 +233,31 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
               final sorted = _selectedInvoices.toList()
                 ..sort((a, b) => b.compareTo(a));
-              setState(() {
-                for (final i in sorted) {
-                  _invoices.removeAt(i);
-                }
-                _selectedInvoices.clear();
-                _expandedIndex = null;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Invoices deleted')),
-              );
+              final ids = sorted.map((i) => _invoices[i]['sale_id']?.toString() ?? '').where((id) => id.isNotEmpty).toList();
+              try {
+                final repo = ref.read(salesRepositoryProvider);
+                if (ids.isNotEmpty) await repo.bulkDelete({'sale_ids': ids});
+                if (!mounted) return;
+                setState(() {
+                  for (final i in sorted) {
+                    _invoices.removeAt(i);
+                  }
+                  _selectedInvoices.clear();
+                  _expandedIndex = null;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Invoices deleted')),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Delete failed: $e')),
+                );
+              }
             },
             child: Text(
               'Delete',
@@ -420,21 +443,38 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       final amount = double.tryParse(amountController.text) ?? 0;
                       if (amount > 0) {
-                        setState(() {
-                          _invoices[invoiceIndex]['paid'] = (_invoices[invoiceIndex]['paid'] as double) + amount;
-                          _invoices[invoiceIndex]['balance'] = balance - amount;
-                          if ((_invoices[invoiceIndex]['balance'] as double) <= 0) {
-                            _invoices[invoiceIndex]['status'] = 'PAID';
-                            _invoices[invoiceIndex]['balance'] = 0.0;
-                          }
-                        });
+                        final saleId = _invoices[invoiceIndex]['sale_id']?.toString() ?? '';
+                        final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Payment recorded successfully')),
-                        );
+                        try {
+                          final repo = ref.read(salesRepositoryProvider);
+                          await repo.addPayment({
+                            'sale_id': saleId,
+                            'amount': amount,
+                            'date': dateStr,
+                            'account': selectedAccount,
+                          });
+                          if (!mounted) return;
+                          setState(() {
+                            _invoices[invoiceIndex]['paid'] = (_invoices[invoiceIndex]['paid'] as double) + amount;
+                            _invoices[invoiceIndex]['balance'] = balance - amount;
+                            if ((_invoices[invoiceIndex]['balance'] as double) <= 0) {
+                              _invoices[invoiceIndex]['status'] = 'PAID';
+                              _invoices[invoiceIndex]['balance'] = 0.0;
+                            }
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Payment recorded successfully')),
+                          );
+                        } catch (e) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Payment failed: $e')),
+                          );
+                        }
                       }
                     },
                     style: ElevatedButton.styleFrom(
@@ -600,15 +640,26 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
     );
 
     if (picked != null && mounted) {
-      final formatted = DateFormat('MMM dd, yyyy HH:mm').format(
-        DateTime(picked.year, picked.month, picked.day, parsedDate.hour, parsedDate.minute),
-      );
-      setState(() {
-        _invoices[invoiceIndex]['date'] = formatted;
-      });
-      if (mounted) {
+      final newDate = DateTime(picked.year, picked.month, picked.day, parsedDate.hour, parsedDate.minute);
+      final formatted = DateFormat('MMM dd, yyyy HH:mm').format(newDate);
+      final saleId = _invoices[invoiceIndex]['sale_id']?.toString() ?? '';
+      try {
+        final repo = ref.read(salesRepositoryProvider);
+        await repo.backdate({
+          'sale_id': saleId,
+          'date': DateFormat('yyyy-MM-dd HH:mm:ss').format(newDate),
+        });
+        if (!mounted) return;
+        setState(() {
+          _invoices[invoiceIndex]['date'] = formatted;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Invoice date updated')),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Backdate failed: $e')),
         );
       }
     }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
@@ -8,6 +10,7 @@ import 'package:dukaapp/features/purchase/presentation/widgets/purchase_informat
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_product_card.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_summary_card.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_bottom_bar.dart';
+import 'package:dukaapp/features/purchase/presentation/providers/purchase_provider.dart';
 
 class _PurchaseItem {
   final String name;
@@ -36,7 +39,7 @@ class _PurchaseItem {
   }
 }
 
-class PurchaseStockPage extends StatefulWidget {
+class PurchaseStockPage extends ConsumerStatefulWidget {
   final Map<String, dynamic>? initialProduct;
   final bool editMode;
   final bool createMode;
@@ -55,10 +58,10 @@ class PurchaseStockPage extends StatefulWidget {
   });
 
   @override
-  State<PurchaseStockPage> createState() => _PurchaseStockPageState();
+  ConsumerState<PurchaseStockPage> createState() => _PurchaseStockPageState();
 }
 
-class _PurchaseStockPageState extends State<PurchaseStockPage> {
+class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
   String? _selectedAccount;
   String? _selectedSupplier;
   DateTime _purchaseDate = DateTime.now();
@@ -629,24 +632,39 @@ class _PurchaseStockPageState extends State<PurchaseStockPage> {
                       ? 'Create Order'
                       : null,
               onSave: _items.isNotEmpty
-                  ? () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
+                  ? () async {
+                      try {
+                        final repo = ref.read(purchaseRepositoryProvider);
+                        final products = _items.map((item) => {
+                          'name': item.name,
+                          'quantity': item.quantity,
+                          'buying_price': double.tryParse(item.buyingPrice.text) ?? 0,
+                          'selling_price': double.tryParse(item.sellingPrice.text) ?? 0,
+                          'wholesale_price': double.tryParse(item.wholesalePrice.text) ?? 0,
+                          if (item.expiryDate != null)
+                            'expiry_date': DateFormat('yyyy-MM-dd').format(item.expiryDate!),
+                        }).toList();
+                        await repo.createPurchase({
+                          'supplier': _selectedSupplier ?? '',
+                          'record_date': DateFormat('yyyy-MM-dd').format(_purchaseDate),
+                          'payment_type': _selectedAccount ?? 'cash',
+                          'products': products,
+                          if (widget.createMode) 'order_type': 'order',
+                        });
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                           content: Text(
-                            widget.editMode
-                                ? 'Purchase order updated successfully'
-                                : 'Purchase saved successfully',
+                            widget.editMode ? 'Purchase order updated successfully' : 'Purchase saved successfully',
                             style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
                           ),
                           backgroundColor: AppColors.success,
                           behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-                          ),
-                        ),
-                      );
-                      if (widget.editMode) {
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+                        ));
                         context.pop();
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e'), backgroundColor: AppColors.danger));
                       }
                     }
                   : null,

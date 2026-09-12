@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -15,20 +16,23 @@ import 'package:dukaapp/features/sales/presentation/widgets/payment_summary_card
 import 'package:dukaapp/features/sales/presentation/widgets/sales_bottom_actions.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/receipt_widget.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/features/purchase/presentation/providers/purchase_provider.dart';
+import 'package:dukaapp/features/sales/presentation/providers/filter_provider.dart';
 
-class PurchaseOrdersPage extends StatefulWidget {
+class PurchaseOrdersPage extends ConsumerStatefulWidget {
   const PurchaseOrdersPage({super.key});
 
   @override
-  State<PurchaseOrdersPage> createState() => _PurchaseOrdersPageState();
+  ConsumerState<PurchaseOrdersPage> createState() => _PurchaseOrdersPageState();
 }
 
-class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
+class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   int? _expandedIndex;
+  bool _isLoading = false;
 
-  final List<Map<String, dynamic>> _orders = [
+  List<Map<String, dynamic>> _orders = [
     {
       'poNumber': 'PO-001',
       'date': 'Aug 05, 2026 10:30',
@@ -92,6 +96,45 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadOrders());
+  }
+
+  Future<void> _loadOrders({String? from, String? to}) async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final repo = ref.read(purchaseRepositoryProvider);
+      final items = await repo.fetchPurchaseOrders(from: from, to: to);
+      if (!mounted) return;
+      setState(() {
+        _orders = items.map((item) => {
+          'purchase_id': item.purchaseId,
+          'poNumber': item.purchaseId,
+          'date': item.date,
+          'status': item.paymentStatus.toUpperCase(),
+          'createdBy': item.createdBy,
+          'supplier': item.supplier,
+          'products': (item.items ?? []).map((p) => {
+            'name': p['name'] ?? '',
+            'quantity': (p['quantity'] as num?)?.toInt() ?? 0,
+            'price': (p['price'] as num?)?.toDouble() ?? 0.0,
+            'total': ((p['quantity'] as num?)?.toDouble() ?? 0) * ((p['price'] as num?)?.toDouble() ?? 0),
+          }).toList(),
+          'discount': 0.0,
+          'paid': item.paidAmount,
+          'balance': item.balanceAmount,
+          'paymentMode': item.purchaseType,
+        }).toList();
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -135,55 +178,36 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
     });
   }
 
-  void _deleteOrder(int index) {
-    showDialog(
+  Future<void> _deleteOrder(int index) async {
+    final confirmed = await showDialog<bool>(
       context: context,
+      useRootNavigator: true,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.radiusMD),
-        ),
-        title: Text(
-          'Delete Purchase Order',
-          style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
-        ),
-        content: Text(
-          'Are you sure you want to delete this purchase order?',
-          style: AppTypography.bodyMedium.copyWith(
-            color: AppColors.textSecondary,
-          ),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD)),
+        title: Text('Delete Purchase Order', style: AppTypography.h6.copyWith(color: AppColors.textPrimary)),
+        content: Text('Are you sure you want to delete this purchase order?', style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
         actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text('Cancel', style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary))),
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                _orders.removeAt(index);
-                _expandedIndex = null;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Purchase order deleted')),
-              );
-            },
-            child: Text(
-              'Delete',
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.danger,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Delete', style: AppTypography.bodyMedium.copyWith(color: AppColors.danger, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
     );
+    if (confirmed == true && mounted) {
+      final purchaseId = _orders[index]['purchase_id']?.toString() ?? '';
+      try {
+        final repo = ref.read(purchaseRepositoryProvider);
+        await repo.bulkDelete({'purchase_ids': purchaseId});
+        if (!mounted) return;
+        setState(() { _orders.removeAt(index); _expandedIndex = null; });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Purchase order deleted')));
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e'), backgroundColor: AppColors.danger));
+      }
+    }
   }
 
   void _showUpdateStatusDialog(int index) {
@@ -393,33 +417,42 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
                       Expanded(
                         flex: 2,
                         child: ElevatedButton(
-                          onPressed: () {
-                            if (selectedStatus == null || selectedAccount == null) {
+                          onPressed: () async {
+                            if (selectedStatus == null) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Please fill all fields')),
+                                const SnackBar(content: Text('Please select a status')),
                               );
                               return;
                             }
+                            final purchaseId = _orders[index]['purchase_id']?.toString() ?? '';
                             Navigator.pop(context);
-                            setState(() {
-                              if (selectedStatus == 'Paid (Cash)') {
-                                _orders[index]['status'] = 'PAID';
-                                _orders[index]['balance'] = 0.0;
-                                _orders[index]['paid'] = (order['products'] as List).fold<double>(
-                                  0,
-                                  (sum, p) => sum + (p['price'] as double) * (p['quantity'] as int),
-                                ) - (order['discount'] as double);
-                                _orders[index]['paymentMode'] = 'Cash';
-                              } else {
-                                _orders[index]['status'] = 'PENDING';
-                                _orders[index]['paymentMode'] = 'Credit';
-                              }
-                              final formatted = DateFormat('MMM dd, yyyy HH:mm').format(selectedDate);
-                              _orders[index]['date'] = formatted;
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Purchase order status updated')),
-                            );
+                            try {
+                              final repo = ref.read(purchaseRepositoryProvider);
+                              await repo.updateOrderStatus({
+                                'purchase_id': purchaseId,
+                                'status': selectedStatus == 'Paid (Cash)' ? 'paid' : 'credit',
+                                'date': DateFormat('yyyy-MM-dd').format(selectedDate),
+                                if (selectedAccount != null) 'account': selectedAccount,
+                              });
+                              if (!mounted) return;
+                              setState(() {
+                                if (selectedStatus == 'Paid (Cash)') {
+                                  _orders[index]['status'] = 'PAID';
+                                  _orders[index]['balance'] = 0.0;
+                                  _orders[index]['paymentMode'] = 'Cash';
+                                } else {
+                                  _orders[index]['status'] = 'PENDING';
+                                  _orders[index]['paymentMode'] = 'Credit';
+                                }
+                                _orders[index]['date'] = DateFormat('MMM dd, yyyy HH:mm').format(selectedDate);
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Purchase order status updated')),
+                              );
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Update failed: $e'), backgroundColor: AppColors.danger));
+                            }
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
@@ -814,6 +847,11 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (prev, next) {
+      if (prev?.from != next.from || prev?.to != next.to) {
+        _loadOrders(from: next.from, to: next.to);
+      }
+    });
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
