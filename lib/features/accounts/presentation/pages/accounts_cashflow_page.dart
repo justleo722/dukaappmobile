@@ -9,7 +9,7 @@ import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/features/accounts/data/models/cashflow_models.dart';
 import 'package:dukaapp/features/accounts/presentation/providers/cashflow_provider.dart';
-import 'package:dukaapp/features/sales/presentation/providers/filter_provider.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class AccountsCashflowPage extends ConsumerStatefulWidget {
   const AccountsCashflowPage({super.key});

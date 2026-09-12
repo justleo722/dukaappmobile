@@ -17,7 +17,7 @@ import 'package:dukaapp/features/sales/presentation/widgets/sales_bottom_actions
 import 'package:dukaapp/features/sales/presentation/widgets/receipt_widget.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/features/purchase/presentation/providers/purchase_provider.dart';
-import 'package:dukaapp/features/sales/presentation/providers/filter_provider.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class PurchaseOrdersPage extends ConsumerStatefulWidget {
   const PurchaseOrdersPage({super.key});
@@ -124,7 +124,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
           }).toList(),
           'discount': 0.0,
           'paid': item.paidAmount,
-          'balance': item.balanceAmount,
+          'balance': item.balance,
           'paymentMode': item.purchaseType,
         }).toList();
         _isLoading = false;

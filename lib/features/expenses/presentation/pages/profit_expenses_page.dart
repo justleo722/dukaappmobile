@@ -951,7 +951,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
   }
 
   // ─── EXPENSES LIST ──────────────────────────────────────────────────
-  Widget _buildExpensesList(List<_ExpenseItem> expenses) {
+  Widget _buildExpensesList(List<ExpenseItem> expenses) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       child: Column(
