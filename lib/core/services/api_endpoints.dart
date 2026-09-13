@@ -292,6 +292,9 @@ abstract final class ApiEndpoints {
   /// Online-shop admin data (orders, products, payment accounts, …).
   static final getDataOnlineShopAdmin = _g('online_shop_admin');
 
+  /// Public storefront data (products, categories, delivery methods) for a given shop_id.
+  static final getDataOnlineShopPublic = _g('online_shop_public');
+
   // ── System / storage ─────────────────────────────────────────────────
 
   /// Storage quota summary (used / available).

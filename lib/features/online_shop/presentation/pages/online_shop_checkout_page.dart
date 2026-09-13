@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/shared/textfields/app_text_field.dart';
 import 'package:dukaapp/features/online_shop/presentation/widgets/order_confirmation_dialog.dart';
 
-class OnlineShopCheckoutPage extends StatefulWidget {
+class OnlineShopCheckoutPage extends ConsumerStatefulWidget {
   final List<Map<String, dynamic>> cartItems;
 
   const OnlineShopCheckoutPage({super.key, required this.cartItems});
 
   @override
-  State<OnlineShopCheckoutPage> createState() => _OnlineShopCheckoutPageState();
+  ConsumerState<OnlineShopCheckoutPage> createState() => _OnlineShopCheckoutPageState();
 }
 
-class _OnlineShopCheckoutPageState extends State<OnlineShopCheckoutPage> {
+class _OnlineShopCheckoutPageState extends ConsumerState<OnlineShopCheckoutPage> {
   final _formKey = GlobalKey<FormState>();
   final _fullNameController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -63,38 +65,116 @@ class _OnlineShopCheckoutPageState extends State<OnlineShopCheckoutPage> {
     'Mjini Magharibi',
   ];
 
-  final List<Map<String, dynamic>> _deliveryMethods = const [
-    {
-      'name': 'City Delivery',
-      'fee': 5000,
-      'estimatedDelivery': '~20 minutes',
-      'icon': Icons.delivery_dining_rounded,
-    },
-    {
-      'name': 'Pickup in Office',
-      'fee': 0,
-      'estimatedDelivery': 'Ready for pickup',
-      'icon': Icons.store_rounded,
-    },
-    {
-      'name': 'Fast Delivery',
-      'fee': 10000,
-      'estimatedDelivery': '3–5 hours',
-      'icon': Icons.flash_on_rounded,
-    },
+  // Populated from API in initState; fallback to defaults if API fails
+  List<Map<String, dynamic>> _deliveryMethods = const [
+    {'name': 'Standard Delivery', 'fee': 0, 'estimatedDelivery': 'TBD', 'icon': Icons.delivery_dining_rounded},
   ];
 
-  final List<Map<String, dynamic>> _paymentMethods = const [
+  List<Map<String, dynamic>> _paymentMethods = const [
     {'name': 'Cash on Delivery', 'icon': Icons.money_rounded},
-    {'name': 'MPESA', 'icon': Icons.phone_android_rounded},
-    {'name': 'YAS (Mobile Payment)', 'icon': Icons.credit_card_rounded},
   ];
 
-  static const Map<String, double> _validCoupons = {
-    'SAVE10': 10,
-    'WELCOME20': 20,
-    'FLAT5000': 0,
-  };
+  // Coupon code → {discount_type, discount_value} from API
+  final Map<String, Map<String, dynamic>> _apiCoupons = {};
+  bool _isLoadingCheckoutData = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCheckoutData());
+  }
+
+  /// Load delivery methods, payment accounts and coupons from the API.
+  Future<void> _loadCheckoutData() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getOnlineShopPublic();
+      final raw = res.data;
+      Map<String, dynamic> pub = {};
+      if (raw is Map<String, dynamic>) {
+        pub = raw['data'] is Map ? raw['data'] as Map<String, dynamic> : raw;
+      } else if (raw is List && raw.isNotEmpty && raw.first is Map) {
+        pub = Map<String, dynamic>.from(raw.first as Map);
+      }
+
+      // ── Delivery methods ──────────────────────────────────────────────────
+      final rawDelivery = pub['delivery_methods'];
+      if (rawDelivery is List && rawDelivery.isNotEmpty) {
+        final methods = rawDelivery.whereType<Map<String, dynamic>>().map((d) {
+          final fee = (d['fee'] is num ? (d['fee'] as num).toInt() : int.tryParse(d['fee']?.toString() ?? '0')) ?? 0;
+          final name = d['method_name']?.toString() ?? d['name']?.toString() ?? 'Delivery';
+          final est  = d['estimated_delivery']?.toString() ?? d['delivery_time']?.toString() ?? '';
+          return {
+            'name': name,
+            'fee': fee,
+            'estimatedDelivery': est,
+            'icon': _iconForDelivery(name),
+            '_raw': d,
+          };
+        }).toList();
+        if (mounted) setState(() => _deliveryMethods = methods);
+      }
+
+      // ── Payment accounts ──────────────────────────────────────────────────
+      final rawPayments = pub['payment_accounts'];
+      if (rawPayments is List && rawPayments.isNotEmpty) {
+        final payments = rawPayments.whereType<Map<String, dynamic>>().map((p) {
+          final name = p['account_name']?.toString() ?? p['name']?.toString() ?? 'Payment';
+          return {
+            'name': name,
+            'icon': _iconForPayment(name),
+            'number': p['account_number']?.toString() ?? '',
+            '_raw': p,
+          };
+        }).toList();
+        if (mounted) setState(() => _paymentMethods = payments);
+      }
+
+      // ── Coupons ───────────────────────────────────────────────────────────
+      // Re-use admin data for coupons (public endpoint may not expose codes)
+      try {
+        final adminRes = await api.getOnlineShopAdmin();
+        final adminRaw = adminRes.data;
+        Map<String, dynamic> admin = {};
+        if (adminRaw is Map<String, dynamic>) {
+          admin = adminRaw['data'] is Map ? adminRaw['data'] as Map<String, dynamic> : adminRaw;
+        }
+        final rawCoupons = admin['coupons'];
+        if (rawCoupons is List) {
+          _apiCoupons.clear();
+          for (final c in rawCoupons.whereType<Map<String, dynamic>>()) {
+            final code = c['coupon_code']?.toString() ?? c['code']?.toString() ?? '';
+            if (code.isNotEmpty) {
+              _apiCoupons[code.toUpperCase()] = {
+                'discount_type':  c['discount_type']?.toString() ?? 'percent',
+                'discount_value': (c['discount_value'] is num ? (c['discount_value'] as num).toDouble() : double.tryParse(c['discount_value']?.toString() ?? '0')) ?? 0.0,
+                'min_order': (c['min_order_amount'] is num ? (c['min_order_amount'] as num).toDouble() : double.tryParse(c['min_order_amount']?.toString() ?? '0')) ?? 0.0,
+              };
+            }
+          }
+        }
+      } catch (_) {}
+    } catch (_) {}
+    if (mounted) setState(() => _isLoadingCheckoutData = false);
+  }
+
+  static IconData _iconForDelivery(String name) {
+    final n = name.toLowerCase();
+    if (n.contains('pickup') || n.contains('office') || n.contains('collect')) return Icons.store_rounded;
+    if (n.contains('fast') || n.contains('express') || n.contains('instant')) return Icons.flash_on_rounded;
+    if (n.contains('bike') || n.contains('boda') || n.contains('motor')) return Icons.two_wheeler_rounded;
+    return Icons.delivery_dining_rounded;
+  }
+
+  static IconData _iconForPayment(String name) {
+    final n = name.toLowerCase();
+    if (n.contains('cash')) return Icons.money_rounded;
+    if (n.contains('mpesa') || n.contains('m-pesa') || n.contains('vodacom')) return Icons.phone_android_rounded;
+    if (n.contains('tigopesa') || n.contains('tigo') || n.contains('airtel')) return Icons.phone_android_rounded;
+    if (n.contains('card') || n.contains('visa') || n.contains('master')) return Icons.credit_card_rounded;
+    if (n.contains('bank')) return Icons.account_balance_rounded;
+    return Icons.payment_rounded;
+  }
 
   @override
   void dispose() {
@@ -131,9 +211,12 @@ class _OnlineShopCheckoutPageState extends State<OnlineShopCheckoutPage> {
 
   double get _discountAmount {
     if (_appliedCouponCode == null) return 0;
-    if (_appliedCouponCode == 'FLAT5000') return 5000;
-    final pct = _validCoupons[_appliedCouponCode] ?? 0;
-    return _subtotal * (pct / 100);
+    final coupon = _apiCoupons[_appliedCouponCode!.toUpperCase()];
+    if (coupon == null) return 0;
+    final value = (coupon['discount_value'] as double?) ?? 0.0;
+    final type  = coupon['discount_type']?.toString() ?? 'percent';
+    if (type == 'flat' || type == 'fixed') return value;
+    return _subtotal * (value / 100);
   }
 
   int get _total => _subtotal + _deliveryFee - _discountAmount.round();
@@ -147,22 +230,23 @@ class _OnlineShopCheckoutPageState extends State<OnlineShopCheckoutPage> {
       });
       return;
     }
-    if (_validCoupons.containsKey(code)) {
-      setState(() {
-        _appliedCouponCode = code;
-        _couponError = null;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Coupon "$code" applied!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+    if (_apiCoupons.containsKey(code)) {
+      final coupon = _apiCoupons[code]!;
+      final minOrder = (coupon['min_order'] as double?) ?? 0.0;
+      if (minOrder > 0 && _subtotal < minOrder) {
+        setState(() {
+          _couponError = 'Minimum order TZS ${minOrder.toStringAsFixed(0)} required';
+          _appliedCouponCode = null;
+        });
+        return;
+      }
+      setState(() { _appliedCouponCode = code; _couponError = null; });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Coupon "$code" applied!'),
+        backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
+      ));
     } else {
-      setState(() {
-        _couponError = 'Invalid coupon code';
-        _appliedCouponCode = null;
-      });
+      setState(() { _couponError = 'Invalid coupon code'; _appliedCouponCode = null; });
     }
   }
 
@@ -181,24 +265,84 @@ class _OnlineShopCheckoutPageState extends State<OnlineShopCheckoutPage> {
     return 'OS-$datePart-$seqPart';
   }
 
-  void _placeOrder() {
+  bool _isPlacing = false;
+
+  Future<void> _placeOrder() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_isPlacing) return;
 
-    final orderId = _generateOrderId();
+    setState(() => _isPlacing = true);
+    try {
+      final api = ref.read(apiServiceProvider);
 
-    OrderConfirmationDialog.show(
-      context: context,
-      orderId: orderId,
-      customerName: _fullNameController.text.trim(),
-      phone: _phoneController.text.trim(),
-      address: _addressController.text.trim(),
-      deliveryMethod: _deliveryMethods[_selectedDeliveryIndex]['name'] as String,
-      deliveryFee: _deliveryFee,
-      paymentMethod: _paymentMethods[_selectedPaymentIndex]['name'] as String,
-      items: widget.cartItems,
-      subtotal: _subtotal,
-      total: _total,
-    );
+      // Build items payload
+      final items = widget.cartItems.map((item) => {
+        'product_id': item['product_id']?.toString() ?? '',
+        'name': item['name']?.toString() ?? '',
+        'price': _parsePrice((item['price'] as String?) ?? '0'),
+        'qty': (item['qty'] as int?) ?? 1,
+        'code': item['code']?.toString() ?? '',
+      }).toList();
+
+      final payload = {
+        'customer_name': _fullNameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'email': _emailController.text.trim(),
+        'address': _addressController.text.trim(),
+        'region': _selectedRegion ?? '',
+        'delivery_method': _deliveryMethods[_selectedDeliveryIndex]['name'],
+        'delivery_fee': _deliveryFee,
+        'payment_method': _paymentMethods[_selectedPaymentIndex]['name'],
+        'coupon_code': _appliedCouponCode ?? '',
+        'subtotal': _subtotal,
+        'total': _total,
+        'items': items,
+      };
+
+      // Get encoded shop id from admin data public_url
+      String encodedShopId = '';
+      try {
+        final adminRes = await api.getOnlineShopAdmin();
+        final adminRaw = adminRes.data;
+        Map<String, dynamic> admin = {};
+        if (adminRaw is Map<String, dynamic>) {
+          admin = adminRaw['data'] is Map ? adminRaw['data'] as Map<String, dynamic> : adminRaw;
+        }
+        final publicUrl = admin['public_url']?.toString() ?? '';
+        final uri = Uri.tryParse(publicUrl);
+        encodedShopId = uri?.pathSegments.isNotEmpty == true ? uri!.pathSegments.last : '';
+      } catch (_) {}
+
+      String? serverOrderId;
+      if (encodedShopId.isNotEmpty) {
+        final res = await api.postOnlineshopPlaceOrder(encodedShopId, payload);
+        serverOrderId = res['order_id']?.toString() ?? res['data']?['order_id']?.toString();
+      }
+
+      final orderId = serverOrderId ?? _generateOrderId();
+
+      if (!mounted) return;
+      await OrderConfirmationDialog.show(
+        context: context,
+        orderId: orderId,
+        customerName: _fullNameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        address: _addressController.text.trim(),
+        deliveryMethod: _deliveryMethods[_selectedDeliveryIndex]['name'] as String,
+        deliveryFee: _deliveryFee,
+        paymentMethod: _paymentMethods[_selectedPaymentIndex]['name'] as String,
+        items: widget.cartItems,
+        subtotal: _subtotal,
+        total: _total,
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Order failed: $e'),
+        backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating,
+      ));
+    } finally {
+      if (mounted) setState(() => _isPlacing = false);
+    }
   }
 
   @override
@@ -234,7 +378,9 @@ class _OnlineShopCheckoutPageState extends State<OnlineShopCheckoutPage> {
           child: Container(height: 1, color: AppColors.divider),
         ),
       ),
-      body: Form(
+      body: _isLoadingCheckoutData
+        ? const Center(child: CircularProgressIndicator())
+        : Form(
         key: _formKey,
         child: Column(
           children: [
@@ -811,7 +957,7 @@ class _OnlineShopCheckoutPageState extends State<OnlineShopCheckoutPage> {
           width: double.infinity,
           height: AppConstants.buttonHeight,
           child: ElevatedButton(
-            onPressed: _placeOrder,
+            onPressed: _isPlacing ? null : _placeOrder,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.secondary,
               foregroundColor: AppColors.textWhite,
@@ -820,7 +966,9 @@ class _OnlineShopCheckoutPageState extends State<OnlineShopCheckoutPage> {
                 borderRadius: BorderRadius.circular(AppConstants.radiusMD),
               ),
             ),
-            child: Row(
+            child: _isPlacing
+              ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(Icons.shopping_bag_rounded, size: 20),

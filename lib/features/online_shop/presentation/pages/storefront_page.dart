@@ -1,28 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/online_shop/presentation/widgets/track_order_bottom_sheet.dart';
 import 'package:dukaapp/features/online_shop/presentation/widgets/shop_by_id_bottom_sheet.dart';
 
-class StorefrontPage extends StatefulWidget {
+class StorefrontPage extends ConsumerStatefulWidget {
   const StorefrontPage({super.key});
 
   @override
-  State<StorefrontPage> createState() => _StorefrontPageState();
+  ConsumerState<StorefrontPage> createState() => _StorefrontPageState();
 }
 
-class _StorefrontPageState extends State<StorefrontPage> {
+class _StorefrontPageState extends ConsumerState<StorefrontPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _productsKey = GlobalKey();
   final List<Map<String, dynamic>> _cart = [];
   String _selectedSort = 'Default';
+  bool _isLoading = true;
+  String? _shopName;
+  String? _encodedShopId;
 
-  final List<Map<String, dynamic>> _categories = const [
+  // Populated from API; falls back to empty list when loading
+  List<Map<String, dynamic>> _categories = const [];
+
+  static const List<Map<String, dynamic>> _fallbackCategories = [
     {'icon': Icons.category_rounded, 'label': 'Uncategorized'},
     {'icon': Icons.local_drink_rounded, 'label': 'Drinks'},
     {'icon': Icons.bolt_rounded, 'label': 'Energy Drinks'},
@@ -33,86 +41,122 @@ class _StorefrontPageState extends State<StorefrontPage> {
     {'icon': Icons.spa_rounded, 'label': 'Beauty'},
   ];
 
-  final List<Map<String, dynamic>> _products = const [
-    {
-      'name': 'iPhone X',
-      'price': 'TZS 1,200,000',
-      'seller': 'KUZO HARDWARE',
-      'icon': Icons.phone_iphone_rounded,
-      'collection': 'TECH COLLECTION',
-      'description': 'The iPhone X features a stunning 5.8-inch Super Retina display, A11 Bionic chip, and dual 12MP cameras. Experience the future of smartphones with Face ID and wireless charging.',
-      'images': [
-        'https://picsum.photos/seed/iphonex1/600/600',
-        'https://picsum.photos/seed/iphonex2/600/600',
-        'https://picsum.photos/seed/iphonex3/600/600',
-      ],
-    },
-    {
-      'name': 'Baby Cat 100ML',
-      'price': 'TZS 45,000',
-      'seller': 'CROWNED SINZA',
-      'icon': Icons.inventory_2_rounded,
-      'collection': 'BEAUTY COLLECTION',
-      'description': 'A premium fragrance for the modern individual. This 100ML bottle offers a long-lasting scent with notes of citrus, jasmine, and warm musk.',
-      'images': [
-        'https://picsum.photos/seed/babycat1/600/600',
-        'https://picsum.photos/seed/babycat2/600/600',
-        'https://picsum.photos/seed/babycat3/600/600',
-      ],
-    },
-    {
-      'name': 'Samsung Galaxy S21',
-      'price': 'TZS 980,000',
-      'seller': 'KUZO HARDWARE',
-      'icon': Icons.phone_iphone_rounded,
-      'collection': 'TECH COLLECTION',
-      'description': 'Samsung Galaxy S21 with 6.2-inch Dynamic AMOLED display, triple camera system, and all-day battery. Capture stunning photos and enjoy silky smooth scrolling.',
-      'images': [
-        'https://picsum.photos/seed/galaxys21/600/600',
-        'https://picsum.photos/seed/galaxys21b/600/600',
-        'https://picsum.photos/seed/galaxys21c/600/600',
-      ],
-    },
-    {
-      'name': 'Coca Cola 1L',
-      'price': 'TZS 3,000',
-      'seller': 'CROWNED SINZA',
-      'icon': Icons.local_drink_rounded,
-      'collection': 'BEVERAGES',
-      'description': 'The classic refreshing cola taste you love. Perfect for any occasion, enjoy ice-cold Coca Cola with friends and family.',
-      'images': [
-        'https://picsum.photos/seed/cocacola1/600/600',
-        'https://picsum.photos/seed/cocacola2/600/600',
-        'https://picsum.photos/seed/cocacola3/600/600',
-      ],
-    },
-    {
-      'name': 'Nike Air Max',
-      'price': 'TZS 350,000',
-      'seller': 'SPORT ZONE',
-      'icon': Icons.checkroom_rounded,
-      'collection': 'SPORT COLLECTION',
-      'description': 'Iconic Air Max cushioning meets modern style. These sneakers deliver all-day comfort with a visible Air unit and premium materials.',
-      'images': [
-        'https://picsum.photos/seed/nikeair1/600/600',
-        'https://picsum.photos/seed/nikeair2/600/600',
-        'https://picsum.photos/seed/nikeair3/600/600',
-      ],
-    },
-    {
-      'name': 'MacBook Pro 14"',
-      'price': 'TZS 3,500,000',
-      'seller': 'KUZO HARDWARE',
-      'icon': Icons.laptop_mac_rounded,
-      'collection': 'TECH COLLECTION',
-      'description': 'The most powerful MacBook Pro ever. With M-series chip, stunning Liquid Retina XDR display, and up to 17 hours of battery life.',
-      'images': [
-        'https://picsum.photos/seed/macbook1/600/600',
-        'https://picsum.photos/seed/macbook2/600/600',
-        'https://picsum.photos/seed/macbook3/600/600',
-      ],
-    },
-  ];
+  List<Map<String, dynamic>> _products = const [];
+
+  // ── API helpers ──────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
+
+  /// Converts an API double/string price to a display string.
+  static String _fmtPrice(dynamic raw, String currency) {
+    if (raw == null) return '';
+    final d = raw is double ? raw : double.tryParse(raw.toString()) ?? 0.0;
+    return '$currency ${d.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
+  }
+
+  /// Returns a generic icon for a product category name.
+  static IconData _iconForCategory(String? cat) {
+    final c = (cat ?? '').toLowerCase();
+    if (c.contains('phone') || c.contains('tech') || c.contains('electronic')) return Icons.phone_iphone_rounded;
+    if (c.contains('drink') || c.contains('beverage') || c.contains('beer') || c.contains('soda')) return Icons.local_drink_rounded;
+    if (c.contains('cloth') || c.contains('fashion') || c.contains('shoe') || c.contains('wear')) return Icons.checkroom_rounded;
+    if (c.contains('food') || c.contains('grocery') || c.contains('kitchen')) return Icons.kitchen_rounded;
+    if (c.contains('beauty') || c.contains('cosmetic') || c.contains('perfume')) return Icons.spa_rounded;
+    if (c.contains('laptop') || c.contains('computer')) return Icons.laptop_mac_rounded;
+    return Icons.inventory_2_rounded;
+  }
+
+  Future<void> _loadData() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      // Use admin data to get encoded shop_id + shop name; then fetch public data
+      final adminRes = await api.getOnlineShopAdmin();
+      final adminRaw = adminRes.data;
+      Map<String, dynamic> admin = {};
+      if (adminRaw is Map<String, dynamic>) {
+        admin = adminRaw['data'] is Map ? adminRaw['data'] as Map<String, dynamic> : adminRaw;
+      }
+      final publicUrl = admin['public_url']?.toString() ?? '';
+      // Extract encoded shop id from public_url (last path segment)
+      final uri = Uri.tryParse(publicUrl);
+      _encodedShopId = uri?.pathSegments.isNotEmpty == true ? uri!.pathSegments.last : null;
+
+      // Now fetch public storefront data
+      final pubRes = await api.getOnlineShopPublic();
+      final pubRaw = pubRes.data;
+      Map<String, dynamic> pub = {};
+      if (pubRaw is Map<String, dynamic>) {
+        pub = pubRaw['data'] is Map ? pubRaw['data'] as Map<String, dynamic> : pubRaw;
+      } else if (pubRaw is List && pubRaw.isNotEmpty && pubRaw.first is Map) {
+        pub = Map<String, dynamic>.from(pubRaw.first as Map);
+      }
+
+      final shop = pub['shop'];
+      final currency = (shop is Map ? shop['currency']?.toString() : null) ?? 'TZS';
+      _shopName = (shop is Map ? shop['shop_name']?.toString() : null) ?? 'DukaApp Online Shop';
+
+      // Map products
+      final rawProducts = pub['products'];
+      final productList = rawProducts is List ? rawProducts : [];
+      _products = productList.whereType<Map<String, dynamic>>().map((p) {
+        final catName = p['category']?.toString() ?? '';
+        final imagePath = p['image_path']?.toString() ?? p['image']?.toString();
+        final imageUrl = (imagePath != null && imagePath.isNotEmpty)
+            ? (imagePath.startsWith('http') ? imagePath : 'http://192.168.0.107/dukaapp/$imagePath')
+            : null;
+        return {
+          'product_id': p['product_id']?.toString() ?? '',
+          'name': p['product_name']?.toString() ?? p['name']?.toString() ?? '',
+          'price': _fmtPrice(p['ecommerce_price'] ?? p['selling_price'], currency),
+          'seller': p['shop_name']?.toString() ?? _shopName ?? '',
+          'icon': _iconForCategory(catName),
+          'collection': catName.isNotEmpty ? catName.toUpperCase() : 'GENERAL',
+          'description': p['description']?.toString() ?? p['notes']?.toString() ?? '',
+          'images': imageUrl != null ? [imageUrl] : <String>[],
+          'quantity': p['quantity'] ?? p['qty'],
+          'code': p['code']?.toString() ?? p['barcode']?.toString() ?? '',
+          '_raw': p,
+        };
+      }).toList();
+
+      // Map categories
+      final rawCats = pub['categories'];
+      final catList = rawCats is List ? rawCats : [];
+      if (catList.isNotEmpty) {
+        _categories = catList.whereType<Map<String, dynamic>>().map((c) {
+          final name = c['category']?.toString() ?? '';
+          return {
+            'icon': _iconForCategory(name),
+            'label': name,
+            'count': c['products_count'],
+          };
+        }).toList();
+      } else {
+        _categories = _fallbackCategories;
+      }
+    } catch (_) {
+      _categories = _fallbackCategories;
+    }
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  // ── Sort helper ───────────────────────────────────────────────────────────
+
+  List<Map<String, dynamic>> get _displayProducts {
+    final list = List<Map<String, dynamic>>.from(_products);
+    switch (_selectedSort) {
+      case 'A-Z': list.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String)); break;
+      case 'Z-A': list.sort((a, b) => (b['name'] as String).compareTo(a['name'] as String)); break;
+      default: break;
+    }
+    return list;
+  }
 
   void _addToCart(Map<String, dynamic> product) {
     setState(() {
@@ -267,7 +311,7 @@ class _StorefrontPageState extends State<StorefrontPage> {
         ),
         leadingWidth: 56,
         title: Text(
-          'DukaApp Online Shop',
+          _shopName ?? 'DukaApp Online Shop',
           style: AppTypography.h6.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
@@ -560,10 +604,25 @@ class _StorefrontPageState extends State<StorefrontPage> {
             ),
           ),
           const SizedBox(height: 12),
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_displayProducts.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.inventory_2_outlined, size: 56, color: AppColors.textHint.withValues(alpha: 0.4)),
+                const SizedBox(height: 12),
+                Text('No products available', style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint)),
+              ])),
+            )
+          else
           Wrap(
             spacing: 12,
             runSpacing: 12,
-            children: _products.map((product) {
+            children: _displayProducts.map((product) {
               final cardWidth =
                   (MediaQuery.of(context).size.width - 44) / 2;
               return SizedBox(

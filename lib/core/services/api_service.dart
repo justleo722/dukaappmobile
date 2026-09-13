@@ -29,6 +29,7 @@
 
 import 'package:dio/dio.dart';
 import 'package:dukaapp/core/network/api_client.dart';
+import 'package:dukaapp/core/config/api_config.dart';
 import 'package:dukaapp/core/services/api_endpoints.dart';
 
 class ApiService {
@@ -735,6 +736,31 @@ class ApiService {
   Future<Response> getOnlineShopAdmin() =>
       _client.get(ApiEndpoints.getDataOnlineShopAdmin);
 
+  /// Public storefront — pass [shopId] to filter by shop; omit for current session shop.
+  Future<Response> getOnlineShopPublic({String? shopId}) =>
+      _client.get(ApiEndpoints.getDataOnlineShopPublic,
+          queryParameters: shopId != null ? {'shop_id': shopId} : null);
+
+  /// Place an order on the public storefront. [encodedShopId] from [getOnlineShopAdmin] public_url.
+  Future<Map<String, dynamic>> postOnlineshopPlaceOrder(
+      String encodedShopId, Map<String, dynamic> payload) async {
+    final url = '${ApiConfig.appApiBase}/Onlineshop/place_order/$encodedShopId';
+    final response = await _client.post(url,
+        data: payload,
+        options: Options(contentType: 'application/json'));
+    return _body(response);
+  }
+
+  /// Apply a coupon on the public storefront.
+  Future<Map<String, dynamic>> postOnlineshopApplyCoupon(
+      String encodedShopId, Map<String, dynamic> payload) async {
+    final url = '${ApiConfig.appApiBase}/Onlineshop/apply_coupon/$encodedShopId';
+    final response = await _client.post(url,
+        data: payload,
+        options: Options(contentType: 'application/json'));
+    return _body(response);
+  }
+
   Future<Map<String, dynamic>> postOnlineshopCouponSave(Map<String, dynamic> body) =>
       _post(ApiEndpoints.postOnlineshopCouponSave, body);
 
@@ -856,14 +882,29 @@ class ApiService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   /// POST and return the parsed JSON body as [Map<String,dynamic>].
+  ///
+  /// Sends as `application/x-www-form-urlencoded` so that PHP's `$_POST`
+  /// and `$this->input->post()` receive the fields correctly.
+  /// The body is manually URI-encoded as a String to bypass Dio's base
+  /// `Content-Type: application/json` default header.
   Future<Map<String, dynamic>> _post(
     String path,
     Map<String, dynamic> body,
   ) async {
+    // Manually build a URL-encoded string (supports bracket keys like shops[0]).
+    final encoded = body.entries
+        .where((e) => e.value != null)
+        .map((e) =>
+            '${Uri.encodeQueryComponent(e.key)}='
+            '${Uri.encodeQueryComponent(e.value.toString())}')
+        .join('&');
+
     final response = await _client.post(
       path,
-      data: body,
-      options: Options(contentType: 'application/x-www-form-urlencoded'),
+      data: encoded,
+      options: Options(
+        contentType: 'application/x-www-form-urlencoded',
+      ),
     );
     return _body(response);
   }
@@ -872,6 +913,12 @@ class ApiService {
   Map<String, dynamic> _body(Response response) {
     final data = response.data;
     if (data is Map<String, dynamic>) return data;
+    if (data is String && data.isNotEmpty) {
+      try {
+        final decoded = (response.data as dynamic);
+        if (decoded is Map<String, dynamic>) return decoded;
+      } catch (_) {}
+    }
     return {};
   }
 
