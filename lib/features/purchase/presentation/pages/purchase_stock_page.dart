@@ -11,6 +11,8 @@ import 'package:dukaapp/features/purchase/presentation/widgets/purchase_product_
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_summary_card.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_bottom_bar.dart';
 import 'package:dukaapp/features/purchase/presentation/providers/purchase_provider.dart';
+import 'package:dukaapp/core/services/api_service.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class _PurchaseItem {
   final String name;
