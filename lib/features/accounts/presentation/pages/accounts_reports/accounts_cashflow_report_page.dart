@@ -1,5 +1,7 @@
+// ignore_for_file: avoid_dynamic_calls
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -10,131 +12,182 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
-class AccountsCashflowReportPage extends StatefulWidget {
+class AccountsCashflowReportPage extends ConsumerStatefulWidget {
   final String reportKey;
   final String title;
 
   const AccountsCashflowReportPage({super.key, required this.reportKey, required this.title});
 
   @override
-  State<AccountsCashflowReportPage> createState() => _AccountsCashflowReportPageState();
+  ConsumerState<AccountsCashflowReportPage> createState() => _AccountsCashflowReportPageState();
 }
 
-class _AccountsCashflowReportPageState extends State<AccountsCashflowReportPage> {
+class _AccountsCashflowReportPageState extends ConsumerState<AccountsCashflowReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
 
-  static const List<Map<String, dynamic>> _cashInHandData = [
-    {'sn': 1, 'currency': 'TSH', 'cashIn': 1250000.0, 'cashOut': 755000.0, 'balance': 495000.0},
-    {'sn': 2, 'currency': 'USD', 'cashIn': 500.0, 'cashOut': 200.0, 'balance': 300.0},
-    {'sn': 3, 'currency': 'KES', 'cashIn': 15000.0, 'cashOut': 8000.0, 'balance': 7000.0},
-  ];
+  List<Map<String, dynamic>> _rawData = [];
+  bool _isLoading = false;
+  String? _fromDate;
+  String? _toDate;
 
-  static const List<Map<String, dynamic>> _cashInData = [
-    {'sn': 1, 'date': '13 Aug 2026', 'account': 'Main Account', 'title': 'Capital Injection', 'from': 'Owner', 'cashIn': 500000.0, 'balance': 500000.0},
-    {'sn': 2, 'date': '13 Aug 2026', 'account': 'Main Account', 'title': 'Sales Revenue', 'from': 'Customer', 'cashIn': 350000.0, 'balance': 850000.0},
-    {'sn': 3, 'date': '11 Aug 2026', 'account': 'Savings Account', 'title': 'Customer Payment', 'from': 'John Doe', 'cashIn': 120000.0, 'balance': 120000.0},
-    {'sn': 4, 'date': '10 Aug 2026', 'account': 'Main Account', 'title': 'Sales Revenue', 'from': 'Customer', 'cashIn': 280000.0, 'balance': 1130000.0},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
 
-  static const List<Map<String, dynamic>> _cashOutData = [
-    {'sn': 1, 'date': '12 Aug 2026', 'account': 'Main Account', 'title': 'Rent Payment', 'to': 'Landlord', 'cashOut': 200000.0, 'balance': 650000.0},
-    {'sn': 2, 'date': '12 Aug 2026', 'account': 'Main Account', 'title': 'Supplier Payment', 'to': 'ABC Suppliers', 'cashOut': 150000.0, 'balance': 500000.0},
-    {'sn': 3, 'date': '11 Aug 2026', 'account': 'Savings Account', 'title': 'Electricity Bill', 'to': 'TANESCO', 'cashOut': 85000.0, 'balance': 535000.0},
-    {'sn': 4, 'date': '10 Aug 2026', 'account': 'Main Account', 'title': 'Staff Salaries', 'to': 'Employees', 'cashOut': 320000.0, 'balance': 495000.0},
-  ];
+  Future<void> _loadData({String? from, String? to}) async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      List<Map<String, dynamic>> items = [];
 
-  static const List<Map<String, dynamic>> _accountsBalanceData = [
-    {'sn': 1, 'account': 'Main Account', 'cashIn': 1130000.0, 'cashOut': 685000.0, 'balance': 445000.0},
-    {'sn': 2, 'account': 'Savings Account', 'cashIn': 120000.0, 'cashOut': 85000.0, 'balance': 35000.0},
-    {'sn': 3, 'account': 'Petty Cash', 'cashIn': 50000.0, 'cashOut': 30000.0, 'balance': 20000.0},
-  ];
+      switch (widget.reportKey) {
+        case 'cash-in-hand-in-bank':
+        case 'accounts-balance':
+          // cashbookAccounts: account_name, total_credit, total_debit, balance, currency
+          final res = await api.getCashbookAccounts();
+          final raw = res.data;
+          final list = _unwrapList(raw);
+          int sn = 1;
+          for (final row in list) {
+            items.add({
+              'sn': sn++,
+              'currency': row['currency']?.toString() ?? 'TSh',
+              'account': row['account_name']?.toString() ?? '',
+              'cashIn': _toD(row['total_credit']),
+              'cashOut': _toD(row['total_debit']),
+              'balance': _toD(row['balance']),
+            });
+          }
+          break;
+
+        case 'cash-in':
+          // cashflow list filtered to cash_in > 0
+          final res = await api.getCashflow(from: from, to: to);
+          final list = _unwrapList(res.data);
+          int sn = 1;
+          for (final row in list) {
+            final cashIn = _toD(row['cash_in']);
+            if (cashIn <= 0) continue;
+            items.add({
+              'sn': sn++,
+              'date': row['record_date']?.toString() ?? '',
+              'account': row['name']?.toString() ?? '',
+              'title': row['title']?.toString() ?? row['category']?.toString() ?? '',
+              'from': row['counter_account']?.toString() ?? '',
+              'cashIn': cashIn,
+              'balance': _toD(row['balance']),
+            });
+          }
+          break;
+
+        case 'cash-out':
+          // cashflow list filtered to cash_out > 0
+          final res = await api.getCashflow(from: from, to: to);
+          final list = _unwrapList(res.data);
+          int sn = 1;
+          for (final row in list) {
+            final cashOut = _toD(row['cash_out']);
+            if (cashOut <= 0) continue;
+            items.add({
+              'sn': sn++,
+              'date': row['record_date']?.toString() ?? '',
+              'account': row['name']?.toString() ?? '',
+              'title': row['title']?.toString() ?? row['category']?.toString() ?? '',
+              'to': row['counter_account']?.toString() ?? '',
+              'cashOut': cashOut,
+              'balance': _toD(row['balance']),
+            });
+          }
+          break;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _rawData = items;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  List<Map<String, dynamic>> _unwrapList(dynamic raw) {
+    if (raw is List) return raw.whereType<Map<String, dynamic>>().toList();
+    if (raw is Map<String, dynamic>) {
+      final v = raw['data'] ?? raw['result'] ?? raw['items'];
+      if (v is List) return v.whereType<Map<String, dynamic>>().toList();
+    }
+    return [];
+  }
+
+  static double _toD(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0.0;
+  }
 
   List<String> get _headers {
     switch (widget.reportKey) {
       case 'cash-in-hand-in-bank':
-        return ['S/N', 'Currency', 'Cash In', 'Cash Out', 'Balance'];
+        return ['S/N', 'Account', 'Currency', 'Cash In', 'Cash Out', 'Balance'];
       case 'cash-in':
         return ['S/N', 'Date', 'Account', 'Title', 'From', 'Cash In', 'Balance'];
       case 'cash-out':
         return ['S/N', 'Date', 'Account', 'Title', 'To', 'Cash Out', 'Balance'];
       case 'accounts-balance':
-        return ['S/N', 'Account', 'Cash In', 'Cash Out', 'Balance'];
+        return ['S/N', 'Account', 'Currency', 'Cash In', 'Cash Out', 'Balance'];
       default:
-        return ['S/N', 'Currency', 'Cash In', 'Cash Out', 'Balance'];
+        return ['S/N', 'Account', 'Currency', 'Cash In', 'Cash Out', 'Balance'];
     }
   }
 
   List<double> get _columnWidths {
     switch (widget.reportKey) {
       case 'cash-in-hand-in-bank':
-        return [50, 100, 120, 120, 120];
-      case 'cash-in':
-        return [50, 110, 130, 140, 120, 120, 120];
-      case 'cash-out':
-        return [50, 110, 130, 140, 120, 120, 120];
       case 'accounts-balance':
-        return [50, 150, 120, 120, 120];
-      default:
-        return [50, 100, 120, 120, 120];
-    }
-  }
-
-  List<Map<String, dynamic>> get _allData {
-    switch (widget.reportKey) {
-      case 'cash-in-hand-in-bank':
-        return _cashInHandData;
+        return [40, 150, 80, 120, 120, 120];
       case 'cash-in':
-        return _cashInData;
+        return [40, 110, 130, 140, 120, 120, 120];
       case 'cash-out':
-        return _cashOutData;
-      case 'accounts-balance':
-        return _accountsBalanceData;
+        return [40, 110, 130, 140, 120, 120, 120];
       default:
-        return _cashInHandData;
+        return [40, 150, 80, 120, 120, 120];
     }
   }
 
   List<Map<String, dynamic>> get _filteredItems {
     final query = _searchController.text.toLowerCase().trim();
-    final items = _allData;
-    if (query.isEmpty) return items;
-    return items.where((i) => i.values.any((v) => v.toString().toLowerCase().contains(query))).toList();
+    if (query.isEmpty) return _rawData;
+    return _rawData.where((i) => i.values.any((v) => v.toString().toLowerCase().contains(query))).toList();
   }
 
-  double get _totalCashIn => _filteredItems.fold(0.0, (s, i) => s + (i['cashIn'] as double? ?? 0));
-  double get _totalCashOut => _filteredItems.fold(0.0, (s, i) => s + (i['cashOut'] as double? ?? 0));
-  double get _totalBalance => _filteredItems.fold(0.0, (s, i) => s + (i['balance'] as double? ?? 0));
-
-  String get _currentDateTime {
-    final now = DateTime.now();
-    return '${DateFormat('dd MMM yyyy').format(now)} • ${DateFormat('hh:mm a').format(now)}';
-  }
+  double get _totalCashIn => _filteredItems.fold(0.0, (s, i) => s + _toD(i['cashIn']));
+  double get _totalCashOut => _filteredItems.fold(0.0, (s, i) => s + _toD(i['cashOut']));
+  double get _totalBalance => _filteredItems.fold(0.0, (s, i) => s + _toD(i['balance']));
 
   String get _exportDateTime => DateFormat('dd-MM-yyyy_HH-mm').format(DateTime.now());
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    _horizontalController.dispose();
-    super.dispose();
-  }
-
   String _cellValue(Map<String, dynamic> item, String header) {
     switch (header) {
-      case 'S/N': return '${item['sn']}';
-      case 'Currency': return '${item['currency']}';
-      case 'Date': return '${item['date']}';
-      case 'Account': return '${item['account']}';
-      case 'Title': return '${item['title']}';
-      case 'From': return '${item['from']}';
-      case 'To': return '${item['to']}';
-      case 'Cash In': return _fmt(item['cashIn'] as double? ?? 0);
-      case 'Cash Out': return _fmt(item['cashOut'] as double? ?? 0);
-      case 'Balance': return _fmt(item['balance'] as double? ?? 0);
-      default: return '';
+      case 'S/N':       return '${item['sn']}';
+      case 'Currency':  return item['currency']?.toString() ?? '';
+      case 'Date':      return item['date']?.toString() ?? '';
+      case 'Account':   return item['account']?.toString() ?? '';
+      case 'Title':     return item['title']?.toString() ?? '';
+      case 'From':      return item['from']?.toString() ?? '';
+      case 'To':        return item['to']?.toString() ?? '';
+      case 'Cash In':   return _fmt(_toD(item['cashIn']));
+      case 'Cash Out':  return _fmt(_toD(item['cashOut']));
+      case 'Balance':   return _fmt(_toD(item['balance']));
+      default:          return '';
     }
   }
 
@@ -154,7 +207,7 @@ class _AccountsCashflowReportPageState extends State<AccountsCashflowReportPage>
       header: (_) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
         pw.Text(widget.title, style: pw.TextStyle(font: pw.Font.helveticaBold(), fontSize: 16)),
         pw.SizedBox(height: 2),
-        pw.Text('DukaApp Main Shop  •  $now', style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
+        pw.Text('DukaApp  •  $now', style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
         pw.SizedBox(height: 4), pw.Divider(), pw.SizedBox(height: 4),
       ]),
       build: (_) => [pw.TableHelper.fromTextArray(
@@ -222,21 +275,32 @@ class _AccountsCashflowReportPageState extends State<AccountsCashflowReportPage>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (prev, next) {
+      if (prev?.from != next.from || prev?.to != next.to) {
+        _fromDate = next.from;
+        _toDate = next.to;
+        _loadData(from: next.from, to: next.to);
+      }
+    });
+
     final items = _filteredItems;
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: _buildAppBar(context),
-      body: SafeArea(top: false, child: SingleChildScrollView(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: Column(children: [
-          _buildActionButtons(context),
-          const SizedBox(height: 12),
-          _buildSearchField(),
-          const SizedBox(height: 12),
-          items.isEmpty ? _buildEmptyState() : _buildTable(items),
-          const SizedBox(height: 24),
-        ]),
-      )),
+      body: SafeArea(top: false, child: _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : SingleChildScrollView(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+            child: Column(children: [
+              _buildActionButtons(context),
+              const SizedBox(height: 12),
+              _buildSearchField(),
+              const SizedBox(height: 12),
+              items.isEmpty ? _buildEmptyState() : _buildTable(items),
+              const SizedBox(height: 24),
+            ]),
+          ),
+      ),
     );
   }
 
@@ -250,6 +314,15 @@ class _AccountsCashflowReportPageState extends State<AccountsCashflowReportPage>
       leadingWidth: 56,
       title: Text(widget.title, style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
       centerTitle: true,
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: IconButton(
+            onPressed: () => _loadData(from: _fromDate, to: _toDate),
+            icon: const Icon(Icons.refresh_rounded, color: AppColors.textHint, size: 20),
+          ),
+        ),
+      ],
       bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(height: 1, color: AppColors.divider)),
     );
   }
@@ -277,7 +350,7 @@ class _AccountsCashflowReportPageState extends State<AccountsCashflowReportPage>
   Widget _buildSearchField() {
     return Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG), child: TextField(
       controller: _searchController, onChanged: (_) => setState(() {}), style: AppTypography.bodyMedium,
-      decoration: InputDecoration(hintText: 'Search reports...', hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
+      decoration: InputDecoration(hintText: 'Search...', hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
         prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textHint, size: 20),
         suffixIcon: _searchController.text.isNotEmpty ? IconButton(onPressed: () { _searchController.clear(); setState(() {}); }, icon: const Icon(Icons.close_rounded, color: AppColors.textHint, size: 18)) : null,
         filled: true, fillColor: AppColors.card, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -351,7 +424,14 @@ class _AccountsCashflowReportPageState extends State<AccountsCashflowReportPage>
       const SizedBox(height: 20),
       Text('No Records Found', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
       const SizedBox(height: 6),
-      Text('Try a different search term.', style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
+      Text('Try a different date range or search term.', style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
     ])));
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _horizontalController.dispose();
+    super.dispose();
   }
 }

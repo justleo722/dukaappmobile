@@ -40,8 +40,24 @@ class PurchaseItem {
       purchaseType: j['purchase_type']?.toString() ?? 'purchase',
       createdBy: j['username']?.toString() ?? '',
       currency: j['currency']?.toString() ?? 'TSh',
-      items: rawItems.whereType<Map<String, dynamic>>().toList(),
+      // Normalise each item so downstream pages can safely use typed values.
+      items: rawItems.whereType<Map<String, dynamic>>().map((item) => {
+        'name': item['product_name']?.toString() ?? item['name']?.toString() ?? '',
+        'price': _toDouble(item['price'] ?? item['cost_price'] ?? item['buying_price'] ?? item['unit_price'] ?? item['bp']),
+        'quantity': _toInt(item['quantity'] ?? item['qty']),
+        'total': _toDouble(item['total'] ?? item['total_price'] ?? item['subtotal']),
+        'discount': _toDouble(item['discount']),
+        'product_id': item['product_id'] ?? item['id'],
+        'stock_id': item['stock_id'],
+      }).toList(),
     );
+  }
+
+  static int _toInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is double) return v.toInt();
+    return int.tryParse(v.toString()) ?? double.tryParse(v.toString())?.toInt() ?? 0;
   }
 
   static double _toDouble(dynamic v) {

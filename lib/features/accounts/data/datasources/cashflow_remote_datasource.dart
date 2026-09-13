@@ -15,11 +15,17 @@ class CashflowRemoteDatasource {
   Future<CashflowSummary> fetchCashflowSummary({String? from, String? to}) async {
     final res = await _api.getCashflowSummary(from: from, to: to);
     final raw = res.data;
+    // PHP returns a bare list: [[{cash_in, cash_out, cash_in_hand, ...}]]
+    if (raw is List && raw.isNotEmpty) {
+      final first = raw.first;
+      if (first is Map<String, dynamic>) return CashflowSummary.fromJson(first);
+    }
     if (raw is Map<String, dynamic>) {
       final data = raw['data'] ?? raw;
       if (data is Map<String, dynamic>) return CashflowSummary.fromJson(data);
       if (data is List && data.isNotEmpty) {
-        return CashflowSummary.fromJson(data.first as Map<String, dynamic>);
+        final first = data.first;
+        if (first is Map<String, dynamic>) return CashflowSummary.fromJson(first);
       }
     }
     return CashflowSummary.empty;

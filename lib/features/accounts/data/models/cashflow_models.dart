@@ -43,11 +43,13 @@ class CashflowSummary {
   final double totalCashIn;
   final double totalCashOut;
   final double cashInHand;
+  final double customerWallets;
 
   const CashflowSummary({
     this.totalCashIn = 0,
     this.totalCashOut = 0,
     this.cashInHand = 0,
+    this.customerWallets = 0,
   });
 
   static const empty = CashflowSummary();
@@ -56,6 +58,7 @@ class CashflowSummary {
         totalCashIn: _toDouble(j['cash_in'] ?? j['total_credit'] ?? j['total_in']),
         totalCashOut: _toDouble(j['cash_out'] ?? j['total_debit'] ?? j['total_out']),
         cashInHand: _toDouble(j['cash_in_hand'] ?? j['balance'] ?? j['net']),
+        customerWallets: _toDouble(j['customer_wallets'] ?? j['customer_wallet']),
       );
 
   static double _toDouble(dynamic v) {

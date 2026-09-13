@@ -1,4 +1,5 @@
 // features/purchase/presentation/pages/purchases_page.dart
+// ignore_for_file: avoid_dynamic_calls
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -80,7 +81,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
       final products = List<Map<String, dynamic>>.from(purchase['products']);
       total += products.fold<double>(
         0,
-        (sum, p) => sum + (p['price'] as double) * (p['quantity'] as int),
+        (sum, p) => sum + _toD(p['price']) * _toI(p['quantity']),
       );
     }
     return total;
@@ -89,7 +90,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   double get _totalToPay {
     double total = 0;
     for (final purchase in _purchases) {
-      total += purchase['balance'] as double;
+      total += _toD(purchase['balance']);
     }
     return total;
   }
@@ -98,7 +99,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
     double total = 0;
     for (final purchase in _purchases) {
       if (purchase['paymentMode'] == 'Credit') {
-        total += purchase['balance'] as double;
+        total += _toD(purchase['balance']);
       }
     }
     return total;
@@ -108,7 +109,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
     double total = 0;
     for (final purchase in _purchases) {
       if (purchase['paymentMode'] == 'Cash') {
-        total += purchase['paid'] as double;
+        total += _toD(purchase['paid']);
       }
     }
     return total;
@@ -117,9 +118,9 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   List<Map<String, dynamic>> get _filteredPurchases {
     if (_searchQuery.isEmpty) return _purchases;
     return _purchases.where((purchase) {
-      final supplier = (purchase['supplier'] as String).toLowerCase();
+      final supplier = (purchase['supplier']?.toString() ?? '').toLowerCase();
       final products = (purchase['products'] as List)
-          .map((p) => (p['name'] as String).toLowerCase())
+          .map((p) => ( p['name']?.toString() ?? '').toLowerCase())
           .join(' ');
       final query = _searchQuery.toLowerCase();
       return supplier.contains(query) || products.contains(query);
@@ -278,7 +279,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
 
   void _showPayDialog(int index) {
     final purchase = _purchases[index];
-    final balance = purchase['balance'] as double;
+    final balance = _toD(purchase['balance']);
     final supplier = purchase['supplier'] as String;
     final amountController = TextEditingController(text: balance.toStringAsFixed(0));
     DateTime selectedDate = DateTime.now();
@@ -609,7 +610,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
     final products = List<Map<String, dynamic>>.from(purchase['products']);
     final totalAmount = products.fold<double>(
       0,
-      (sum, p) => sum + (p['price'] as double) * (p['quantity'] as int),
+      (sum, p) => sum + _toD(p['price']) * _toI(p['quantity']),
     );
     DateTime selectedDate = DateTime.now();
 
@@ -951,7 +952,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
     final products = List<Map<String, dynamic>>.from(purchase['products']);
     final totalAmount = products.fold<double>(
       0,
-      (sum, p) => sum + (p['price'] as double) * (p['quantity'] as int),
+      (sum, p) => sum + _toD(p['price']) * _toI(p['quantity']),
     );
 
     ReceiptWidget.show(
@@ -974,7 +975,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
     final products = List<Map<String, dynamic>>.from(purchase['products']);
     final totalAmount = products.fold<double>(
       0,
-      (sum, p) => sum + (p['price'] as double) * (p['quantity'] as int),
+      (sum, p) => sum + _toD(p['price']) * _toI(p['quantity']),
     );
     final dateTime = purchase['date'] as String;
     final receiptNumber = 'PUR-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
@@ -1071,15 +1072,15 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
               pw.SizedBox(height: 8),
               _buildPdfTotalRow('Subtotal:', _formatCurrencyPdf(totalAmount)),
               pw.SizedBox(height: 4),
-              _buildPdfTotalRow('Discount:', _formatCurrencyPdf(purchase['discount'] as double)),
+              _buildPdfTotalRow('Discount:', _formatCurrencyPdf(_toD(purchase['discount']))),
               pw.SizedBox(height: 4),
-              _buildPdfTotalRow('Amount Paid:', _formatCurrencyPdf(purchase['paid'] as double)),
+              _buildPdfTotalRow('Amount Paid:', _formatCurrencyPdf(_toD(purchase['paid']))),
               pw.SizedBox(height: 4),
               _buildPdfTotalRow(
                 'Balance:',
-                _formatCurrencyPdf(purchase['balance'] as double),
+                _formatCurrencyPdf(_toD(purchase['balance'])),
                 isBold: true,
-                color: (purchase['balance'] as double) > 0 ? PdfColors.red700 : PdfColors.green700,
+                color: _toD(purchase['balance']) > 0 ? PdfColors.red700 : PdfColors.green700,
               ),
             ],
           ),
@@ -1610,7 +1611,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
     final isPaid = purchase['status'] == 'PAID';
     final totalAmount = products.fold<double>(
       0,
-      (sum, p) => sum + (p['price'] as double) * (p['quantity'] as int),
+      (sum, p) => sum + _toD(p['price']) * _toI(p['quantity']),
     );
 
     return Container(
@@ -2007,4 +2008,18 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
       ),
     );
   }
+}
+
+// ── Safe type helpers ─────────────────────────────────────────────────────
+double _toD(dynamic v) {
+  if (v == null) return 0.0;
+  if (v is num) return v.toDouble();
+  return double.tryParse(v.toString()) ?? 0.0;
+}
+
+int _toI(dynamic v) {
+  if (v == null) return 0;
+  if (v is int) return v;
+  if (v is double) return v.toInt();
+  return int.tryParse(v.toString()) ?? double.tryParse(v.toString())?.toInt() ?? 0;
 }

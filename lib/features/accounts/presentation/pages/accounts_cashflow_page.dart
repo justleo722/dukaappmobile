@@ -79,7 +79,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
   double get _totalCashIn => _summary?.totalCashIn ?? _allItems.fold(0, (s, e) => s + e.cashIn);
   double get _totalCashOut => _summary?.totalCashOut ?? _allItems.fold(0, (s, e) => s + e.cashOut);
   double get _cashInHand => _summary?.cashInHand ?? (_totalCashIn - _totalCashOut);
-  double get _customerWallet => 0;
+  double get _customerWallet => _summary?.customerWallets ?? 0;
 
   String _fmt(double v) {
     final fmt = NumberFormat('#,###');

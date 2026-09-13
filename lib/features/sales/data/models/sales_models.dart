@@ -110,7 +110,8 @@ class SaleProduct {
         name: (j['product_name'] ?? j['name'] ?? '').toString(),
         quantity: _i(j['qty'] ?? j['quantity']),
         price: _d(j['price_per_unit'] ?? j['unit_price'] ?? j['price'] ?? j['selling_price']),
-        total: _d(j['subtotal'] ?? j['total'] ?? j['total_amount']),
+        // PHP sale_items uses 'total_price'; also accept common aliases.
+        total: _d(j['total_price'] ?? j['subtotal'] ?? j['total'] ?? j['total_amount']),
         discount: _d(j['discount']),
       );
 }
@@ -691,7 +692,10 @@ double _d(dynamic v) {
 int _i(dynamic v) {
   if (v == null) return 0;
   if (v is int) return v;
-  return int.tryParse(v.toString()) ?? 0;
+  if (v is double) return v.toInt();
+  // Handle decimal strings like "1.00" from MySQL DECIMAL columns.
+  final s = v.toString();
+  return int.tryParse(s) ?? double.tryParse(s)?.toInt() ?? 0;
 }
 
 String _formatNumber(double v) {

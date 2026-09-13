@@ -143,7 +143,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
   double get _outstandingBalance {
     double total = 0;
     for (final order in _orders) {
-      total += order['balance'] as double;
+      total += _toD(order['balance']);
     }
     return total;
   }
@@ -155,7 +155,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
     return _orders.where((order) {
       final supplier = (order['supplier'] as String).toLowerCase();
       final products = (order['products'] as List)
-          .map((p) => (p['name'] as String).toLowerCase())
+          .map((p) => ( p['name']?.toString() ?? '').toLowerCase())
           .join(' ');
       final query = _searchQuery.toLowerCase();
       return supplier.contains(query) || products.contains(query);
@@ -641,7 +641,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
     final products = List<Map<String, dynamic>>.from(order['products']);
     final totalAmount = products.fold<double>(
       0,
-      (sum, p) => sum + (p['price'] as double) * (p['quantity'] as int),
+      (sum, p) => sum + _toD(p['price']) * _toI(p['quantity']),
     );
 
     ReceiptWidget.show(
@@ -676,7 +676,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
     final products = List<Map<String, dynamic>>.from(order['products']);
     final totalAmount = products.fold<double>(
       0,
-      (sum, p) => sum + (p['price'] as double) * (p['quantity'] as int),
+      (sum, p) => sum + _toD(p['price']) * _toI(p['quantity']),
     );
     final dateTime = order['date'] as String;
 
@@ -772,15 +772,15 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
               pw.SizedBox(height: 8),
               _buildPdfTotalRow('Subtotal:', _formatCurrencyPdf(totalAmount)),
               pw.SizedBox(height: 4),
-              _buildPdfTotalRow('Discount:', _formatCurrencyPdf(order['discount'] as double)),
+              _buildPdfTotalRow('Discount:', _formatCurrencyPdf(_toD(order['discount']))),
               pw.SizedBox(height: 4),
-              _buildPdfTotalRow('Amount Paid:', _formatCurrencyPdf(order['paid'] as double)),
+              _buildPdfTotalRow('Amount Paid:', _formatCurrencyPdf(_toD(order['paid']))),
               pw.SizedBox(height: 4),
               _buildPdfTotalRow(
                 'Balance:',
-                _formatCurrencyPdf(order['balance'] as double),
+                _formatCurrencyPdf(_toD(order['balance'])),
                 isBold: true,
-                color: (order['balance'] as double) > 0 ? PdfColors.red700 : PdfColors.green700,
+                color: _toD(order['balance']) > 0 ? PdfColors.red700 : PdfColors.green700,
               ),
             ],
           ),
@@ -1243,7 +1243,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
     final isPaid = order['status'] == 'PAID';
     final totalAmount = products.fold<double>(
       0,
-      (sum, p) => sum + (p['price'] as double) * (p['quantity'] as int),
+      (sum, p) => sum + _toD(p['price']) * _toI(p['quantity']),
     );
 
     return Container(
@@ -1494,4 +1494,18 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
           : const SizedBox.shrink(),
     );
   }
+}
+
+// ── Safe type helpers ─────────────────────────────────────────────────────
+double _toD(dynamic v) {
+  if (v == null) return 0.0;
+  if (v is num) return v.toDouble();
+  return double.tryParse(v.toString()) ?? 0.0;
+}
+
+int _toI(dynamic v) {
+  if (v == null) return 0;
+  if (v is int) return v;
+  if (v is double) return v.toInt();
+  return int.tryParse(v.toString()) ?? double.tryParse(v.toString())?.toInt() ?? 0;
 }
