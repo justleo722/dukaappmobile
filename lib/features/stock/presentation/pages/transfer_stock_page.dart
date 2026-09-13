@@ -35,6 +35,9 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
   final TextEditingController _searchController = TextEditingController();
   final List<_TransferItem> _items = [];
   bool _isSaving = false;
+  /// Checkbox selection inside _ProductSelectionList, lifted to parent so
+  /// the Transfer button can become enabled as soon as checkboxes are ticked.
+  final Set<int> _pendingIndices = {};
 
   List<Map<String, dynamic>> _getFilteredProducts() {
     final stockState = ref.read(stockProvider);
@@ -143,7 +146,12 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
             ),
             TransferBottomBar(
               onClose: () => context.pop(),
-              onTransfer: (_items.isNotEmpty && _selectedShop != null && !_isSaving)
+              // Enable once a shop is chosen AND either:
+              //  - items are already in the transfer list, OR
+              //  - the user has ticked checkboxes (pending selection)
+              onTransfer: (_selectedShop != null &&
+                      !_isSaving &&
+                      (_items.isNotEmpty || _pendingIndices.isNotEmpty))
                   ? _transfer
                   : null,
             ),
@@ -156,6 +164,14 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
   Future<void> _transfer() async {
     final shopId = _extractShopId(_selectedShop);
     if (shopId == null) return;
+
+    // Auto-add any pending checkbox selections before transferring.
+    if (_pendingIndices.isNotEmpty) {
+      final products = _getFilteredProducts();
+      _addSelectedProducts(products, Set.from(_pendingIndices));
+      _pendingIndices.clear();
+    }
+
     final transferItems = _items
         .where((item) => item.transferQuantity > 0 && item.productId != null)
         .map((item) => {'product_id': item.productId, 'quantity': item.transferQuantity})
@@ -483,65 +499,71 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
     return _ProductSelectionList(
       products: products,
       addedNames: _items.map((i) => i.name).toSet(),
-      onAddProducts: (indices) => _addSelectedProducts(products, indices),
+      selectedIndices: _pendingIndices,
+      onSelectionChanged: (indices) => setState(() {
+        _pendingIndices
+          ..clear()
+          ..addAll(indices);
+      }),
+      onAddProducts: (indices) {
+        _addSelectedProducts(products, indices);
+        setState(() => _pendingIndices.clear());
+      },
     );
   }
 }
 
-class _ProductSelectionList extends StatefulWidget {
+class _ProductSelectionList extends StatelessWidget {
   final List<Map<String, dynamic>> products;
   final Set<String> addedNames;
+  /// Controlled selection — parent owns this set and updates it via [onSelectionChanged].
+  final Set<int> selectedIndices;
+  final ValueChanged<Set<int>> onSelectionChanged;
   final ValueChanged<Set<int>> onAddProducts;
 
   const _ProductSelectionList({
     required this.products,
     required this.addedNames,
+    required this.selectedIndices,
+    required this.onSelectionChanged,
     required this.onAddProducts,
   });
 
-  @override
-  State<_ProductSelectionList> createState() => _ProductSelectionListState();
-}
-
-class _ProductSelectionListState extends State<_ProductSelectionList> {
-  final Set<int> _selectedIndices = {};
-
   void _toggleSelection(int index) {
-    setState(() {
-      if (_selectedIndices.contains(index)) {
-        _selectedIndices.remove(index);
-      } else {
-        _selectedIndices.add(index);
-      }
-    });
+    final updated = Set<int>.from(selectedIndices);
+    if (updated.contains(index)) {
+      updated.remove(index);
+    } else {
+      updated.add(index);
+    }
+    onSelectionChanged(updated);
   }
 
   void _toggleAll() {
-    final selectable = widget.products
+    final selectable = products
         .asMap()
         .keys
-        .where((i) => !widget.addedNames.contains(widget.products[i]['name']))
+        .where((i) => !addedNames.contains(products[i]['name']))
         .toSet();
-    final allSelected = selectable.every((i) => _selectedIndices.contains(i));
-    setState(() {
-      if (allSelected) {
-        _selectedIndices.removeAll(selectable);
-      } else {
-        _selectedIndices.addAll(selectable);
-      }
-    });
+    final allSelected = selectable.every((i) => selectedIndices.contains(i));
+    final updated = Set<int>.from(selectedIndices);
+    if (allSelected) {
+      updated.removeAll(selectable);
+    } else {
+      updated.addAll(selectable);
+    }
+    onSelectionChanged(updated);
   }
 
   @override
   Widget build(BuildContext context) {
-    final products = widget.products;
     final selectableIndices = products
         .asMap()
         .keys
-        .where((i) => !widget.addedNames.contains(products[i]['name']))
+        .where((i) => !addedNames.contains(products[i]['name']))
         .toSet();
     final allSelected = selectableIndices.isNotEmpty &&
-        selectableIndices.every((i) => _selectedIndices.contains(i));
+        selectableIndices.every((i) => selectedIndices.contains(i));
 
     return Column(
       children: [
@@ -582,8 +604,8 @@ class _ProductSelectionListState extends State<_ProductSelectionList> {
           final product = entry.value;
           final name = product['name'] as String;
           final stock = product['stock'] as int;
-          final isAlreadyAdded = widget.addedNames.contains(name);
-          final isSelected = _selectedIndices.contains(index);
+          final isAlreadyAdded = addedNames.contains(name);
+          final isSelected = selectedIndices.contains(index);
 
           return Container(
             margin: const EdgeInsets.symmetric(
@@ -702,7 +724,7 @@ class _ProductSelectionListState extends State<_ProductSelectionList> {
             ),
           );
         }),
-        if (_selectedIndices.isNotEmpty) ...[
+        if (selectedIndices.isNotEmpty) ...[
           const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
@@ -711,12 +733,11 @@ class _ProductSelectionListState extends State<_ProductSelectionList> {
               height: AppConstants.buttonHeight,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  widget.onAddProducts(Set.from(_selectedIndices));
-                  setState(() => _selectedIndices.clear());
+                  onAddProducts(Set.from(selectedIndices));
                 },
                 icon: const Icon(Icons.add_rounded, size: 20),
                 label: Text(
-                  'Add Selected (${_selectedIndices.length})',
+                  'Add Selected (${selectedIndices.length})',
                   style: AppTypography.buttonLarge,
                 ),
                 style: ElevatedButton.styleFrom(

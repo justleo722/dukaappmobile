@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:dukaapp/core/network/api_client.dart';
 import 'package:dukaapp/core/services/api_endpoints.dart';
 import 'package:dukaapp/features/stock/data/models/stock_models.dart';
@@ -41,12 +42,11 @@ class StockRemoteDatasource {
     return _list(res.data).map(StockProduct.fromJson).toList();
   }
 
-  /// Products from a specific (source) shop — used for import-from-shop
+  /// Products belonging to a specific (remote) shop — used by import-from-shop
+  /// and transfer flows. Uses the mapped GET endpoint so the backend resolves
+  /// the correct shop regardless of the caller's session shop.
   Future<List<Map<String, dynamic>>> fetchProductsByShop(String shopId) async {
-    final res = await _client.get(
-      ApiEndpoints.getDataProducts,
-      queryParameters: {'shop_id': shopId},
-    );
+    final res = await _client.get(ApiEndpoints.getMappedStockRemoteProducts(shopId));
     return _list(res.data).map((p) => {
       'name': p['product_name'] ?? p['name'] ?? '',
       'barcode': p['barcode'] ?? p['bar_code'] ?? '',
@@ -66,39 +66,85 @@ class StockRemoteDatasource {
 
   // ── POST ─────────────────────────────────────────────────────────────────
 
+  static final _formOptions = Options(contentType: 'application/x-www-form-urlencoded');
+
   /// Create a new product (stock/register/create)
   Future<Map<String, dynamic>> createProduct(Map<String, dynamic> body) async {
-    final res = await _client.post(ApiEndpoints.postStockRegisterCreate, data: body);
+    final res = await _client.post(ApiEndpoints.postStockRegisterCreate, data: body, options: _formOptions);
     return _json(res.data);
   }
 
   /// Update existing product details (stock/product/update)
   Future<Map<String, dynamic>> updateProduct(Map<String, dynamic> body) async {
-    final res = await _client.post(ApiEndpoints.postStockProductUpdate, data: body);
+    final res = await _client.post(ApiEndpoints.postStockProductUpdate, data: body, options: _formOptions);
     return _json(res.data);
   }
 
   /// Adjust stock balance (stock/restock/balance)
   Future<Map<String, dynamic>> adjustStockBalance(Map<String, dynamic> body) async {
-    final res = await _client.post(ApiEndpoints.postStockRestockBalance, data: body);
+    final res = await _client.post(ApiEndpoints.postStockRestockBalance, data: body, options: _formOptions);
     return _json(res.data);
   }
 
   /// Create a purchase/restock record (stock/restock/create)
   Future<Map<String, dynamic>> createRestock(Map<String, dynamic> body) async {
-    final res = await _client.post(ApiEndpoints.postStockRestockCreate, data: body);
+    final res = await _client.post(ApiEndpoints.postStockRestockCreate, data: body, options: _formOptions);
     return _json(res.data);
   }
 
-  /// Transfer stock to another shop (stock/transfer)
+  /// Transfer stock to another shop (stock/transfer).
+  ///
+  /// Accepts the Flutter-friendly payload:
+  ///   { 'to_shop_id': '...', 'products': [{'product_id': id, 'quantity': qty}] }
+  ///
+  /// Remaps to the PHP form-post format expected by Stock::transferStock():
+  ///   toShop, product_id[], quantity[pid], name[pid]
   Future<Map<String, dynamic>> transferStock(Map<String, dynamic> body) async {
-    final res = await _client.post(ApiEndpoints.postStockTransfer, data: body);
+    final toShop = body['to_shop_id']?.toString() ?? '';
+    final products = (body['products'] as List?) ?? [];
+
+    // Build flat form-encoded maps that PHP reads as indexed arrays.
+    final Map<String, dynamic> form = {'toShop': toShop};
+    for (final item in products) {
+      final pid = item['product_id']?.toString() ?? '';
+      if (pid.isEmpty) continue;
+      // PHP: $this->input->post('product_id') → array of ids
+      // We append each id into the list key.
+      (form['product_id'] ??= <String>[]).add(pid);
+      // PHP: $this->input->post('quantity')[pid]
+      form['quantity[$pid]'] = (item['quantity'] ?? 0).toString();
+      // PHP: $this->input->post('name')[pid] — optional, backend falls back to DB name
+      if (item['name'] != null) form['name[$pid]'] = item['name'].toString();
+    }
+
+    final res = await _client.post(ApiEndpoints.postStockTransfer, data: form, options: _formOptions);
     return _json(res.data);
   }
 
-  /// Copy products from another shop (stock/copy-in-products)
+  /// Copy products from another shop (stock/copy-in-products).
+  ///
+  /// Accepts: { 'product_id': [id1, id2, ...] }
+  ///
+  /// Remaps to PHP bracket notation so the backend reads
+  /// $this->input->post('product_id') as a proper array:
+  ///   product_id[]=id1&product_id[]=id2
   Future<Map<String, dynamic>> copyInProducts(Map<String, dynamic> body) async {
-    final res = await _client.post(ApiEndpoints.postStockCopyInProducts, data: body);
+    final ids = (body['product_id'] as List?) ?? [];
+    if (ids.isEmpty) {
+      return {'status': 'error', 'message': 'No products selected'};
+    }
+
+    // Build explicit bracket-notation form so PHP sees product_id as an array.
+    final Map<String, dynamic> form = {};
+    for (int i = 0; i < ids.length; i++) {
+      form['product_id[$i]'] = ids[i]?.toString() ?? '';
+    }
+
+    final res = await _client.post(
+      ApiEndpoints.postStockCopyInProducts,
+      data: form,
+      options: _formOptions,
+    );
     return _json(res.data);
   }
 
@@ -107,6 +153,7 @@ class StockRemoteDatasource {
     final res = await _client.post(
       ApiEndpoints.postStockCategoryCreate,
       data: {'category': name},
+      options: _formOptions,
     );
     return _json(res.data);
   }
@@ -116,6 +163,7 @@ class StockRemoteDatasource {
     final res = await _client.post(
       ApiEndpoints.postStockRegisterImport,
       data: {'products': products},
+      options: _formOptions,
     );
     return _json(res.data);
   }
@@ -131,6 +179,7 @@ class StockRemoteDatasource {
     final res = await _client.post(
       ApiEndpoints.postStockProductBulkDelete,
       data: {'product_id': productIds},
+      options: _formOptions,
     );
     return _json(res.data);
   }

@@ -32,6 +32,9 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
   final Set<dynamic> _selectedIds = {};
   dynamic _expandedProductId;
 
+  /// Active filter pill: 'all' | 'out_of_stock' | 'to_expire' | 'expired' | 'low_stock'
+  String _activeFilter = 'all';
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -41,9 +44,30 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
   // ── Filtering ────────────────────────────────────────────────────────────
 
   List<StockProduct> _filtered(List<StockProduct> products) {
+    // 1. Apply status-pill filter first.
+    List<StockProduct> result;
+    switch (_activeFilter) {
+      case 'out_of_stock':
+        result = products.where((p) => p.isOutOfStock).toList();
+        break;
+      case 'low_stock':
+        result =
+            products.where((p) => p.isLowStock && !p.isOutOfStock).toList();
+        break;
+      // 'to_expire' and 'expired' require expiry data from the API.
+      // For now return an empty list so the pill clearly shows 0.
+      case 'to_expire':
+      case 'expired':
+        result = [];
+        break;
+      default: // 'all'
+        result = products;
+    }
+
+    // 2. Then apply the search query on top.
     final q = _searchController.text.trim().toLowerCase();
-    if (q.isEmpty) return products;
-    return products
+    if (q.isEmpty) return result;
+    return result
         .where((p) =>
             p.name.toLowerCase().contains(q) ||
             (p.category?.toLowerCase().contains(q) ?? false) ||
@@ -366,6 +390,12 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
     final lowStock =
         stock.products.where((p) => p.isLowStock && !p.isOutOfStock).length;
 
+    void select(String filter) => setState(() {
+          _activeFilter = filter;
+          _selectedIds.clear();
+          _expandedProductId = null;
+        });
+
     return SizedBox(
       height: 40,
       child: ListView(
@@ -379,6 +409,8 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
             label: 'All',
             color: AppColors.textSecondary,
             backgroundColor: AppColors.background,
+            isSelected: _activeFilter == 'all',
+            onTap: () => select('all'),
           ),
           const SizedBox(width: 8),
           StockStatusChip(
@@ -387,22 +419,28 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
             label: 'Out of Stock',
             color: AppColors.danger,
             backgroundColor: AppColors.dangerLight,
+            isSelected: _activeFilter == 'out_of_stock',
+            onTap: () => select('out_of_stock'),
           ),
           const SizedBox(width: 8),
-          const StockStatusChip(
+          StockStatusChip(
             icon: Icons.schedule_rounded,
             count: 0,
             label: 'To Expire',
-            color: Color(0xFFFF9800),
-            backgroundColor: Color(0xFFFFF3E0),
+            color: const Color(0xFFFF9800),
+            backgroundColor: const Color(0xFFFFF3E0),
+            isSelected: _activeFilter == 'to_expire',
+            onTap: () => select('to_expire'),
           ),
           const SizedBox(width: 8),
-          const StockStatusChip(
+          StockStatusChip(
             icon: Icons.event_busy_rounded,
             count: 0,
             label: 'Expired',
-            color: Color(0xFFE64A19),
-            backgroundColor: Color(0xFFFBE9E7),
+            color: const Color(0xFFE64A19),
+            backgroundColor: const Color(0xFFFBE9E7),
+            isSelected: _activeFilter == 'expired',
+            onTap: () => select('expired'),
           ),
           const SizedBox(width: 8),
           StockStatusChip(
@@ -411,6 +449,8 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
             label: 'Running Low',
             color: AppColors.primary,
             backgroundColor: const Color(0xFFE3F2FD),
+            isSelected: _activeFilter == 'low_stock',
+            onTap: () => select('low_stock'),
           ),
         ],
       ),

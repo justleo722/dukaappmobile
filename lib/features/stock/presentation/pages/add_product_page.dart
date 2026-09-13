@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/add_category_bottom_sheet.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/add_supplier_bottom_sheet.dart';
@@ -31,7 +33,6 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
   final _barcodeController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _wholesalePriceController = TextEditingController();
-  final _supplierController = TextEditingController();
   final _expiryDateController = TextEditingController();
 
   String? _selectedType;
@@ -46,7 +47,9 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
 
   final List<String> _types = ['Product', 'Service'];
   final List<String> _categories = [];
-  final List<String> _suppliers = [];
+  // Suppliers loaded from API: list of {supplier_id, name}
+  final List<Map<String, dynamic>> _suppliersList = [];
+  String? _selectedSupplierId;
   // Map category name → category_id for API call
   final Map<String, dynamic> _categoryIds = {};
   bool _isSaving = false;
@@ -82,8 +85,33 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
       _sellingPriceController.text = (p['sellingPrice'] ?? 0).toString();
       _selectedCategory = p['category'];
     }
-    // Load categories from cached stock state
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCategories());
+    // Load categories from cached stock state, and suppliers from API
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _loadCategories();
+      await _loadSuppliers();
+    });
+  }
+
+  Future<void> _loadSuppliers() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getSuppliers();
+      final raw = res.data;
+      final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? raw['suppliers'] ?? []) : []);
+      if (!mounted) return;
+      setState(() {
+        _suppliersList.clear();
+        for (final s in list) {
+          if (s is Map) {
+            final id = (s['supplier_id'] ?? s['id'])?.toString();
+            final name = (s['supplier_name'] ?? s['name'] ?? '').toString();
+            if (id != null && name.isNotEmpty) {
+              _suppliersList.add({'id': id, 'name': name});
+            }
+          }
+        }
+      });
+    } catch (_) {}
   }
 
   void _loadCategories() {
@@ -116,7 +144,6 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
     _barcodeController.dispose();
     _descriptionController.dispose();
     _wholesalePriceController.dispose();
-    _supplierController.dispose();
     _expiryDateController.dispose();
     super.dispose();
   }
@@ -129,6 +156,18 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
       final repo = ref.read(stockRepositoryProvider);
       final categoryId = _categoryIds[_selectedCategory];
       final isEditing = _isEditing;
+
+      // Convert expiry date from DD/MM/YYYY → YYYY-MM-DD for backend
+      String? expiryForApi;
+      final rawExpiry = _expiryDateController.text.trim();
+      if (rawExpiry.isNotEmpty) {
+        try {
+          final parsed = DateFormat('dd/MM/yyyy').parse(rawExpiry);
+          expiryForApi = DateFormat('yyyy-MM-dd').format(parsed);
+        } catch (_) {
+          expiryForApi = rawExpiry; // already in correct format
+        }
+      }
 
       final body = {
         'product_name': _nameController.text.trim(),
@@ -144,7 +183,8 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
         'description': _descriptionController.text.trim(),
         'is_taxable': _selectedTaxable == 'Yes' ? '1' : '0',
         'ecommerce_enabled': _selectedOnlineShop == 'Yes' ? '1' : '0',
-        'expiry_date': _expiryDateController.text.trim(),
+        if (expiryForApi != null && expiryForApi.isNotEmpty) 'expiry_date': expiryForApi,
+        if (_selectedSupplierId != null) 'supplier_id': _selectedSupplierId,
         if (isEditing) 'product_id': widget.product!['product_id']?.toString() ?? '',
       };
 
@@ -211,10 +251,8 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
   }
 
   void _addSupplier(String name) {
-    setState(() {
-      _suppliers.add(name);
-      _supplierController.text = name;
-    });
+    // After adding a supplier via the bottom sheet, reload to get its ID
+    _loadSuppliers();
   }
 
   Future<void> _openBarcodeScanner() async {
@@ -918,7 +956,10 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
 
   Widget _buildExpandableSupplierDropdown() {
     final isExpanded = _expandedOptions.contains(9);
-    final allOptions = [..._suppliers, _addNewSupplierValue];
+    final selectedName = _suppliersList
+        .where((s) => s['id'] == _selectedSupplierId)
+        .map((s) => s['name'] as String)
+        .firstOrNull ?? '';
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -959,7 +1000,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                       ),
                     ),
                   ),
-                  if (_supplierController.text.isNotEmpty)
+                  if (selectedName.isNotEmpty)
                     Flexible(
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -971,7 +1012,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          _supplierController.text,
+                          selectedName,
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.caption.copyWith(
                             color: AppColors.primary,
@@ -1002,12 +1043,10 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                 ? Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                     child: DropdownButtonFormField<String>(
-                      initialValue: _supplierController.text.isNotEmpty
-                          ? _supplierController.text
-                          : null,
+                      value: _selectedSupplierId,
                       isExpanded: true,
                       hint: Text(
-                        'Select supplier',
+                        _suppliersList.isEmpty ? 'Loading suppliers…' : 'Select supplier',
                         style: AppTypography.bodyMedium.copyWith(
                           color: AppColors.textHint,
                         ),
@@ -1047,38 +1086,23 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                         ),
                       ),
                       items: [
-                        ...allOptions.map((opt) {
-                          if (opt == _addNewSupplierValue) {
-                            return DropdownMenuItem(
-                              value: opt,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.add_rounded,
-                                    size: 18,
-                                    color: AppColors.primary,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Flexible(
-                                    child: Text(
-                                      'Add New Supplier',
-                                      style: AppTypography.bodyMedium.copyWith(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-                          return DropdownMenuItem(
-                            value: opt,
-                            child: Text(opt),
-                          );
-                        }),
+                        ..._suppliersList.map((s) => DropdownMenuItem(
+                          value: s['id'] as String,
+                          child: Text(s['name'] as String),
+                        )),
+                        DropdownMenuItem(
+                          value: _addNewSupplierValue,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.add_rounded, size: 18, color: AppColors.primary),
+                              const SizedBox(width: 8),
+                              Flexible(child: Text('Add New Supplier',
+                                style: AppTypography.bodyMedium.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
+                                overflow: TextOverflow.ellipsis)),
+                            ],
+                          ),
+                        ),
                       ],
                       onChanged: (v) {
                         if (v == _addNewSupplierValue) {
@@ -1087,9 +1111,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                             onSupplierAdded: _addSupplier,
                           );
                         } else {
-                          setState(() {
-                            _supplierController.text = v ?? '';
-                          });
+                          setState(() => _selectedSupplierId = v);
                         }
                       },
                     ),

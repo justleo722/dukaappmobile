@@ -81,14 +81,20 @@ class _ImportFromShopPageState extends ConsumerState<ImportFromShopPage> {
     });
   }
 
-  void _toggleAllSelection(List<Map<String, dynamic>> products) {
-    final allIndices = List.generate(products.length, (i) => i).toSet();
-    final allSelected = allIndices.every((i) => _selectedProducts.contains(i));
+  void _toggleAllSelection(List<Map<String, dynamic>> displayProducts) {
+    // Find the indices of the displayed products inside _allProducts.
+    final displayIndices = displayProducts
+        .map((p) => _allProducts.indexOf(p))
+        .where((i) => i >= 0)
+        .toSet();
+    final allSelected =
+        displayIndices.isNotEmpty &&
+        displayIndices.every((i) => _selectedProducts.contains(i));
     setState(() {
       if (allSelected) {
-        _selectedProducts.removeAll(allIndices);
+        _selectedProducts.removeAll(displayIndices);
       } else {
-        _selectedProducts.addAll(allIndices);
+        _selectedProducts.addAll(displayIndices);
       }
     });
   }
@@ -102,10 +108,11 @@ class _ImportFromShopPageState extends ConsumerState<ImportFromShopPage> {
     final shopId = _extractShopId(_selectedShop);
     if (shopId == null) return;
 
-    final displayProducts = _filteredProducts;
+    // _selectedProducts holds indices into _allProducts (not _filteredProducts)
+    // so selection survives search-query changes between tap and import.
     final productIds = _selectedProducts
-        .where((i) => i < displayProducts.length)
-        .map((i) => displayProducts[i]['product_id'])
+        .where((i) => i < _allProducts.length)
+        .map((i) => _allProducts[i]['product_id'])
         .where((id) => id != null)
         .toList();
 
@@ -332,9 +339,14 @@ class _ImportFromShopPageState extends ConsumerState<ImportFromShopPage> {
 
   Widget _buildProductCountLabel(int count) {
     final displayProducts = _filteredProducts;
-    final indices = List.generate(displayProducts.length, (i) => i).toSet();
+    // Use _allProducts indices for consistency with selection tracking.
+    final displayIndices = displayProducts
+        .map((p) => _allProducts.indexOf(p))
+        .where((i) => i >= 0)
+        .toSet();
     final allSelected =
-        indices.isNotEmpty && indices.every((i) => _selectedProducts.contains(i));
+        displayIndices.isNotEmpty &&
+        displayIndices.every((i) => _selectedProducts.contains(i));
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
@@ -345,7 +357,7 @@ class _ImportFromShopPageState extends ConsumerState<ImportFromShopPage> {
             height: 24,
             child: Checkbox(
               value: allSelected,
-              onChanged: indices.isEmpty
+              onChanged: displayIndices.isEmpty
                   ? null
                   : (_) => _toggleAllSelection(displayProducts),
               activeColor: AppColors.primary,
@@ -388,8 +400,10 @@ class _ImportFromShopPageState extends ConsumerState<ImportFromShopPage> {
 
   Widget _buildProductList(List<Map<String, dynamic>> products) {
     return Column(
-      children: List.generate(products.length, (index) {
-        final product = products[index];
+      children: products.map((product) {
+        // Use the index in _allProducts so selection survives search changes.
+        final allIndex = _allProducts.indexOf(product);
+        final isSelected = allIndex >= 0 && _selectedProducts.contains(allIndex);
         return ProductImportCard(
           productName: product['name'] as String? ?? '',
           barcode: product['barcode'] as String? ?? '',
@@ -397,11 +411,11 @@ class _ImportFromShopPageState extends ConsumerState<ImportFromShopPage> {
           sellingPrice: (product['sellingPrice'] ?? product['selling_price'] ?? 0.0).toDouble(),
           wholesalePrice: (product['wholesalePrice'] ?? product['wholesale_price'] ?? 0.0).toDouble(),
           stock: (product['stock'] ?? product['available'] ?? 0).toInt(),
-          isSelected: _selectedProducts.contains(index),
-          onTap: () => _toggleProductSelection(index),
-          onSelectionChanged: (_) => _toggleProductSelection(index),
+          isSelected: isSelected,
+          onTap: () { if (allIndex >= 0) _toggleProductSelection(allIndex); },
+          onSelectionChanged: (_) { if (allIndex >= 0) _toggleProductSelection(allIndex); },
         );
-      }),
+      }).toList(),
     );
   }
 

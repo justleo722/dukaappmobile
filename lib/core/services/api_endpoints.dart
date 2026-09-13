@@ -373,6 +373,11 @@ abstract final class ApiEndpoints {
   static String getMappedWalletCustomerSalesStatement(String customerId) =>
       '${ApiConfig.appApiBase}/get/getdata/wallet/customer-sales-statement?customer_id=$customerId';
 
+  /// GET products belonging to a specific (remote) shop — used by import-from-shop
+  /// and transfer flows. Requires [shopId] (not the session shop).
+  static String getMappedStockRemoteProducts(String shopId) =>
+      '${ApiConfig.appApiBase}/get/getdata/stock/remote-products?shop_id=$shopId';
+
   // ═══════════════════════════════════════════════════════════════════════════
   // POST  —  POST /api/v1/app/post/postdata/{key}
   // All write actions. Bearer token required unless noted.

@@ -14,7 +14,9 @@ class _LanguageSelectorState extends State<LanguageSelector> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 120),
+      child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: AppColors.background,
@@ -25,15 +27,33 @@ class _LanguageSelectorState extends State<LanguageSelector> {
         child: DropdownButton<String>(
           value: _selectedLanguage,
           isDense: true,
+          isExpanded: false,
           icon: const Icon(
             Icons.keyboard_arrow_down_rounded,
-            size: 18,
+            size: 16,
             color: AppColors.textSecondary,
           ),
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w500,
+            fontSize: 12,
           ),
+          selectedItemBuilder: (context) => [
+            'English',
+            'Swahili',
+          ].map((lang) => Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              lang,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
+              ),
+            ),
+          )).toList(),
           items: const [
             DropdownMenuItem(value: 'English', child: Text('English')),
             DropdownMenuItem(value: 'Swahili', child: Text('Swahili')),
@@ -47,6 +67,8 @@ class _LanguageSelectorState extends State<LanguageSelector> {
           },
         ),
       ),
+      ),
     );
   }
 }
+

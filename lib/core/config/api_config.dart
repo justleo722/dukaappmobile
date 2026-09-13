@@ -4,7 +4,10 @@ class ApiConfig {
   // ── Base URL ────────────────────────────────────────────────────────────────
   // Local dev  → http://192.168.0.107  (LAMPP on this machine, subfolder /dukaapp)
   // Production → https://dukaapp.net   (root, no subfolder)
-  static const String baseUrl = 'http://localhost';
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://192.168.0.107',
+  );
   static const String _subFolder = '/dukaapp';
   // static const String baseUrl = 'https://dukaapp.com';
   // static const String _subFolder = ''; // production: root

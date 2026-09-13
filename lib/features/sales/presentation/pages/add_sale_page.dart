@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/add_sale_item_tile.dart';
 import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 import 'package:dukaapp/features/customers/presentation/pages/add_customer_page.dart';
@@ -25,7 +26,6 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _discountController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
-  String? _selectedCustomer;
   String _selectedPaymentType = 'Cash';
   bool _isWholesale = false;
   bool get _isEditing => widget.existingSale != null;
@@ -33,8 +33,12 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   static const String _addNewCustomerValue = '__add_new_customer__';
   static const String _addNewPaymentValue = '__add_new_payment__';
 
-  // Customers loaded from backend; prefilled with Walk-in
-  List<String> _customers = ['Walk-in'];
+  // Customers loaded from backend: [{id, name}]; null id = Walk-in
+  List<Map<String, dynamic>> _customers = [
+    {'id': null, 'name': 'Walk-in'},
+  ];
+  // The selected customer_id (null = Walk-in)
+  String? _selectedCustomerId;
 
   final List<String> _paymentTypes = [
     'Cash',
@@ -56,8 +60,25 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   }
 
   Future<void> _loadCustomers() async {
-    // Customers will be fully loaded when the Customers module is connected.
-    // For now, Walk-in is the default — additional customers can be added inline.
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getCustomers();
+      final raw = res.data;
+      final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? raw['customers'] ?? []) : []);
+      if (!mounted) return;
+      setState(() {
+        _customers = [{'id': null, 'name': 'Walk-in'}];
+        for (final c in list) {
+          if (c is Map) {
+            final id = (c['customer_id'] ?? c['id'])?.toString();
+            final name = (c['customer_name'] ?? c['name'] ?? '').toString();
+            if (id != null && name.isNotEmpty) {
+              _customers.add({'id': id, 'name': name});
+            }
+          }
+        }
+      });
+    } catch (_) {}
   }
 
   void _loadExistingSale() {
@@ -71,7 +92,8 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
     } catch (_) {
       _selectedDate = DateTime.now();
     }
-    _selectedCustomer = sale['customer'] as String?;
+    // customer name from existing sale — we don't have the ID, leave as walk-in
+    // customer will be re-selectable when editing
     final paymentMethod = sale['paymentMethod'] as String? ?? 'Cash';
     if (_paymentTypes.contains(paymentMethod)) {
       _selectedPaymentType = paymentMethod;
@@ -262,13 +284,8 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
       ),
     );
     if (result != null && mounted) {
-      final name = result.name;
-      if (name.isNotEmpty) {
-        setState(() {
-          _customers.add(name);
-          _selectedCustomer = name;
-        });
-      }
+      // Reload customers to get the newly added one with its real ID
+      await _loadCustomers();
     }
   }
 
@@ -437,9 +454,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
       final body = {
         'items': itemStrings,
         'payment_mode': _selectedPaymentType,
-        'customer_id': _selectedCustomer != null && _selectedCustomer != 'Walk-in'
-            ? _selectedCustomer
-            : '',
+        'customer_id': _selectedCustomerId ?? '',
         'total_amount': _items.fold<double>(0, (s, i) {
           final price = (i['sellingPrice'] ?? 0.0) as double;
           final qty = (i['quantity'] ?? 1) as int;
@@ -658,7 +673,8 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   }
 
   Widget _buildCustomerDropdown() {
-    final allOptions = [..._customers, _addNewCustomerValue];
+    // Value is customer_id string (null = Walk-in, sentinel = add new)
+    final dropdownValue = _selectedCustomerId; // null = Walk-in selected
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -669,85 +685,43 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          initialValue: _selectedCustomer,
+          value: dropdownValue,
           isExpanded: true,
           hint: Text(
-            'Select Customer',
-            style: AppTypography.bodyMedium.copyWith(
-              color: AppColors.textHint,
-            ),
+            'Walk-in',
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
           ),
-          icon: const Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: AppColors.textHint,
-          ),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textHint),
           style: AppTypography.bodyMedium,
           decoration: InputDecoration(
             filled: true,
             fillColor: AppColors.card,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
-              ),
-              borderSide: const BorderSide(color: AppColors.inputBorder),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
-              ),
-              borderSide: const BorderSide(color: AppColors.inputBorder),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
-              ),
-              borderSide: const BorderSide(
-                color: AppColors.inputFocusBorder,
-                width: 1.5,
-              ),
-            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConstants.textFieldRadius), borderSide: const BorderSide(color: AppColors.inputBorder)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConstants.textFieldRadius), borderSide: const BorderSide(color: AppColors.inputBorder)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConstants.textFieldRadius), borderSide: const BorderSide(color: AppColors.inputFocusBorder, width: 1.5)),
           ),
-          items: allOptions.map((customer) {
-            if (customer == _addNewCustomerValue) {
-              return DropdownMenuItem(
-                value: customer,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.add_rounded,
-                      size: 18,
-                      color: AppColors.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        'Add New Customer',
-                        style: AppTypography.bodyMedium.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-            return DropdownMenuItem(
-              value: customer,
-              child: Text(customer),
-            );
-          }).toList(),
+          items: [
+            ..._customers.map((c) => DropdownMenuItem<String>(
+              value: c['id'] as String?,
+              child: Text(c['name'] as String),
+            )),
+            DropdownMenuItem<String>(
+              value: _addNewCustomerValue,
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.add_rounded, size: 18, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Flexible(child: Text('Add New Customer',
+                  style: AppTypography.bodyMedium.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis)),
+              ]),
+            ),
+          ],
           onChanged: (value) {
             if (value == _addNewCustomerValue) {
               _showAddNewCustomerSheet();
             } else {
-              setState(() => _selectedCustomer = value);
+              setState(() => _selectedCustomerId = value);
             }
           },
         ),

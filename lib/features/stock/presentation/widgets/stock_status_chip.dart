@@ -9,6 +9,8 @@ class StockStatusChip extends StatelessWidget {
   final Color color;
   final Color backgroundColor;
   final VoidCallback? onTap;
+  /// Whether this chip is the currently-active filter.
+  final bool isSelected;
 
   const StockStatusChip({
     super.key,
@@ -18,6 +20,7 @@ class StockStatusChip extends StatelessWidget {
     required this.color,
     required this.backgroundColor,
     this.onTap,
+    this.isSelected = false,
   });
 
   @override
@@ -29,11 +32,11 @@ class StockStatusChip extends StatelessWidget {
         curve: Curves.easeInOut,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: backgroundColor,
+          color: isSelected ? color.withValues(alpha: 0.12) : backgroundColor,
           borderRadius: BorderRadius.circular(AppConstants.radiusFull),
           border: Border.all(
-            color: color.withValues(alpha: 0.2),
-            width: 1,
+            color: isSelected ? color : color.withValues(alpha: 0.2),
+            width: isSelected ? 1.5 : 1,
           ),
         ),
         child: Row(
@@ -54,7 +57,7 @@ class StockStatusChip extends StatelessWidget {
               label,
               style: AppTypography.caption.copyWith(
                 color: color,
-                fontWeight: FontWeight.w500,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 fontSize: 11,
               ),
             ),
