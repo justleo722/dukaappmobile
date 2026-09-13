@@ -107,6 +107,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       return;
     }
 
+    if (password.length < 6) {
+      _showSnackBar('Password must be at least 6 characters.');
+      return;
+    }
+
     if (password != confirmPassword) {
       _showSnackBar('Passwords do not match.');
       return;
