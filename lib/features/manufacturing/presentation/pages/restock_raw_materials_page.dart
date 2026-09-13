@@ -5,6 +5,7 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/core/services/api_service.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_information_card.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_product_card.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_summary_card.dart';

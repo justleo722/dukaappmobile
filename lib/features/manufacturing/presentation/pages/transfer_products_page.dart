@@ -5,6 +5,7 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/core/services/api_service.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/transfer_shop_dropdown.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/transfer_product_card.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/transfer_summary_card.dart';

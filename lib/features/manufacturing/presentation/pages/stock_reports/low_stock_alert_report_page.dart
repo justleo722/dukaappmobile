@@ -12,6 +12,7 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/core/services/api_service.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _LowStockItem {
