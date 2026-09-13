@@ -6,9 +6,16 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/staff/presentation/providers/staff_provider.dart';
 
+/// A permission entry: [key] is the DB column name, [label] is the display name.
+class _Permission {
+  final String key;
+  final String label;
+  const _Permission(this.key, this.label);
+}
+
 class _PermissionGroup {
   final String title;
-  final List<String> permissions;
+  final List<_Permission> permissions;
   const _PermissionGroup({required this.title, required this.permissions});
 }
 
@@ -23,54 +30,79 @@ class ManagePermissionsPage extends ConsumerStatefulWidget {
 class _ManagePermissionsPageState extends ConsumerState<ManagePermissionsPage> {
   static const List<_PermissionGroup> _groups = [
     _PermissionGroup(title: 'Management', permissions: [
-      'Can Delete Record', 'Can edit profile', 'Can edit password',
-      'Can manage sales & Receipt', 'Can manage stock setup', 'Can add attendants',
-      'Can manage profit expenses & Cashflow', 'Can manage purchases',
+      _Permission('can_delete_record',              'Can Delete Record'),
+      _Permission('can_edit_profile',               'Can edit profile'),
+      _Permission('can_edit_password',              'Can edit password'),
+      _Permission('can_manage_sales_receipt',       'Can manage sales & Receipt'),
+      _Permission('can_manage_stock_setup',         'Can manage stock setup'),
+      _Permission('can_add_attendants',             'Can add attendants'),
+      _Permission('can_manage_profit_expenses_cashflow', 'Can manage profit expenses & Cashflow'),
+      _Permission('can_manage_purchases',           'Can manage purchases'),
     ]),
     _PermissionGroup(title: 'Sales & Receipt', permissions: [
-      'Can make Sales', 'Can Create Invoice', 'Can manage orders', 'Can pay orders',
-      'Can view sales reports', 'Can view and manage customers', 'Can Print Receipt',
-      'Can enable sales commission',
+      _Permission('can_make_sales',         'Can make Sales'),
+      _Permission('can_make_invoice',       'Can Create Invoice'),
+      _Permission('can_manage_orders',      'Can manage orders'),
+      _Permission('can_pay_orders',         'Can pay orders'),
+      _Permission('can_view_sales',         'Can view sales reports'),
+      _Permission('can_manage_customers',   'Can view and manage customers'),
+      _Permission('can_print_receipt',      'Can Print Receipt'),
+      _Permission('can_enable_commission',  'Can enable sales commission'),
     ]),
     _PermissionGroup(title: 'Stock Setup', permissions: [
-      'Can add new products', 'Can edit stock items', 'Can view stock balance list',
-      'Can count and update stock', 'Can add stock‑ins', 'Can manage suppliers',
-      'Can record bad stock', 'Can view profit estimate', 'Can view stock value', 'Can view loss',
+      _Permission('can_add_product',          'Can add new products'),
+      _Permission('can_edit_stock',           'Can edit stock items'),
+      _Permission('can_view_stock_balance',   'Can view stock balance list'),
+      _Permission('can_count_stock',          'Can count and update stock'),
+      _Permission('can_add_stockin',          'Can add stock-ins'),
+      _Permission('can_view_suppliers',       'Can manage suppliers'),
+      _Permission('can_add_bad_stock',        'Can record bad stock'),
+      _Permission('can_view_profit_estimate', 'Can view profit estimate'),
+      _Permission('can_view_stock_value',     'Can view stock value'),
+      _Permission('can_view_loss',            'Can view loss'),
     ]),
     _PermissionGroup(title: 'Stock Reports', permissions: [
-      'Can view reports',
+      _Permission('can_view_reports', 'Can view reports'),
     ]),
     _PermissionGroup(title: 'Profit Expense & Cashflow', permissions: [
-      'Can View Profit', 'Can add expenses', 'Can view cash‑in records',
-      'Can view cash‑out records', 'Can view Accounts & cash flow report',
-      'Can view profit and loss report',
+      _Permission('can_view_profit',        'Can View Profit'),
+      _Permission('can_add_expense',        'Can add expenses'),
+      _Permission('can_view_cashin',        'Can view cash-in records'),
+      _Permission('can_view_cashout',       'Can view cash-out records'),
+      _Permission('can_manage_cashflow',    'Can view Accounts & cash flow report'),
+      _Permission('can_view_profit_report', 'Can view profit and loss report'),
     ]),
     _PermissionGroup(title: 'SMS', permissions: [
-      'Can send SMS', 'Can set SMS sender ID', 'Can add contact',
+      _Permission('can_send_sms',     'Can send SMS'),
+      _Permission('can_set_senderid', 'Can set SMS sender ID'),
+      _Permission('can_add_contact',  'Can add contact'),
     ]),
     _PermissionGroup(title: 'Email', permissions: [
-      'Can send Email',
+      _Permission('can_send_email', 'Can send Email'),
     ]),
     _PermissionGroup(title: 'Campaign', permissions: [
-      'Can add contact category',
+      _Permission('can_add_contact_category', 'Can add contact category'),
     ]),
     _PermissionGroup(title: 'Other', permissions: [
-      'Can View Dashboard Summary', 'Can give discounts', 'Can edit daily entries',
-      'Can delete daily entries', 'Can backdate entries', 'Can return stock',
-      'Can generate barcodes', 'Can preview receipts before printing', 'Can manage warehouse',
+      _Permission('can_view_dashboard_summary', 'Can View Dashboard Summary'),
+      _Permission('can_give_discount',          'Can give discounts'),
+      _Permission('can_edit_entry',             'Can edit daily entries'),
+      _Permission('can_delete_entry',           'Can delete daily entries'),
+      _Permission('can_backdate_entry',         'Can backdate entries'),
+      _Permission('can_return_stock',           'Can return stock'),
+      _Permission('can_generate_barcode',       'Can generate barcodes'),
+      _Permission('can_preview_receipt',        'Can preview receipts before printing'),
+      _Permission('can_manage_warehouse',       'Can manage warehouse'),
     ]),
     _PermissionGroup(title: 'Manufacturing', permissions: [
-      'Can manage manufacturing module',
+      _Permission('can_manage_manufacturing', 'Can manage manufacturing module'),
     ]),
     _PermissionGroup(title: 'Online Shop', permissions: [
-      'Can manage online shop module',
-    ]),
-    _PermissionGroup(title: 'Display', permissions: [
-      'Enable Category Mode', 'Enable Customer Mode', 'Enable Team Mode',
-      'Enable Non‑staff Mode', 'List order items',
+      _Permission('can_manage_onlineshop', 'Can manage online shop module'),
     ]),
   ];
 
+  /// Map<dbColumnKey, enabled>
   late Map<String, bool> _permissionValues;
 
   @override
@@ -79,7 +111,7 @@ class _ManagePermissionsPageState extends ConsumerState<ManagePermissionsPage> {
     _permissionValues = {};
     for (final group in _groups) {
       for (final p in group.permissions) {
-        _permissionValues[p] = false;
+        _permissionValues[p.key] = false;
       }
     }
   }
@@ -149,13 +181,13 @@ class _ManagePermissionsPageState extends ConsumerState<ManagePermissionsPage> {
     );
   }
 
-  Widget _buildPermissionTile(String permission) {
+  Widget _buildPermissionTile(_Permission permission) {
     return Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Column(children: [
       Row(children: [
-        Expanded(child: Text(permission, style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary, fontSize: 13))),
+        Expanded(child: Text(permission.label, style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary, fontSize: 13))),
         Switch(
-          value: _permissionValues[permission] ?? false,
-          onChanged: (v) => setState(() => _permissionValues[permission] = v),
+          value: _permissionValues[permission.key] ?? false,
+          onChanged: (v) => setState(() => _permissionValues[permission.key] = v),
           activeThumbColor: AppColors.primary,
         ),
       ]),
@@ -169,15 +201,20 @@ class _ManagePermissionsPageState extends ConsumerState<ManagePermissionsPage> {
       decoration: const BoxDecoration(color: AppColors.card, border: Border(top: BorderSide(color: AppColors.divider, width: 1))),
       child: SizedBox(width: double.infinity, height: AppConstants.buttonHeight, child: ElevatedButton.icon(
         onPressed: () async {
-          try {
-            final repo = ref.read(staffRepositoryProvider);
-            final perms = _permissionValues.entries.where((e) => e.value).map((e) => e.key).toList();
-            await repo.updatePermission({
-              if (widget.roleId != null) 'role_id': widget.roleId,
-              'permissions': perms.join(','),
-            });
-            if (!mounted) return;
-          } catch (_) {}
+          if (widget.roleId != null) {
+            try {
+              final repo = ref.read(staffRepositoryProvider);
+              // Backend expects one call per permission: {role_id, col, status}
+              for (final entry in _permissionValues.entries) {
+                await repo.updatePermission({
+                  'role_id': widget.roleId,
+                  'col': entry.key,
+                  'status': entry.value ? '1' : '0',
+                });
+              }
+            } catch (_) {}
+          }
+          if (!mounted) return;
           context.pop();
         },
         icon: const Icon(Icons.check_rounded, size: 18, color: AppColors.textWhite),

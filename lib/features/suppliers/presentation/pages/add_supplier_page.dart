@@ -58,10 +58,10 @@ class _AddSupplierPageState extends ConsumerState<AddSupplierPage> {
     try {
       final repo = ref.read(supplierRepositoryProvider);
       await repo.addSupplier({
-        'name': _nameController.text.trim(),
+        'supplier_name': _nameController.text.trim(),  // backend reads supplier_name
         'phone': _phoneController.text.trim(),
         if (_emailController.text.trim().isNotEmpty) 'email': _emailController.text.trim(),
-        if (_companyController.text.trim().isNotEmpty) 'company': _companyController.text.trim(),
+        if (_companyController.text.trim().isNotEmpty) 'company_name': _companyController.text.trim(),
         if (_addressController.text.trim().isNotEmpty) 'address': _addressController.text.trim(),
         if (_tinController.text.trim().isNotEmpty) 'tin': _tinController.text.trim(),
       });

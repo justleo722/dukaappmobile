@@ -10,6 +10,7 @@ import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/features/accounts/data/models/cashflow_models.dart';
 import 'package:dukaapp/features/accounts/presentation/providers/cashflow_provider.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class AccountsCashflowPage extends ConsumerStatefulWidget {
   const AccountsCashflowPage({super.key});
@@ -24,11 +25,29 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
   List<CashflowItem> _allItems = [];
   CashflowSummary? _summary;
   bool _isLoading = false;
+  // Payment accounts for from/to selectors in dialogs
+  List<Map<String, dynamic>> _accounts = [];
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCashflow());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadCashflow();
+      await _loadAccounts();
+    });
+  }
+
+  Future<void> _loadAccounts() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getPaymentMode();
+      final data = res.data;
+      final list = data is List ? data : (data is Map ? (data['data'] ?? []) : []);
+      if (!mounted) return;
+      setState(() {
+        _accounts = (list as List).whereType<Map<String, dynamic>>().toList();
+      });
+    } catch (_) {}
   }
 
   Future<void> _loadCashflow({String? from, String? to}) async {
@@ -109,11 +128,13 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
   }
 
   void _showAddCashInDialog() {
-    String? selectedCategory;
-    final statusController = TextEditingController();
+    String? selectedFromAccountId;
+    String? selectedToAccountId;
+    final titleController = TextEditingController();
     final amountController = TextEditingController();
     DateTime selectedDate = DateTime.now();
     final categories = ['Capital', 'Loan', 'Balancing'];
+    String? selectedCategory;
 
     showModalBottomSheet(
       context: context,
@@ -144,13 +165,21 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      _fieldLabel('Title'),
+                      const SizedBox(height: 6),
+                      _buildTextInput(titleController, 'e.g. Capital injection'),
+                      const SizedBox(height: 16),
                       _fieldLabel('Category'),
                       const SizedBox(height: 6),
                       _buildDropdown(ctx, setDialogState, selectedCategory, categories, (v) { setDialogState(() => selectedCategory = v); }),
                       const SizedBox(height: 16),
-                      _fieldLabel('Note'),
+                      _fieldLabel('From Account (source)'),
                       const SizedBox(height: 6),
-                      _buildTextInput(statusController, 'e.g. Capital injection'),
+                      _buildAccountDropdown(ctx, setDialogState, selectedFromAccountId, (v) { setDialogState(() => selectedFromAccountId = v); }),
+                      const SizedBox(height: 16),
+                      _fieldLabel('To Account (destination)'),
+                      const SizedBox(height: 6),
+                      _buildAccountDropdown(ctx, setDialogState, selectedToAccountId, (v) { setDialogState(() => selectedToAccountId = v); }),
                       const SizedBox(height: 16),
                       _fieldLabel('Amount'),
                       const SizedBox(height: 6),
@@ -165,18 +194,26 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
               ),
               _buildDialogActions(ctx, () async {
                 final amount = double.tryParse(amountController.text) ?? 0;
-                if (amount <= 0) return;
+                final title = titleController.text.trim();
+                if (amount <= 0 || title.isEmpty || selectedFromAccountId == null || selectedToAccountId == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fill all fields and select both accounts')));
+                  return;
+                }
                 Navigator.pop(ctx);
                 try {
                   final repo = ref.read(cashflowRepositoryProvider);
                   await repo.addFund({
-                    'title': statusController.text.isNotEmpty ? statusController.text : (selectedCategory ?? 'Fund'),
+                    'type': 'cashin',
+                    'title': title,
                     'amount': amount,
+                    'from_account_id': selectedFromAccountId,
+                    'to_account_id': selectedToAccountId,
                     'record_date': DateFormat('yyyy-MM-dd').format(selectedDate),
                     if (selectedCategory != null) 'category': selectedCategory,
                   });
                   if (!mounted) return;
                   await _loadCashflow();
+                  if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Cash In recorded', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)), backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))),
                   );
@@ -194,7 +231,9 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
 
   void _showAddCashOutDialog() {
     String? selectedCategory;
-    final statusController = TextEditingController();
+    String? selectedFromAccountId;
+    String? selectedToAccountId;
+    final titleController = TextEditingController();
     final amountController = TextEditingController();
     DateTime selectedDate = DateTime.now();
     final categories = ['To Bank', 'To Personal Use', 'Other'];
@@ -205,7 +244,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => Container(
-          height: MediaQuery.of(ctx).size.height * 0.7,
+          height: MediaQuery.of(ctx).size.height * 0.85,
           decoration: const BoxDecoration(
             color: AppColors.card,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -228,13 +267,21 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      _fieldLabel('Title'),
+                      const SizedBox(height: 6),
+                      _buildTextInput(titleController, 'e.g. Rent payment'),
+                      const SizedBox(height: 16),
                       _fieldLabel('Category'),
                       const SizedBox(height: 6),
                       _buildDropdown(ctx, setDialogState, selectedCategory, categories, (v) { setDialogState(() => selectedCategory = v); }),
                       const SizedBox(height: 16),
-                      _fieldLabel('Note'),
+                      _fieldLabel('From Account (source)'),
                       const SizedBox(height: 6),
-                      _buildTextInput(statusController, 'e.g. Rent payment'),
+                      _buildAccountDropdown(ctx, setDialogState, selectedFromAccountId, (v) { setDialogState(() => selectedFromAccountId = v); }),
+                      const SizedBox(height: 16),
+                      _fieldLabel('To Account (destination)'),
+                      const SizedBox(height: 6),
+                      _buildAccountDropdown(ctx, setDialogState, selectedToAccountId, (v) { setDialogState(() => selectedToAccountId = v); }),
                       const SizedBox(height: 16),
                       _fieldLabel('Amount'),
                       const SizedBox(height: 6),
@@ -249,18 +296,26 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
               ),
               _buildDialogActions(ctx, () async {
                 final amount = double.tryParse(amountController.text) ?? 0;
-                if (amount <= 0) return;
+                final title = titleController.text.trim();
+                if (amount <= 0 || title.isEmpty || selectedFromAccountId == null || selectedToAccountId == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fill all fields and select both accounts')));
+                  return;
+                }
                 Navigator.pop(ctx);
                 try {
                   final repo = ref.read(cashflowRepositoryProvider);
-                  await repo.addExpense({
-                    'title': statusController.text.isNotEmpty ? statusController.text : (selectedCategory ?? 'Expense'),
+                  await repo.addFund({
+                    'type': 'cashout',
+                    'title': title,
                     'amount': amount,
+                    'from_account_id': selectedFromAccountId,
+                    'to_account_id': selectedToAccountId,
                     'record_date': DateFormat('yyyy-MM-dd').format(selectedDate),
-                    if (selectedCategory != null) 'note': selectedCategory,
+                    if (selectedCategory != null) 'category': selectedCategory,
                   });
                   if (!mounted) return;
                   await _loadCashflow();
+                  if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Cash Out recorded', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)), backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))),
                   );
@@ -268,7 +323,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.danger));
                 }
-              }, AppColors.primary, 'Save'),
+              }, AppColors.danger, 'Save'),
             ],
           ),
         ),
@@ -291,6 +346,27 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
           hint: Text('Select\u2026', style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint)),
           isExpanded: true,
           items: items.map((c) => DropdownMenuItem(value: c, child: Text(c, style: AppTypography.bodyMedium))).toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAccountDropdown(BuildContext ctx, StateSetter setDialogState, String? value, ValueChanged<String?> onChanged) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(border: Border.all(color: AppColors.inputBorder), borderRadius: BorderRadius.circular(AppConstants.textFieldRadius)),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          hint: Text(_accounts.isEmpty ? 'Loading accounts…' : 'Select account…', style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint)),
+          isExpanded: true,
+          items: _accounts.map((a) {
+            final id = (a['payment_mode_id'] ?? a['id'] ?? '').toString();
+            final name = (a['payment_mode_name'] ?? a['name'] ?? id).toString();
+            return DropdownMenuItem(value: id, child: Text(name, style: AppTypography.bodyMedium));
+          }).toList(),
           onChanged: onChanged,
         ),
       ),
