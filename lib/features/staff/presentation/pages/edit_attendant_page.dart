@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/staff/presentation/providers/staff_provider.dart';
 
 class EditAttendantPage extends ConsumerStatefulWidget {
@@ -12,8 +13,17 @@ class EditAttendantPage extends ConsumerStatefulWidget {
   final String role;
   final List<String> shops;
   final String? roleId;
+  final bool isManager;
 
-  const EditAttendantPage({super.key, required this.name, required this.phone, required this.role, this.shops = const [], this.roleId});
+  const EditAttendantPage({
+    super.key,
+    required this.name,
+    required this.phone,
+    required this.role,
+    this.shops = const [],
+    this.roleId,
+    this.isManager = false,
+  });
 
   @override
   ConsumerState<EditAttendantPage> createState() => _EditAttendantPageState();
@@ -26,12 +36,14 @@ class _EditAttendantPageState extends ConsumerState<EditAttendantPage> {
   final _passwordController = TextEditingController();
   late final TextEditingController _roleController;
   bool _obscurePassword = true;
+  bool _isSaving = false;
 
   String? _selectedAccessLevel;
-  late final Set<String> _selectedShops;
+  List<Map<String, dynamic>> _availableShops = [];
+  final Set<String> _selectedShopIds = {};
+  bool _loadingShops = true;
 
   static const List<String> _accessLevels = ['Attendant Access', 'Manager Access'];
-  static const List<String> _shops = ['SON COLLECTION', 'DUKA SMART', 'FASHION HOUSE'];
 
   @override
   void initState() {
@@ -39,7 +51,37 @@ class _EditAttendantPageState extends ConsumerState<EditAttendantPage> {
     _nameController = TextEditingController(text: widget.name);
     _phoneController = TextEditingController(text: widget.phone);
     _roleController = TextEditingController(text: widget.role);
-    _selectedShops = Set<String>.from(widget.shops);
+    _selectedAccessLevel = widget.isManager ? 'Manager Access' : 'Attendant Access';
+    // pre-populate shops if passed
+    _selectedShopIds.addAll(widget.shops);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadShops());
+  }
+
+  Future<void> _loadShops() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getMyShops();
+      final raw = res.data;
+      List<dynamic> list = [];
+      if (raw is List) {
+        list = raw;
+      } else if (raw is Map) {
+        final d = raw['data'] ?? raw['shops'] ?? raw['result'] ?? [];
+        if (d is List) list = d;
+      }
+      if (!mounted) return;
+      setState(() {
+        _availableShops = list.whereType<Map<String, dynamic>>().toList();
+        _loadingShops = false;
+        // pre-select current shop if none selected yet
+        if (_selectedShopIds.isEmpty && _availableShops.length == 1) {
+          final id = (_availableShops.first['shop_id'] ?? '').toString();
+          if (id.isNotEmpty) _selectedShopIds.add(id);
+        }
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingShops = false);
+    }
   }
 
   @override
@@ -72,15 +114,13 @@ class _EditAttendantPageState extends ConsumerState<EditAttendantPage> {
             _buildPasswordField(),
             const SizedBox(height: 16),
             _buildSection('Role Title'),
-            _buildTextField(_roleController, 'Enter role title', TextInputType.text),
+            _buildTextField(_roleController, 'e.g. Cashier, Salesperson', TextInputType.text),
             const SizedBox(height: 16),
             _buildSection('Access Level'),
             _buildDropdown(_accessLevels, _selectedAccessLevel, (v) => setState(() => _selectedAccessLevel = v)),
             const SizedBox(height: 16),
-            _buildSection('Shop to Manage'),
-            _buildShopCheckboxes(),
-            const SizedBox(height: 20),
-            _buildPermissionsButton(context),
+            _buildSection('Shop(s) to Manage'),
+            _buildShopSelector(),
             const SizedBox(height: 30),
             _buildActionButtons(context),
           ]),
@@ -123,7 +163,7 @@ class _EditAttendantPageState extends ConsumerState<EditAttendantPage> {
   Widget _buildPasswordField() {
     return Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG, vertical: 6), child: TextField(
       controller: _passwordController, obscureText: _obscurePassword, style: AppTypography.bodyMedium,
-      decoration: InputDecoration(hintText: 'Enter new password (leave blank to keep current)', hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint, fontSize: 13),
+      decoration: InputDecoration(hintText: 'New password (leave blank to keep current)', hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint, fontSize: 13),
         filled: true, fillColor: AppColors.card, contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         suffixIcon: IconButton(onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
           icon: Icon(_obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: AppColors.textHint, size: 20)),
@@ -150,22 +190,30 @@ class _EditAttendantPageState extends ConsumerState<EditAttendantPage> {
     ));
   }
 
-  Widget _buildShopCheckboxes() {
+  Widget _buildShopSelector() {
     return Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG, vertical: 6), child: GestureDetector(
-      onTap: _showShopPicker,
+      onTap: _loadingShops ? null : _showShopPicker,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(border: Border.all(color: AppColors.inputBorder, width: 1.5),
           borderRadius: BorderRadius.circular(AppConstants.textFieldRadius), color: AppColors.card),
         child: Row(children: [
-          Expanded(child: _selectedShops.isEmpty
-            ? Text('Select shops…', style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint))
-            : Wrap(spacing: 6, runSpacing: 4, children: _selectedShops.map((s) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
-                child: Text(s, style: AppTypography.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
-              )).toList()),
+          Expanded(child: _loadingShops
+            ? Text('Loading shops…', style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint))
+            : _selectedShopIds.isEmpty
+              ? Text('Select shops…', style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint))
+              : Wrap(spacing: 6, runSpacing: 4, children: _selectedShopIds.map((id) {
+                  final shop = _availableShops.firstWhere(
+                    (s) => s['shop_id'].toString() == id,
+                    orElse: () => {'shop_name': id},
+                  );
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+                    child: Text(shop['shop_name']?.toString() ?? id, style: AppTypography.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                  );
+                }).toList()),
           ),
           Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textHint, size: 20),
         ]),
@@ -174,7 +222,7 @@ class _EditAttendantPageState extends ConsumerState<EditAttendantPage> {
   }
 
   void _showShopPicker() {
-    final tempSelected = Set<String>.from(_selectedShops);
+    final tempSelected = Set<String>.from(_selectedShopIds);
     showModalBottomSheet(
       context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
@@ -185,80 +233,112 @@ class _EditAttendantPageState extends ConsumerState<EditAttendantPage> {
             Container(width: 40, height: 4, margin: const EdgeInsets.only(top: 12), decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
             Padding(padding: const EdgeInsets.fromLTRB(20, 16, 20, 0), child: Row(children: [
               Expanded(child: Text('Select Shops', style: AppTypography.h6.copyWith(fontWeight: FontWeight.w700))),
-              TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Done', style: AppTypography.bodyMedium.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600))),
+              TextButton(onPressed: () { Navigator.pop(ctx); setState(() { _selectedShopIds.clear(); _selectedShopIds.addAll(tempSelected); }); },
+                child: Text('Done', style: AppTypography.bodyMedium.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600))),
             ])),
             const Divider(height: 1),
-            Expanded(child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: _shops.length,
-              itemBuilder: (ctx, i) {
-                final shop = _shops[i];
-                final isSelected = tempSelected.contains(shop);
-                return CheckboxListTile(
-                  value: isSelected,
-                  onChanged: (v) => setModalState(() {
-                    if (v == true) { tempSelected.add(shop); } else { tempSelected.remove(shop); }
-                  }),
-                  title: Text(shop, style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary)),
-                  activeColor: AppColors.primary,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                );
-              },
-            )),
+            Expanded(child: _availableShops.isEmpty
+              ? Center(child: Text('No shops found', style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint)))
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: _availableShops.length,
+                  itemBuilder: (ctx, i) {
+                    final shop = _availableShops[i];
+                    final id = (shop['shop_id'] ?? '').toString();
+                    final name = (shop['shop_name'] ?? shop['name'] ?? id).toString();
+                    final isSelected = tempSelected.contains(id);
+                    return CheckboxListTile(
+                      value: isSelected,
+                      onChanged: (v) => setModalState(() {
+                        if (v == true) { tempSelected.add(id); } else { tempSelected.remove(id); }
+                      }),
+                      title: Text(name, style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary)),
+                      activeColor: AppColors.primary,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                    );
+                  },
+                )),
           ]),
         ),
       ),
-    ).then((_) { _selectedShops.clear(); _selectedShops.addAll(tempSelected); setState(() {}); });
-  }
-
-  Widget _buildPermissionsButton(BuildContext context) {
-    return Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG), child: SizedBox(
-      width: double.infinity, height: AppConstants.buttonHeightSM,
-      child: OutlinedButton.icon(
-        onPressed: () => context.push('/staff/permissions'),
-        icon: Icon(Icons.security_rounded, size: 18, color: AppColors.primary),
-        label: Text('Manage Permissions', style: AppTypography.bodyMedium.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
-        style: OutlinedButton.styleFrom(side: BorderSide(color: AppColors.primary, width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD))),
-      ),
-    ));
+    );
   }
 
   Widget _buildActionButtons(BuildContext context) {
     return Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG), child: Row(children: [
       Expanded(child: SizedBox(height: AppConstants.buttonHeight, child: OutlinedButton(
-        onPressed: () => context.pop(),
+        onPressed: _isSaving ? null : () => context.pop(),
         style: OutlinedButton.styleFrom(foregroundColor: AppColors.textSecondary, side: const BorderSide(color: AppColors.border, width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD))),
         child: Text('Cancel', style: AppTypography.buttonLarge.copyWith(color: AppColors.textSecondary)),
       ))),
       const SizedBox(width: 12),
       Expanded(flex: 2, child: SizedBox(height: AppConstants.buttonHeight, child: ElevatedButton.icon(
-        onPressed: () async {
-          if (!(_formKey.currentState?.validate() ?? false)) return;
-          try {
-            final repo = ref.read(staffRepositoryProvider);
-            await repo.updateMember({
-              if (widget.roleId != null) 'role_id': widget.roleId,
-              'username': _nameController.text.trim(),
-              'phone': _phoneController.text.trim(),
-              'role': _roleController.text.trim(),
-              if (_passwordController.text.isNotEmpty) 'password': _passwordController.text,
-            });
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Attendant updated'), backgroundColor: Colors.green));
-            context.pop();
-          } catch (e) {
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red));
-          }
-        },
-        icon: const Icon(Icons.check_rounded, size: 18, color: AppColors.textWhite),
+        onPressed: _isSaving ? null : _save,
+        icon: _isSaving
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: AppColors.textWhite, strokeWidth: 2))
+          : const Icon(Icons.check_rounded, size: 18, color: AppColors.textWhite),
         label: Text('Update Attendant', style: AppTypography.buttonLarge.copyWith(color: AppColors.textWhite)),
         style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD))),
       ))),
     ]));
+  }
+
+  Future<void> _save() async {
+    final name = _nameController.text.trim();
+    final phone = _phoneController.text.trim();
+    final staffRole = _roleController.text.trim();
+
+    if (name.isEmpty) { _snack('Enter full name', AppColors.warning); return; }
+    if (phone.isEmpty) { _snack('Enter phone number', AppColors.warning); return; }
+    if (_selectedShopIds.isEmpty) { _snack('Select at least one shop', AppColors.warning); return; }
+
+    setState(() => _isSaving = true);
+    try {
+      final repo = ref.read(staffRepositoryProvider);
+      final isManager = _selectedAccessLevel == 'Manager Access';
+
+      final body = <String, dynamic>{
+        if (widget.roleId != null) 'role_id': widget.roleId,
+        'username': name,
+        'phone': phone,
+        'staff_role': staffRole.isEmpty ? 'Normal Attendant' : staffRole,
+        'is_manager': isManager ? '1' : '0',
+        'shops_submitted': '1',
+        for (int i = 0; i < _selectedShopIds.length; i++)
+          'shops[$i]': _selectedShopIds.elementAt(i),
+      };
+
+      if (_passwordController.text.isNotEmpty) {
+        body['password'] = _passwordController.text;
+      }
+
+      final res = await repo.updateMember(body);
+      if (!mounted) return;
+      final status = res['status']?.toString() ?? '';
+      final message = res['message']?.toString() ?? 'Done';
+      if (status == 'success') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating),
+        );
+        context.pop();
+      } else {
+        _snack(message, AppColors.danger);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _snack('Failed: $e', AppColors.danger);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  void _snack(String msg, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))),
+    );
   }
 }

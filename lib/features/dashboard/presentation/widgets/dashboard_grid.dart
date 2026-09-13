@@ -41,6 +41,9 @@ class DashboardGrid extends StatelessWidget {
       case 'Renew':
         context.push('/renew');
         break;
+      case 'TMS Loans':
+        context.push('/tms');
+        break;
       default:
         break;
     }

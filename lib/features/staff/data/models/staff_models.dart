@@ -8,6 +8,8 @@ class Attendant {
   final bool isManager;
   final String status;     // 'active' | 'inactive'
   final String? attendantId;
+  final String? shopId;
+  final String staffRole;
 
   const Attendant({
     required this.roleId,
@@ -18,6 +20,8 @@ class Attendant {
     required this.isManager,
     required this.status,
     this.attendantId,
+    this.shopId,
+    this.staffRole = 'Normal Attendant',
   });
 
   bool get isActive => status == 'active' || status == '1';
@@ -32,6 +36,8 @@ class Attendant {
       isManager: (j['is_manager'] == 1 || j['is_manager'] == true || j['is_manager'] == '1'),
       status: j['status']?.toString() ?? 'active',
       attendantId: j['attendant_id']?.toString(),
+      shopId: j['shop_id']?.toString(),
+      staffRole: j['staff_role']?.toString() ?? 'Normal Attendant',
     );
   }
 }

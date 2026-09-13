@@ -1,41 +1,108 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 
-class EditProfilePage extends StatefulWidget {
+class EditProfilePage extends ConsumerStatefulWidget {
   const EditProfilePage({super.key});
 
   @override
-  State<EditProfilePage> createState() => _EditProfilePageState();
+  ConsumerState<EditProfilePage> createState() => _EditProfilePageState();
 }
 
-class _EditProfilePageState extends State<EditProfilePage> {
+class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
-  final _regionController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _phoneController = TextEditingController();
+  final _usernameController       = TextEditingController();
+  final _regionController         = TextEditingController();
+  final _emailController          = TextEditingController();
+  final _phoneController          = TextEditingController();
   final _currentPasswordController = TextEditingController();
-  final _newPasswordController = TextEditingController();
+  final _newPasswordController    = TextEditingController();
 
   bool _obscureCurrentPassword = true;
-  bool _obscureNewPassword = true;
+  bool _obscureNewPassword     = true;
+  bool _isLoading = true;
+  bool _isSaving  = false;
 
   @override
   void initState() {
     super.initState();
-    _loadProfileData();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadProfile());
   }
 
-  void _loadProfileData() {
-    _usernameController.text = 'SON';
-    _regionController.text = 'Nairobi';
-    _emailController.text = 'son@example.com';
-    _phoneController.text = '0712345678';
+  Future<void> _loadProfile() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getSessionUser();
+      final raw = res.data;
+      Map<String, dynamic>? user;
+      if (raw is Map<String, dynamic>) {
+        user = raw['data'] is Map ? raw['data'] as Map<String, dynamic> : raw;
+      } else if (raw is List && raw.isNotEmpty) {
+        user = raw.first as Map<String, dynamic>;
+      }
+      if (!mounted) return;
+      if (user != null) {
+        _usernameController.text = user['username']?.toString() ?? '';
+        _emailController.text    = user['email']?.toString()    ?? '';
+        _phoneController.text    = user['phone']?.toString()    ?? '';
+        _regionController.text   = user['region']?.toString()   ?? '';
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _isLoading = false);
   }
+
+  Future<void> _saveProfile() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final newPass    = _newPasswordController.text;
+    final currPass   = _currentPasswordController.text;
+    final username   = _usernameController.text.trim();
+
+    if (username.isEmpty) { _snack('Username is required', AppColors.warning); return; }
+    if (newPass.isNotEmpty && currPass.isEmpty) {
+      _snack('Enter current password to change password', AppColors.warning); return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final body = <String, dynamic>{
+        'username': username,
+        'email':    _emailController.text.trim(),
+        'phone':    _phoneController.text.trim(),
+        'region':   _regionController.text.trim(),
+      };
+      if (newPass.isNotEmpty) {
+        body['current_password'] = currPass;
+        body['new_password']     = newPass;
+      }
+      final res = await api.postSettingsProfileUpdate(body);
+      if (!mounted) return;
+      final status = res['status']?.toString() ?? '';
+      if (status == 'success') {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Profile updated successfully'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+        ));
+        context.pop();
+      } else {
+        _snack(res['message']?.toString() ?? 'Update failed', AppColors.danger);
+      }
+    } catch (e) {
+      if (mounted) _snack('Error: $e', AppColors.danger);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  void _snack(String msg, Color c) => ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(msg), backgroundColor: c, behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
 
   @override
   void dispose() {
@@ -48,496 +115,107 @@ class _EditProfilePageState extends State<EditProfilePage> {
     super.dispose();
   }
 
-  void _saveProfile() {
-    if (!_formKey.currentState!.validate()) return;
-
-    final profileData = {
-      'username': _usernameController.text.trim(),
-      'region': _regionController.text.trim(),
-      'email': _emailController.text.trim(),
-      'phone': _phoneController.text.trim(),
-      'currentPassword': _currentPasswordController.text.trim(),
-      'newPassword': _newPasswordController.text.trim(),
-    };
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Profile updated successfully'),
-        backgroundColor: AppColors.success,
-      ),
-    );
-
-    Navigator.pop(context, profileData);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: _buildAppBar(context),
-      body: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppConstants.paddingLG),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildSectionHeader(
-                      icon: Icons.person_rounded,
-                      title: 'Personal Information',
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextField(
-                      controller: _usernameController,
-                      label: 'Username',
-                      hint: 'Enter username',
-                      icon: Icons.person_outline_rounded,
-                      textCapitalization: TextCapitalization.words,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter a username';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextField(
-                      controller: _regionController,
-                      label: 'Region',
-                      hint: 'Enter your region',
-                      icon: Icons.location_on_outlined,
-                      textCapitalization: TextCapitalization.words,
-                    ),
-                    const SizedBox(height: 24),
-                    _buildSectionHeader(
-                      icon: Icons.contact_mail_rounded,
-                      title: 'Contact Details',
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextField(
-                      controller: _emailController,
-                      label: 'Email',
-                      hint: 'Enter email address',
-                      icon: Icons.email_outlined,
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (value) {
-                        if (value != null && value.trim().isNotEmpty) {
-                          final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-                          if (!emailRegex.hasMatch(value.trim())) {
-                            return 'Please enter a valid email';
-                          }
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextField(
-                      controller: _phoneController,
-                      label: 'Phone Number',
-                      hint: 'Enter phone number',
-                      icon: Icons.phone_outlined,
-                      keyboardType: TextInputType.phone,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'[0-9+\-\s]'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    _buildSectionHeader(
-                      icon: Icons.lock_rounded,
-                      title: 'Change Password',
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Optional - Leave blank to keep current password',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildPasswordField(
-                      controller: _currentPasswordController,
-                      label: 'Current Password',
-                      hint: 'Enter current password',
-                      obscureText: _obscureCurrentPassword,
-                      onToggle: () {
-                        setState(() {
-                          _obscureCurrentPassword = !_obscureCurrentPassword;
-                        });
-                      },
-                      validator: (value) {
-                        if (_newPasswordController.text.isNotEmpty &&
-                            (value == null || value.trim().isEmpty)) {
-                          return 'Please enter current password';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    _buildPasswordField(
-                      controller: _newPasswordController,
-                      label: 'New Password',
-                      hint: 'Enter new password',
-                      obscureText: _obscureNewPassword,
-                      onToggle: () {
-                        setState(() {
-                          _obscureNewPassword = !_obscureNewPassword;
-                        });
-                      },
-                      validator: (value) {
-                        if (value != null && value.trim().isNotEmpty) {
-                          if (value.trim().length < 6) {
-                            return 'Password must be at least 6 characters';
-                          }
-                        }
-                        return null;
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            _buildBottomBar(context),
-          ],
-        ),
-      ),
+      body: _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : Form(
+            key: _formKey,
+            child: Column(children: [
+              Expanded(child: SingleChildScrollView(
+                padding: EdgeInsets.only(left: AppConstants.paddingLG, right: AppConstants.paddingLG, top: 16, bottom: MediaQuery.of(context).viewInsets.bottom + 24),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _sectionCard('Account Information', [
+                    _fieldRow('Full Name / Username', _usernameController, 'Enter username', TextInputType.text),
+                    _fieldRow('Email', _emailController, 'Enter email', TextInputType.emailAddress),
+                    _fieldRow('Phone', _phoneController, 'Enter phone number', TextInputType.phone),
+                    _fieldRow('Region', _regionController, 'Enter region', TextInputType.text),
+                  ]),
+                  const SizedBox(height: 16),
+                  _sectionCard('Change Password', [
+                    _passwordRow('Current Password', _currentPasswordController, _obscureCurrentPassword,
+                      () => setState(() => _obscureCurrentPassword = !_obscureCurrentPassword)),
+                    _passwordRow('New Password', _newPasswordController, _obscureNewPassword,
+                      () => setState(() => _obscureNewPassword = !_obscureNewPassword)),
+                  ]),
+                ]),
+              )),
+              _buildBottomBar(),
+            ]),
+          ),
     );
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
     return AppBar(
-      backgroundColor: AppColors.card,
-      elevation: 0,
-      leading: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: AppColors.border, width: 1.5),
-            borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-          ),
-          child: IconButton(
-            onPressed: () => context.pop(),
-            icon: const Icon(
-              Icons.arrow_back_rounded,
-              color: AppColors.textPrimary,
-              size: 20,
-            ),
-          ),
-        ),
-      ),
+      backgroundColor: AppColors.card, elevation: 0,
+      leading: Padding(padding: const EdgeInsets.all(8.0), child: Container(
+        decoration: BoxDecoration(border: Border.all(color: AppColors.border, width: 1.5), borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+        child: IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary, size: 20)),
+      )),
       leadingWidth: 56,
-      title: Column(
-        children: [
-          Text(
-            'Edit Profile',
-            style: AppTypography.h6.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Update your personal information',
-            style: AppTypography.caption.copyWith(
-              color: AppColors.textSecondary,
-              fontSize: 10,
-            ),
-          ),
-        ],
-      ),
+      title: Text('Edit Profile', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
       centerTitle: true,
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(
-          height: 1,
-          color: AppColors.divider,
-        ),
-      ),
+      bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(height: 1, color: AppColors.divider)),
     );
   }
 
-  Widget _buildSectionHeader({
-    required IconData icon,
-    required String title,
-  }) {
-    return Row(
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(
-            icon,
-            color: AppColors.primary,
-            size: 18,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          title,
-          style: AppTypography.label.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required IconData icon,
-    TextInputType? keyboardType,
-    TextCapitalization textCapitalization = TextCapitalization.none,
-    List<TextInputFormatter>? inputFormatters,
-    String? Function(String?)? validator,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: AppTypography.label.copyWith(color: AppColors.textPrimary),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          keyboardType: keyboardType,
-          textCapitalization: textCapitalization,
-          inputFormatters: inputFormatters,
-          validator: validator,
-          style: AppTypography.bodyMedium.copyWith(
-            color: AppColors.textPrimary,
-          ),
-          cursorColor: AppColors.primary,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: AppTypography.bodyMedium.copyWith(
-              color: AppColors.textHint,
-            ),
-            prefixIcon: Icon(
-              icon,
-              color: AppColors.textHint,
-              size: 20,
-            ),
-            filled: true,
-            fillColor: AppColors.card,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
-              ),
-              borderSide: const BorderSide(color: AppColors.inputBorder),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
-              ),
-              borderSide: const BorderSide(color: AppColors.inputBorder),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
-              ),
-              borderSide: const BorderSide(
-                color: AppColors.inputFocusBorder,
-                width: 1.5,
-              ),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
-              ),
-              borderSide: const BorderSide(color: AppColors.danger),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
-              ),
-              borderSide: const BorderSide(
-                color: AppColors.danger,
-                width: 1.5,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPasswordField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required bool obscureText,
-    required VoidCallback onToggle,
-    String? Function(String?)? validator,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: AppTypography.label.copyWith(color: AppColors.textPrimary),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          obscureText: obscureText,
-          validator: validator,
-          style: AppTypography.bodyMedium.copyWith(
-            color: AppColors.textPrimary,
-          ),
-          cursorColor: AppColors.primary,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: AppTypography.bodyMedium.copyWith(
-              color: AppColors.textHint,
-            ),
-            prefixIcon: const Icon(
-              Icons.lock_outline_rounded,
-              color: AppColors.textHint,
-              size: 20,
-            ),
-            suffixIcon: IconButton(
-              onPressed: onToggle,
-              icon: Icon(
-                obscureText
-                    ? Icons.visibility_off_rounded
-                    : Icons.visibility_rounded,
-                color: AppColors.textHint,
-                size: 20,
-              ),
-            ),
-            filled: true,
-            fillColor: AppColors.card,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
-              ),
-              borderSide: const BorderSide(color: AppColors.inputBorder),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
-              ),
-              borderSide: const BorderSide(color: AppColors.inputBorder),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
-              ),
-              borderSide: const BorderSide(
-                color: AppColors.inputFocusBorder,
-                width: 1.5,
-              ),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
-              ),
-              borderSide: const BorderSide(color: AppColors.danger),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
-              ),
-              borderSide: const BorderSide(
-                color: AppColors.danger,
-                width: 1.5,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBottomBar(BuildContext context) {
+  Widget _sectionCard(String title, List<Widget> children) {
     return Container(
-      padding: EdgeInsets.only(
-        left: AppConstants.paddingLG,
-        right: AppConstants.paddingLG,
-        top: 12,
-        bottom: MediaQuery.of(context).padding.bottom + 12,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.card,
-        border: Border(
-          top: BorderSide(color: AppColors.divider, width: 1),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: SizedBox(
-              height: AppConstants.buttonHeight,
-              child: OutlinedButton(
-                onPressed: () => context.pop(),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.textSecondary,
-                  side: const BorderSide(
-                    color: AppColors.border,
-                    width: 1.5,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      AppConstants.radiusMD,
-                    ),
-                  ),
-                ),
-                child: Text(
-                  'Cancel',
-                  style: AppTypography.buttonLarge.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: SizedBox(
-              height: AppConstants.buttonHeight,
-              child: ElevatedButton(
-                onPressed: _saveProfile,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.textWhite,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      AppConstants.radiusMD,
-                    ),
-                  ),
-                ),
-                child: Text(
-                  'Save',
-                  style: AppTypography.buttonLarge.copyWith(
-                    color: AppColors.textWhite,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(14),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 2))]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+          child: Text(title, style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700, color: AppColors.textPrimary))),
+        const Divider(height: 1, color: AppColors.divider),
+        ...children,
+      ]),
+    );
+  }
+
+  Widget _fieldRow(String label, TextEditingController ctrl, String hint, TextInputType type) {
+    return Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      TextField(controller: ctrl, keyboardType: type, style: AppTypography.bodyMedium,
+        decoration: InputDecoration(hintText: hint, hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
+          filled: true, fillColor: AppColors.background, contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConstants.textFieldRadius), borderSide: const BorderSide(color: AppColors.inputBorder)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConstants.textFieldRadius), borderSide: const BorderSide(color: AppColors.inputBorder)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConstants.textFieldRadius), borderSide: const BorderSide(color: AppColors.inputFocusBorder, width: 1.5)))),
+    ]));
+  }
+
+  Widget _passwordRow(String label, TextEditingController ctrl, bool obscure, VoidCallback toggle) {
+    return Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      TextField(controller: ctrl, obscureText: obscure, style: AppTypography.bodyMedium,
+        decoration: InputDecoration(hintText: '••••••••', hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
+          filled: true, fillColor: AppColors.background, contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          suffixIcon: IconButton(onPressed: toggle, icon: Icon(obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded, color: AppColors.textHint, size: 20)),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConstants.textFieldRadius), borderSide: const BorderSide(color: AppColors.inputBorder)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConstants.textFieldRadius), borderSide: const BorderSide(color: AppColors.inputBorder)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConstants.textFieldRadius), borderSide: const BorderSide(color: AppColors.inputFocusBorder, width: 1.5)))),
+    ]));
+  }
+
+  Widget _buildBottomBar() {
+    return Container(
+      padding: EdgeInsets.only(left: AppConstants.paddingLG, right: AppConstants.paddingLG, top: 12, bottom: MediaQuery.of(context).padding.bottom + 12),
+      decoration: const BoxDecoration(color: AppColors.card, border: Border(top: BorderSide(color: AppColors.divider))),
+      child: SizedBox(width: double.infinity, height: AppConstants.buttonHeight, child: ElevatedButton.icon(
+        onPressed: _isSaving ? null : _saveProfile,
+        icon: _isSaving
+          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+          : const Icon(Icons.check_rounded, size: 18, color: AppColors.textWhite),
+        label: Text('Save Profile', style: AppTypography.buttonLarge.copyWith(color: AppColors.textWhite)),
+        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD))),
+      )),
     );
   }
 }

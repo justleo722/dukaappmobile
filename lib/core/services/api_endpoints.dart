@@ -586,6 +586,13 @@ abstract final class ApiEndpoints {
   static final postWalletSupplierCreate = _p('wallet/supplier/create');
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // TMS (direct controller endpoints — not postdata/getdata)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Submit a TMS loan eligibility application.
+  static const String postTmsApply = '${ApiConfig.appApiBase}/Tms/eligibility';
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // Private helpers
   // ═══════════════════════════════════════════════════════════════════════════
 

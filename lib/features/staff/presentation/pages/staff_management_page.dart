@@ -189,8 +189,10 @@ class _StaffManagementPageState extends ConsumerState<StaffManagementPage> {
           _actionChip(Icons.edit_rounded, 'Edit', AppColors.primary, () => context.push('/staff/edit', extra: {
             'name': attendant.name,
             'phone': attendant.phone,
-            'role': attendant.role,
-            'shops': <String>[],
+            'role': attendant.staffRole,
+            'shops': attendant.shopId != null ? [attendant.shopId!] : <String>[],
+            'roleId': attendant.roleId?.toString(),
+            'isManager': attendant.isManager,
           })),
           const SizedBox(width: 8),
           _actionChip(Icons.delete_rounded, 'Delete', AppColors.danger, () => _confirmDelete(attendant)),

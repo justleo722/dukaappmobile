@@ -797,6 +797,10 @@ class ApiService {
   Future<Response> getTms() =>
       _client.get(ApiEndpoints.getDataTms);
 
+  /// Submit a TMS loan eligibility application (hits Tms::eligibility directly).
+  Future<Map<String, dynamic>> postTmsApply() =>
+      _post(ApiEndpoints.postTmsApply, {});
+
   Future<Response> getPackages() =>
       _client.get(ApiEndpoints.getDataPackages);
 

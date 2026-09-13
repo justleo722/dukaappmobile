@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 
-class CustomFeaturesPage extends StatefulWidget {
+class CustomFeaturesPage extends ConsumerStatefulWidget {
   const CustomFeaturesPage({super.key});
 
   @override
-  State<CustomFeaturesPage> createState() => _CustomFeaturesPageState();
+  ConsumerState<CustomFeaturesPage> createState() => _CustomFeaturesPageState();
 }
 
-class _CustomFeaturesPageState extends State<CustomFeaturesPage> {
+class _CustomFeaturesPageState extends ConsumerState<CustomFeaturesPage> {
   // Dashboard features
   bool _liveSummary = true;
   bool _cashInhand = true;
@@ -71,6 +73,81 @@ class _CustomFeaturesPageState extends State<CustomFeaturesPage> {
   bool _enableBarRestaurant = false;
   bool _enableFinancialReports = true;
 
+  bool _isLoading = true;
+  bool _isSaving  = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadSettings());
+  }
+
+  static bool _b(dynamic v) => v == '1' || v == 1 || v == true;
+
+  Future<void> _loadSettings() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getShopSettings();
+      final raw = res.data;
+      // shop_settings returns a list of {key, value} or a plain map
+      Map<String, dynamic> s = {};
+      if (raw is List) {
+        for (final row in raw) {
+          if (row is Map && row['key'] != null) {
+            s[row['key'].toString()] = row['value'];
+          }
+        }
+      } else if (raw is Map<String, dynamic>) {
+        s = raw['data'] is Map ? raw['data'] as Map<String, dynamic> : raw;
+      }
+      if (!mounted) return;
+      setState(() {
+        _liveSummary           = _b(s['enable_homepage_live_summary'] ?? _liveSummary);
+        _cashInhand            = _b(s['show_cashinhand']    ?? _cashInhand);
+        _toPay                 = _b(s['show_topay']         ?? _toPay);
+        _toReceive             = _b(s['show_toreceive']     ?? _toReceive);
+        _todaySales            = _b(s['show_todaysales']    ?? _todaySales);
+        _todayStockIn          = _b(s['show_todaystockin']  ?? _todayStockIn);
+        _todayProfit           = _b(s['show_todayprofit']   ?? _todayProfit);
+        _expenses              = _b(s['show_expenses']      ?? _expenses);
+        _orders                = _b(s['show_orders']        ?? _orders);
+        _enableVat             = _b(s['enable_vat']         ?? _enableVat);
+        _enableEfdReceipt      = _b(s['enable_efd']         ?? _enableEfdReceipt);
+        _enableCustomReceipt   = _b(s['enable_receipt_mode']?? _enableCustomReceipt);
+        _showLogoOnReceipt     = _b(s['enable_shop_logo']   ?? _showLogoOnReceipt);
+        _useWholesalePrice     = _b(s['use_wholesale_price']?? _useWholesalePrice);
+        _sellByFifo            = _b(s['enable_fifo_mode']   ?? _sellByFifo);
+        _autoCalcSellingPrice  = _b(s['auto_set_selling_price'] ?? _autoCalcSellingPrice);
+        _addProductByImage     = _b(s['upload_by_image']    ?? _addProductByImage);
+        _enableBarcodeScanner  = _b(s['enable_barcode_scanner'] ?? _enableBarcodeScanner);
+        _enableManufacturing   = _b(s['enable_manufacturing']?? _enableManufacturing);
+        _enableTms             = _b(s['enable_tms']          ?? _enableTms);
+        _enableMicrofinance    = _b(s['enable_microfinance'] ?? _enableMicrofinance);
+        _enableOnlineShop      = _b(s['enable_online_store'] ?? _enableOnlineShop);
+        _defaultTodayFilter    = _b(s['make_default_filter_today'] ?? _defaultTodayFilter);
+        _emailReceipts         = _b(s['email_receipt_onsave']?? _emailReceipts);
+        _enableDashboardActions= _b(s['enable_quick_actions']?? _enableDashboardActions);
+        _enableFinancialReports= _b(s['enable_financial_reports'] ?? _enableFinancialReports);
+        _printOnSave           = _b(s['printer_silent_print']?? _printOnSave);
+        _enableReceiptPrinter  = _b(s['enable_printer']     ?? _enableReceiptPrinter);
+        _showPrintedBy         = _b(s['printed_by']         ?? _showPrintedBy);
+        _showServiceProvider   = _b(s['served_by']          ?? _showServiceProvider);
+        final vr = s['vat_rate']?.toString();
+        if (vr != null && vr.isNotEmpty) _vatRateController.text = vr;
+        final vp = s['vat_policy']?.toString() ?? '';
+        if (['Inclusive','Exclusive'].contains(vp)) _vatPolicy = vp;
+        _traClientIdController.text       = s['vfd_client_id']?.toString()       ?? '';
+        _traClientPasswordController.text = s['vfd_client_password']?.toString() ?? '';
+        _customerMessageController.text   = s['message_template']?.toString()    ?? '';
+        final dd = s['item_discount_percent']?.toString();
+        if (dd != null && dd.isNotEmpty) _defaultDiscountController.text = dd;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   void dispose() {
     _vatRateController.dispose();
@@ -101,60 +178,69 @@ class _CustomFeaturesPageState extends State<CustomFeaturesPage> {
     );
   }
 
-  void _saveChanges() {
-    final features = {
-      'liveSummary': _liveSummary,
-      'cashInhand': _cashInhand,
-      'toPay': _toPay,
-      'toReceive': _toReceive,
-      'todaySales': _todaySales,
-      'todayStockIn': _todayStockIn,
-      'todayProfit': _todayProfit,
-      'expenses': _expenses,
-      'orders': _orders,
-      'enableVat': _enableVat,
-      'enableEfdReceipt': _enableEfdReceipt,
-      'vatRate': _vatRateController.text,
-      'vatPolicy': _vatPolicy,
-      'traClientId': _traClientIdController.text,
-      'enableCustomReceipt': _enableCustomReceipt,
-      'enableReceiptPrinter': _enableReceiptPrinter,
-      'showPrintedBy': _showPrintedBy,
-      'showServiceProvider': _showServiceProvider,
-      'showLogoOnReceipt': _showLogoOnReceipt,
-      'customerMessage': _customerMessageController.text,
-      'useWholesalePrice': _useWholesalePrice,
-      'sellByFifo': _sellByFifo,
-      'defaultDiscount': _defaultDiscountController.text,
-      'autoCalcSellingPrice': _autoCalcSellingPrice,
-      'printOnSave': _printOnSave,
-      'addProductByImage': _addProductByImage,
-      'enableBarcodeScanner': _enableBarcodeScanner,
-      'enableManufacturing': _enableManufacturing,
-      'enableTms': _enableTms,
-      'enableMicrofinance': _enableMicrofinance,
-      'enableOnlineShop': _enableOnlineShop,
-      'alertStock': _alertStock,
-      'alertAttendantEdit': _alertAttendantEdit,
-      'alertAnySale': _alertAnySale,
-      'dailySummary': _dailySummary,
-      'dailySummaryTime': _dailySummaryTime,
-      'notifyOnlineVisit': _notifyOnlineVisit,
-      'notifyNewOrders': _notifyNewOrders,
-      'defaultTodayFilter': _defaultTodayFilter,
-      'emailReceipts': _emailReceipts,
-      'enableDashboardActions': _enableDashboardActions,
-      'enableBarRestaurant': _enableBarRestaurant,
-      'enableFinancialReports': _enableFinancialReports,
-    };
-    debugPrint('Features saved: $features');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Custom features saved successfully'),
-        backgroundColor: AppColors.success,
-      ),
-    );
-    context.go('/shop-settings');
+  Future<void> _saveChanges() async {
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final s = (bool v) => v ? '1' : '0';
+      final res = await api.postSettingsShopSettingsSave({
+        'enable_homepage_live_summary': s(_liveSummary),
+        'show_cashinhand':    s(_cashInhand),
+        'show_topay':         s(_toPay),
+        'show_toreceive':     s(_toReceive),
+        'show_todaysales':    s(_todaySales),
+        'show_todaystockin':  s(_todayStockIn),
+        'show_todayprofit':   s(_todayProfit),
+        'show_expenses':      s(_expenses),
+        'show_orders':        s(_orders),
+        'enable_vat':         s(_enableVat),
+        'enable_efd':         s(_enableEfdReceipt),
+        'vat_rate':           _vatRateController.text.trim(),
+        'vat_policy':         _vatPolicy,
+        'vfd_client_id':      _traClientIdController.text.trim(),
+        'vfd_client_password':_traClientPasswordController.text,
+        'enable_receipt_mode':s(_enableCustomReceipt),
+        'enable_printer':     s(_enableReceiptPrinter),
+        'printer_silent_print':s(_printOnSave),
+        'printed_by':         s(_showPrintedBy),
+        'served_by':          s(_showServiceProvider),
+        'enable_shop_logo':   s(_showLogoOnReceipt),
+        'message_template':   _customerMessageController.text.trim(),
+        'use_wholesale_price':s(_useWholesalePrice),
+        'enable_fifo_mode':   s(_sellByFifo),
+        'item_discount_percent': _defaultDiscountController.text.trim(),
+        'auto_set_selling_price':s(_autoCalcSellingPrice),
+        'upload_by_image':    s(_addProductByImage),
+        'enable_barcode_scanner': s(_enableBarcodeScanner),
+        'enable_manufacturing':   s(_enableManufacturing),
+        'enable_tms':         s(_enableTms),
+        'enable_microfinance':s(_enableMicrofinance),
+        'enable_online_store':s(_enableOnlineShop),
+        'make_default_filter_today': s(_defaultTodayFilter),
+        'email_receipt_onsave':  s(_emailReceipts),
+        'enable_quick_actions':  s(_enableDashboardActions),
+        'enable_financial_reports': s(_enableFinancialReports),
+      });
+      if (!mounted) return;
+      final status = res['status']?.toString() ?? '';
+      if (status == 'success') {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Custom features saved successfully'),
+          backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
+        ));
+        context.go('/shop-settings');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(res['message']?.toString() ?? 'Save failed'),
+          backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Error: $e'), backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -197,7 +283,9 @@ class _CustomFeaturesPageState extends State<CustomFeaturesPage> {
           child: Container(height: 1, color: AppColors.divider),
         ),
       ),
-      body: Column(
+      body: _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : Column(
         children: [
           Expanded(
             child: SingleChildScrollView(
@@ -974,7 +1062,7 @@ class _CustomFeaturesPageState extends State<CustomFeaturesPage> {
           child: SizedBox(
             height: AppConstants.buttonHeight,
             child: ElevatedButton(
-              onPressed: _saveChanges,
+              onPressed: _isSaving ? null : _saveChanges,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: AppColors.textWhite,
@@ -983,7 +1071,9 @@ class _CustomFeaturesPageState extends State<CustomFeaturesPage> {
                 ),
                 elevation: 0,
               ),
-              child: Text(
+              child: _isSaving
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : Text(
                 'Save Changes',
                 style: AppTypography.bodyMedium.copyWith(
                   color: Colors.white,
