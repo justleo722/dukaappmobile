@@ -56,7 +56,12 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
     if (_isEditing) {
       _loadExistingSale();
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCustomers());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Ensure stock is loaded so the product picker has data even when the
+      // user navigates to AddSalePage without visiting the stock page first.
+      ref.read(stockProvider);
+      _loadCustomers();
+    });
   }
 
   Future<void> _loadCustomers() async {
@@ -501,9 +506,28 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
     }
   }
 
+  // Resolved product list cached in build() so the picker always has fresh data.
+  List<Map<String, dynamic>> _cachedAllProducts = [];
+
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    // Watch stockProvider in the proper build context so Riverpod can rebuild
+    // this widget when data arrives, and the picker never sees an empty list.
+    _cachedAllProducts = ref.watch(stockProvider).maybeWhen(
+          data: (state) => state.products
+              .map((p) => {
+                    'product_id': p.productId,
+                    'stock_id': p.stockId,
+                    'name': p.name,
+                    'sellingPrice': p.sellingPrice,
+                    'wholesalePrice': p.wholesalePrice,
+                    'stock': p.available.toInt(),
+                  })
+              .toList(),
+          orElse: () => _cachedAllProducts, // keep previous list while reloading
+        );
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
@@ -1173,24 +1197,11 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   }
 
   Widget _buildItemPickerSheet(ScrollController scrollController) {
-    // Load products from stockProvider (already fetched on stock page load)
-    final stockAsync = ref.watch(stockProvider);
-    final allProducts = stockAsync.maybeWhen(
-      data: (state) => state.products
-          .map((p) => {
-                'product_id': p.productId,
-                'stock_id': p.stockId,
-                'name': p.name,
-                'sellingPrice': p.sellingPrice,
-                'wholesalePrice': p.wholesalePrice,
-                'stock': p.available.toInt(),
-              })
-          .toList(),
-      orElse: () => <Map<String, dynamic>>[],
-    );
-
+    // Use the list resolved in build() — it's always up-to-date and was
+    // fetched in a proper Riverpod build context, so the sheet never shows
+    // an empty list just because the provider hadn't resolved yet at open time.
     return _ItemPickerContent(
-      allProducts: allProducts,
+      allProducts: _cachedAllProducts,
       formatCurrency: _formatCurrency,
       onAddItem: _addSelectedItem,
       onScanBarcode: _openBarcodeScanner,

@@ -49,9 +49,11 @@ class StockProduct {
       category: j['category']?.toString(),
       categoryId: j['category_id'],
       type: j['type']?.toString(),
-      buyingPrice: _d(j['buying_price'] ?? j['cost_price']),
-      sellingPrice: _d(j['selling_price'] ?? j['price']),
-      wholesalePrice: _d(j['wholesale_price']),
+      // API returns 'bp'/'sp'/'wp' from stock_report(); also accept the
+      // long-form aliases used in some other endpoints.
+      buyingPrice: _d(j['bp'] ?? j['buying_price'] ?? j['cost_price']),
+      sellingPrice: _d(j['sp'] ?? j['selling_price'] ?? j['price']),
+      wholesalePrice: _d(j['wp'] ?? j['wholesale_price']),
       available: _d(j['available'] ?? j['quantity'] ?? j['qty']),
       reorderLevel: _d(j['reorder_level']),
       unit: j['unit']?.toString(),

@@ -47,13 +47,14 @@ class StockRemoteDatasource {
   /// the correct shop regardless of the caller's session shop.
   Future<List<Map<String, dynamic>>> fetchProductsByShop(String shopId) async {
     final res = await _client.get(ApiEndpoints.getMappedStockRemoteProducts(shopId));
+    // stock_report() returns 'bp'/'sp'/'wp'; also accept long-form aliases.
     return _list(res.data).map((p) => {
       'name': p['product_name'] ?? p['name'] ?? '',
       'barcode': p['barcode'] ?? p['bar_code'] ?? '',
-      'buyingPrice': double.tryParse(p['buying_price']?.toString() ?? p['cost_price']?.toString() ?? '0') ?? 0.0,
-      'sellingPrice': double.tryParse(p['selling_price']?.toString() ?? p['price']?.toString() ?? '0') ?? 0.0,
-      'wholesalePrice': double.tryParse(p['wholesale_price']?.toString() ?? '0') ?? 0.0,
-      'stock': int.tryParse(p['available']?.toString() ?? p['quantity']?.toString() ?? '0') ?? 0,
+      'buyingPrice': double.tryParse((p['bp'] ?? p['buying_price'] ?? p['cost_price'] ?? '0').toString()) ?? 0.0,
+      'sellingPrice': double.tryParse((p['sp'] ?? p['selling_price'] ?? p['price'] ?? '0').toString()) ?? 0.0,
+      'wholesalePrice': double.tryParse((p['wp'] ?? p['wholesale_price'] ?? '0').toString()) ?? 0.0,
+      'stock': int.tryParse((p['available'] ?? p['quantity'] ?? '0').toString()) ?? 0,
       'product_id': p['product_id'] ?? p['id'],
     }).toList();
   }
