@@ -106,10 +106,10 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
     if (!_items.any((item) => item.name == name)) {
       _items.add(_PurchaseItem(
         name: name,
-        currentStock: product['stock'] as int? ?? 0,
-        buyingPriceValue: product['buyingPrice'] as double? ?? 0,
-        sellingPriceValue: product['sellingPrice'] as double? ?? 0,
-        wholesalePriceValue: product['wholesalePrice'] as double? ?? 0,
+        currentStock: (product['stock'] as num?)?.toInt() ?? 0,
+        buyingPriceValue: (product['buyingPrice'] as num?)?.toDouble() ?? 0.0,
+        sellingPriceValue: (product['sellingPrice'] as num?)?.toDouble() ?? 0.0,
+        wholesalePriceValue: (product['wholesalePrice'] as num?)?.toDouble() ?? 0.0,
       ));
     }
   }
@@ -140,10 +140,10 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
       if (_items.any((item) => item.name == name)) continue;
       _items.add(_PurchaseItem(
         name: name,
-        currentStock: product['stock'] as int,
-        buyingPriceValue: product['buyingPrice'] as double,
-        sellingPriceValue: product['sellingPrice'] as double,
-        wholesalePriceValue: product['wholesalePrice'] as double,
+        currentStock: (product['stock'] as num?)?.toInt() ?? 0,
+        buyingPriceValue: (product['buyingPrice'] as num?)?.toDouble() ?? 0.0,
+        sellingPriceValue: (product['sellingPrice'] as num?)?.toDouble() ?? 0.0,
+        wholesalePriceValue: (product['wholesalePrice'] as num?)?.toDouble() ?? 0.0,
       ));
       addedCount++;
     }
@@ -432,7 +432,7 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                                 itemBuilder: (context, index) {
                                   final product = filtered[index];
                                   final name = product['name'] as String;
-                                  final stock = product['stock'] as int;
+                                  final stock = (product['stock'] as num?)?.toInt() ?? 0;
                                   final isAlreadyAdded = _items.any((item) => item.name == name);
                                   final isSelected = selectedIndices.contains(index);
 

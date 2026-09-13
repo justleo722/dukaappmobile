@@ -422,8 +422,9 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
         return s + price * qty - discount;
       });
 
-      final body = {
-        'items': itemStrings,
+      // Bracket notation so PHP reads items[] as a proper array.
+      final body = <String, dynamic>{
+        for (int i = 0; i < itemStrings.length; i++) 'items[$i]': itemStrings[i],
         'payment_mode': 'invoice',
         'customer_id': _selectedCustomer ?? '',
         'total_amount': total,

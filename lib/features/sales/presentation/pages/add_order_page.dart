@@ -262,8 +262,9 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
         return s + price * qty - discount;
       });
 
-      final body = {
-        'items': itemStrings,
+      // Bracket notation so PHP reads items[] as a proper array.
+      final body = <String, dynamic>{
+        for (int i = 0; i < itemStrings.length; i++) 'items[$i]': itemStrings[i],
         'payment_mode': 'order',
         'total_amount': total,
         'paid_amount': 0,

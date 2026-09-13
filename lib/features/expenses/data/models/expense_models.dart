@@ -24,7 +24,10 @@ class ExpenseItem {
     return ExpenseItem(
       flowId: j['flow_id']?.toString() ?? '',
       date: j['record_date']?.toString() ?? '',
-      title: j['note']?.toString() ?? j['description']?.toString() ?? '',
+      // cashflow.title is the primary label; fall back to note or category
+      title: j['title']?.toString().isNotEmpty == true
+          ? j['title'].toString()
+          : (j['note']?.toString() ?? j['description']?.toString() ?? ''),
       category: j['account_name']?.toString() ?? j['category']?.toString() ?? 'Expense',
       amount: _toDouble(j['amount']),
       currency: j['currency']?.toString() ?? 'TSh',
@@ -59,7 +62,7 @@ class ExpenseSummary {
 
   factory ExpenseSummary.fromJson(Map<String, dynamic> j) {
     return ExpenseSummary(
-      totalExpenses: _toDouble(j['total_expense'] ?? j['total_expenses'] ?? j['expense']),
+      totalExpenses: _toDouble(j['total_expense'] ?? j['total_expenses'] ?? j['total_amount'] ?? j['expense']),
       todayExpenses: _toDouble(j['today_expense'] ?? j['today_expenses']),
       totalSales: _toDouble(j['total_sales'] ?? j['sales']),
       grossProfit: _toDouble(j['gross_profit'] ?? j['profit']),

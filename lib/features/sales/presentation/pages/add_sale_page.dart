@@ -456,8 +456,11 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
         return '$productId|$stockId|$qty|$price|$discount|$subtotal|0|$subtotal';
       }).toList();
 
-      final body = {
-        'items': itemStrings,
+      // Use explicit bracket notation so PHP reads items[] as an array.
+      // Dio's default form-urlencoded encoding of a List may not produce
+      // the PHP-compatible items[0]=...&items[1]=... format.
+      final body = <String, dynamic>{
+        for (int i = 0; i < itemStrings.length; i++) 'items[$i]': itemStrings[i],
         'payment_mode': _selectedPaymentType,
         'customer_id': _selectedCustomerId ?? '',
         'total_amount': _items.fold<double>(0, (s, i) {
