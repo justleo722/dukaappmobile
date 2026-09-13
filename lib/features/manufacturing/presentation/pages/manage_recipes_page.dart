@@ -1,49 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
-class _Recipe {
-  final String name;
-  final List<String> ingredients;
-  final String yield;
-  final double estimatedCost;
 
-  const _Recipe({
-    required this.name,
-    required this.ingredients,
-    required this.yield,
-    required this.estimatedCost,
-  });
-}
-
-class ManageRecipesPage extends StatefulWidget {
+class ManageRecipesPage extends ConsumerStatefulWidget {
   const ManageRecipesPage({super.key});
 
   @override
-  State<ManageRecipesPage> createState() => _ManageRecipesPageState();
+  ConsumerState<ManageRecipesPage> createState() => _ManageRecipesPageState();
 }
 
-class _ManageRecipesPageState extends State<ManageRecipesPage> {
+class _ManageRecipesPageState extends ConsumerState<ManageRecipesPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _recipes = [];
 
-  static const List<_Recipe> _recipes = [
-    _Recipe(name: 'Basic Tee', ingredients: ['Cotton Fabric (White)', 'Polyester Thread', 'Elastic Band'], yield: '1 unit', estimatedCost: 4500),
-    _Recipe(name: 'Slim Fit Denim', ingredients: ['Denim Fabric', 'Zipper (Metal)', 'Button (Plastic)', 'Polyester Thread'], yield: '1 unit', estimatedCost: 12000),
-    _Recipe(name: 'Winter Hoodie', ingredients: ['Cotton Fabric (White)', 'Polyester Thread', 'Elastic Band', 'Zipper (Metal)'], yield: '1 unit', estimatedCost: 9000),
-    _Recipe(name: 'Casual Linen', ingredients: ['Linen Fabric', 'Sewing Needles', 'Silk Thread'], yield: '1 unit', estimatedCost: 7000),
-    _Recipe(name: 'Active Shorts', ingredients: ['Cotton Fabric (White)', 'Elastic Band', 'Polyester Thread'], yield: '1 unit', estimatedCost: 3500),
-    _Recipe(name: 'Silk Scarf', ingredients: ['Silk Thread', 'Fabric Dye (Blue)', 'Bleach Solution'], yield: '2 units', estimatedCost: 5000),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadRecipes();
+  }
+
+  Future<void> _loadRecipes() async {
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getMfRecipes();
+      final body = res.data;
+      List<Map<String, dynamic>> recipes = [];
+      if (body is Map) {
+        final data = body['data'] ?? body['recipes'] ?? body;
+        if (data is List) {
+          recipes = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+      }
+      setState(() { _recipes = recipes; _isLoading = false; });
+    } catch (_) {
+      setState(() => _isLoading = false);
+    }
+  }
 
   int get _totalCount => _recipes.length;
 
-  List<_Recipe> get _filteredRecipes {
+  List<Map<String, dynamic>> get _filteredRecipes {
     if (_searchQuery.isEmpty) return _recipes;
-    return _recipes.where((r) => r.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+    return _recipes.where((r) {
+      final name = (r['recipe_name'] ?? r['name'] ?? '').toString().toLowerCase();
+      return name.contains(_searchQuery.toLowerCase());
+    }).toList();
   }
 
   @override
@@ -73,7 +83,9 @@ class _ManageRecipesPageState extends State<ManageRecipesPage> {
                     const SizedBox(height: 14),
                     _buildSearchBar(),
                     const SizedBox(height: 12),
-                    _filteredRecipes.isEmpty ? _buildEmptyState() : _buildRecipesList(),
+                    _isLoading
+                        ? const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: CircularProgressIndicator()))
+                        : _filteredRecipes.isEmpty ? _buildEmptyState() : _buildRecipesList(),
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -232,7 +244,19 @@ class _ManageRecipesPageState extends State<ManageRecipesPage> {
     );
   }
 
-  Widget _buildRecipeCard(_Recipe recipe) {
+  Widget _buildRecipeCard(Map<String, dynamic> recipe) {
+    final name = (recipe['recipe_name'] ?? recipe['name'] ?? 'Unknown').toString();
+    final yieldStr = (recipe['yield_amount'] ?? recipe['yield'] ?? '').toString();
+    final cost = (recipe['estimated_cost'] ?? recipe['cost'] ?? 0) as num;
+    // ingredients can be a List or a comma-separated string
+    List<String> ingredients = [];
+    final ingRaw = recipe['ingredients'] ?? recipe['raw_materials'];
+    if (ingRaw is List) {
+      ingredients = ingRaw.map((e) => e is Map ? (e['name'] ?? e['material_name'] ?? '').toString() : e.toString()).toList();
+    } else if (ingRaw is String && ingRaw.isNotEmpty) {
+      ingredients = ingRaw.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -247,45 +271,48 @@ class _ManageRecipesPageState extends State<ManageRecipesPage> {
             children: [
               Container(width: 40, height: 40,
                 decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(10)),
-                child: Icon(Icons.receipt_long_rounded, color: AppColors.primary, size: 20)),
+                child: const Icon(Icons.receipt_long_rounded, color: AppColors.primary, size: 20)),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(recipe.name, style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+                    Text(name, style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 2),
-                    Text('Yield: ${recipe.yield}', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11)),
+                    if (yieldStr.isNotEmpty) Text('Yield: $yieldStr', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11)),
                   ],
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(6)),
-                child: Text(_fmt(recipe.estimatedCost), style: AppTypography.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 10)),
+                child: Text(_fmt(cost.toDouble()), style: AppTypography.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 10)),
               ),
             ],
           ),
-          const Divider(height: 20),
-          Text('Ingredients', style: AppTypography.caption.copyWith(color: AppColors.textHint, fontSize: 9, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 6, runSpacing: 6,
-            children: recipe.ingredients.map((ing) => Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(color: const Color(0xFFF5F7FB), borderRadius: BorderRadius.circular(6)),
-              child: Text(ing, style: AppTypography.caption.copyWith(color: AppColors.textPrimary, fontSize: 10)),
-            )).toList(),
-          ),
+          if (ingredients.isNotEmpty) ...[
+            const Divider(height: 20),
+            Text('Ingredients', style: AppTypography.caption.copyWith(color: AppColors.textHint, fontSize: 9, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6, runSpacing: 6,
+              children: ingredients.map((ing) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: const Color(0xFFF5F7FB), borderRadius: BorderRadius.circular(6)),
+                child: Text(ing, style: AppTypography.caption.copyWith(color: AppColors.textPrimary, fontSize: 10)),
+              )).toList(),
+            ),
+          ],
           const SizedBox(height: 12),
           Row(
             children: [
               GestureDetector(
                 onTap: () => context.push('/manufacturing/recipes/edit', extra: {
-                  'name': recipe.name,
-                  'yieldAmount': recipe.yield,
-                  'ingredients': recipe.ingredients,
-                  'estimatedCost': recipe.estimatedCost,
+                  'name': name,
+                  'yieldAmount': yieldStr,
+                  'ingredients': ingredients,
+                  'estimatedCost': cost.toDouble(),
+                  ...recipe,
                 }),
                 child: Container(
                   padding: const EdgeInsets.all(6),
@@ -295,7 +322,7 @@ class _ManageRecipesPageState extends State<ManageRecipesPage> {
               ),
               const SizedBox(width: 6),
               GestureDetector(
-                onTap: () => _showDeleteConfirmation(recipe.name),
+                onTap: () => _showDeleteConfirmation(name, recipe),
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
@@ -329,7 +356,7 @@ class _ManageRecipesPageState extends State<ManageRecipesPage> {
     );
   }
 
-  void _showDeleteConfirmation(String recipeName) {
+  void _showDeleteConfirmation(String recipeName, Map<String, dynamic> recipe) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -345,7 +372,15 @@ class _ManageRecipesPageState extends State<ManageRecipesPage> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx),
             child: Text('Cancel', style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600))),
-          TextButton(onPressed: () => Navigator.pop(ctx),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                final api = ref.read(apiServiceProvider);
+                await api.postMfRecipeDelete({'recipe_id': recipe['id'] ?? recipe['recipe_id'] ?? ''});
+                _loadRecipes();
+              } catch (_) {}
+            },
             style: TextButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: AppColors.textWhite,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
             child: Text('Delete', style: AppTypography.bodySmall.copyWith(color: AppColors.textWhite, fontWeight: FontWeight.w600))),

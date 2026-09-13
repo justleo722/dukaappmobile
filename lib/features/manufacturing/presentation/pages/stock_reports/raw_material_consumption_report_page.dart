@@ -7,9 +7,11 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:excel/excel.dart' as xls;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _ConsumptionItem {
@@ -31,23 +33,56 @@ class _ConsumptionItem {
   });
 }
 
-class RawMaterialConsumptionReportPage extends StatefulWidget {
+class RawMaterialConsumptionReportPage extends ConsumerStatefulWidget {
   const RawMaterialConsumptionReportPage({super.key});
 
   @override
-  State<RawMaterialConsumptionReportPage> createState() => _RawMaterialConsumptionReportPageState();
+  ConsumerState<RawMaterialConsumptionReportPage> createState() => _RawMaterialConsumptionReportPageState();
 }
 
-class _RawMaterialConsumptionReportPageState extends State<RawMaterialConsumptionReportPage> {
+class _RawMaterialConsumptionReportPageState extends ConsumerState<RawMaterialConsumptionReportPage> {
   final TextEditingController _searchController = TextEditingController();
+  bool _isLoading = true;
+  List<_ConsumptionItem> _items = [];
 
-  static const List<_ConsumptionItem> _items = [
-    _ConsumptionItem(sn: 1, date: '15/08/2026', rawMaterial: 'Cotton Fabric', unit: 'meters', openingStock: 120, consumedQty: 25, closingStock: 95, unitCost: 5000, consumptionCost: 125000, relatedProduction: 'White T-Shirt'),
-    _ConsumptionItem(sn: 2, date: '15/08/2026', rawMaterial: 'Thread', unit: 'rolls', openingStock: 80, consumedQty: 10, closingStock: 70, unitCost: 2000, consumptionCost: 20000, relatedProduction: 'White T-Shirt'),
-    _ConsumptionItem(sn: 3, date: '14/08/2026', rawMaterial: 'Denim Fabric', unit: 'meters', openingStock: 90, consumedQty: 30, closingStock: 60, unitCost: 8000, consumptionCost: 240000, relatedProduction: 'Denim Jeans'),
-    _ConsumptionItem(sn: 4, date: '14/08/2026', rawMaterial: 'Fleece Fabric', unit: 'meters', openingStock: 60, consumedQty: 20, closingStock: 40, unitCost: 6000, consumptionCost: 120000, relatedProduction: 'Cotton Hoodie'),
-    _ConsumptionItem(sn: 5, date: '13/08/2026', rawMaterial: 'Polyester Fabric', unit: 'meters', openingStock: 100, consumedQty: 15, closingStock: 85, unitCost: 3000, consumptionCost: 45000, relatedProduction: 'Sport Shorts'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getMfRawConsumption();
+      final body = res.data;
+      List<_ConsumptionItem> items = [];
+      if (body is Map) {
+        final data = body['data'] ?? body['items'] ?? body;
+        if (data is List) {
+          for (int i = 0; i < data.length; i++) {
+            final m = data[i] as Map;
+            items.add(_ConsumptionItem(
+              sn: i + 1,
+              date: (m['date'] ?? '').toString(),
+              rawMaterial: (m['material_name'] ?? m['raw_material'] ?? m['name'] ?? '').toString(),
+              unit: (m['unit'] ?? '').toString(),
+              openingStock: (m['opening_stock'] ?? 0) as int? ?? 0,
+              consumedQty: (m['consumed_qty'] ?? m['consumed'] ?? 0) as int? ?? 0,
+              closingStock: (m['closing_stock'] ?? 0) as int? ?? 0,
+              unitCost: ((m['unit_cost'] ?? 0) as num).toDouble(),
+              consumptionCost: ((m['consumption_cost'] ?? m['total_cost'] ?? 0) as num).toDouble(),
+              relatedProduction: (m['related_production'] ?? m['product_name'] ?? '').toString(),
+            ));
+          }
+        }
+      }
+      setState(() { _items = items; _isLoading = false; });
+    } catch (_) {
+      setState(() => _isLoading = false);
+    }
+  }
 
   List<_ConsumptionItem> get _filteredItems {
     final q = _searchController.text.toLowerCase().trim();
@@ -118,7 +153,8 @@ class _RawMaterialConsumptionReportPageState extends State<RawMaterialConsumptio
         child: Column(children: [
           _buildActionButtons(context), const SizedBox(height: 12),
           _buildSearchField(), const SizedBox(height: 12),
-          if (items.isEmpty) _buildEmptyState() else _buildTable(items),
+          if (_isLoading) const Padding(padding: EdgeInsets.symmetric(vertical: 60), child: Center(child: CircularProgressIndicator()))
+          else if (items.isEmpty) _buildEmptyState() else _buildTable(items),
           const SizedBox(height: 24),
         ]),
       )),

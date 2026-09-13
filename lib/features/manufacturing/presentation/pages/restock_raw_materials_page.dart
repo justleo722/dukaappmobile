@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_information_card.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_product_card.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_summary_card.dart';
@@ -27,31 +29,48 @@ class _RestockItem {
   }
 }
 
-class RestockRawMaterialsPage extends StatefulWidget {
+class RestockRawMaterialsPage extends ConsumerStatefulWidget {
   const RestockRawMaterialsPage({super.key});
 
   @override
-  State<RestockRawMaterialsPage> createState() => _RestockRawMaterialsPageState();
+  ConsumerState<RestockRawMaterialsPage> createState() => _RestockRawMaterialsPageState();
 }
 
-class _RestockRawMaterialsPageState extends State<RestockRawMaterialsPage> {
+class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPage> {
   String? _selectedAccount;
   String? _selectedSupplier;
   DateTime _restockDate = DateTime.now();
   final List<_RestockItem> _items = [];
+  List<Map<String, dynamic>> _allMaterials = [];
 
-  static const List<Map<String, dynamic>> _dummyMaterials = [
-    {'name': 'Cotton Fabric (White)', 'stock': 250, 'unitCost': 3500.0},
-    {'name': 'Polyester Thread', 'stock': 120, 'unitCost': 1200.0},
-    {'name': 'Denim Fabric', 'stock': 15, 'unitCost': 5500.0},
-    {'name': 'Zipper (Metal)', 'stock': 500, 'unitCost': 200.0},
-    {'name': 'Button (Plastic)', 'stock': 800, 'unitCost': 50.0},
-    {'name': 'Elastic Band', 'stock': 3, 'unitCost': 150.0},
-    {'name': 'Fabric Dye (Blue)', 'stock': 0, 'unitCost': 4500.0},
-    {'name': 'Bleach Solution', 'stock': 8, 'unitCost': 2200.0},
-    {'name': 'Interfacing Cloth', 'stock': 40, 'unitCost': 1800.0},
-    {'name': 'Sewing Needles', 'stock': 25, 'unitCost': 300.0},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadMaterials();
+  }
+
+  Future<void> _loadMaterials() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getMfRawMaterials();
+      final body = res.data;
+      List<Map<String, dynamic>> materials = [];
+      if (body is Map) {
+        final data = body['data'] ?? body['materials'] ?? body;
+        if (data is List) {
+          materials = data.map((e) {
+            final m = Map<String, dynamic>.from(e as Map);
+            return {
+              'name': m['material_name'] ?? m['name'] ?? '',
+              'stock': (m['quantity'] ?? m['stock'] ?? 0) as num,
+              'unitCost': (m['unit_cost'] ?? m['cost'] ?? 0.0) as num,
+            };
+          }).toList();
+        }
+      }
+      setState(() => _allMaterials = materials);
+    } catch (_) {}
+  }
 
   int get _totalQuantity => _items.fold(0, (sum, item) => sum + item.quantity);
 
@@ -79,8 +98,8 @@ class _RestockRawMaterialsPageState extends State<RestockRawMaterialsPage> {
       if (_items.any((item) => item.name == name)) continue;
       _items.add(_RestockItem(
         name: name,
-        currentStock: material['stock'] as int,
-        unitCostValue: material['unitCost'] as double,
+        currentStock: (material['stock'] as num).toInt(),
+        unitCostValue: (material['unitCost'] as num).toDouble(),
       ));
       addedCount++;
     }
@@ -109,7 +128,7 @@ class _RestockRawMaterialsPageState extends State<RestockRawMaterialsPage> {
 
   void _showSearchSheet() {
     final searchController = TextEditingController();
-    List<Map<String, dynamic>> filtered = List.from(_dummyMaterials);
+    List<Map<String, dynamic>> filtered = List.from(_allMaterials);
     final Set<int> selectedIndices = {};
 
     showModalBottomSheet(
@@ -208,8 +227,8 @@ class _RestockRawMaterialsPageState extends State<RestockRawMaterialsPage> {
                             setSheetState(() {
                               selectedIndices.clear();
                               filtered = query.isEmpty
-                                  ? List.from(_dummyMaterials)
-                                  : _dummyMaterials.where((p) => (p['name'] as String).toLowerCase().contains(query)).toList();
+                                  ? List.from(_allMaterials)
+                                  : _allMaterials.where((p) => (p['name'] as String).toLowerCase().contains(query)).toList();
                             });
                           },
                           style: AppTypography.bodyMedium,

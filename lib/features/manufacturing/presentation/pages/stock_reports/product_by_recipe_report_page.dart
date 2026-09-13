@@ -7,9 +7,11 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:excel/excel.dart' as xls;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _RecipeProductItem {
@@ -30,23 +32,56 @@ class _RecipeProductItem {
   });
 }
 
-class ProductByRecipeReportPage extends StatefulWidget {
+class ProductByRecipeReportPage extends ConsumerStatefulWidget {
   const ProductByRecipeReportPage({super.key});
 
   @override
-  State<ProductByRecipeReportPage> createState() => _ProductByRecipeReportPageState();
+  ConsumerState<ProductByRecipeReportPage> createState() => _ProductByRecipeReportPageState();
 }
 
-class _ProductByRecipeReportPageState extends State<ProductByRecipeReportPage> {
+class _ProductByRecipeReportPageState extends ConsumerState<ProductByRecipeReportPage> {
   final TextEditingController _searchController = TextEditingController();
+  bool _isLoading = true;
+  List<_RecipeProductItem> _items = [];
 
-  static const List<_RecipeProductItem> _items = [
-    _RecipeProductItem(sn: 1, recipeName: 'Basic Tee', productName: 'White T-Shirt', totalProductions: 15, totalQtyProduced: 180, estimatedCostPerUnit: 450, totalProductionCost: 81000, avgDailyProduction: 12),
-    _RecipeProductItem(sn: 2, recipeName: 'Slim Fit Denim', productName: 'Denim Jeans', totalProductions: 8, totalQtyProduced: 64, estimatedCostPerUnit: 1200, totalProductionCost: 76800, avgDailyProduction: 8),
-    _RecipeProductItem(sn: 3, recipeName: 'Winter Hoodie', productName: 'Cotton Hoodie', totalProductions: 12, totalQtyProduced: 60, estimatedCostPerUnit: 900, totalProductionCost: 54000, avgDailyProduction: 5),
-    _RecipeProductItem(sn: 4, recipeName: 'Casual Linen', productName: 'Linen Shirt', totalProductions: 6, totalQtyProduced: 72, estimatedCostPerUnit: 700, totalProductionCost: 50400, avgDailyProduction: 12),
-    _RecipeProductItem(sn: 5, recipeName: 'Active Shorts', productName: 'Sport Shorts', totalProductions: 10, totalQtyProduced: 150, estimatedCostPerUnit: 350, totalProductionCost: 52500, avgDailyProduction: 15),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getMfProductionByRecipe();
+      final body = res.data;
+      List<_RecipeProductItem> items = [];
+      if (body is Map) {
+        final data = body['data'] ?? body['items'] ?? body;
+        if (data is List) {
+          for (int i = 0; i < data.length; i++) {
+            final m = data[i] as Map;
+            final qty = (m['total_qty_produced'] ?? m['total_quantity'] ?? 0) as num;
+            final costUnit = (m['estimated_cost_per_unit'] ?? m['cost_per_unit'] ?? 0.0) as num;
+            items.add(_RecipeProductItem(
+              sn: i + 1,
+              recipeName: (m['recipe_name'] ?? m['recipe'] ?? '').toString(),
+              productName: (m['product_name'] ?? m['name'] ?? '').toString(),
+              totalProductions: (m['total_productions'] ?? m['total_batches'] ?? 0) as int? ?? 0,
+              totalQtyProduced: qty.toInt(),
+              estimatedCostPerUnit: costUnit.toDouble(),
+              totalProductionCost: ((m['total_production_cost'] ?? costUnit * qty) as num).toDouble(),
+              avgDailyProduction: ((m['avg_daily_production'] ?? 0.0) as num).toDouble(),
+            ));
+          }
+        }
+      }
+      setState(() { _items = items; _isLoading = false; });
+    } catch (_) {
+      setState(() => _isLoading = false);
+    }
+  }
 
   List<_RecipeProductItem> get _filteredItems {
     final q = _searchController.text.toLowerCase().trim();
@@ -117,7 +152,8 @@ class _ProductByRecipeReportPageState extends State<ProductByRecipeReportPage> {
         child: Column(children: [
           _buildActionButtons(context), const SizedBox(height: 12),
           _buildSearchField(), const SizedBox(height: 12),
-          if (items.isEmpty) _buildEmptyState() else _buildTable(items),
+          if (_isLoading) const Padding(padding: EdgeInsets.symmetric(vertical: 60), child: Center(child: CircularProgressIndicator()))
+          else if (items.isEmpty) _buildEmptyState() else _buildTable(items),
           const SizedBox(height: 24),
         ]),
       )),

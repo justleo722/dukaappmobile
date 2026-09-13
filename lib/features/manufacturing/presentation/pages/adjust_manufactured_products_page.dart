@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/adjust_product_card.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/adjustment_status_dropdown.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/adjustment_summary_card.dart';
@@ -19,30 +21,51 @@ class _AdjustItem {
         status = AdjustmentStatus.none;
 }
 
-class AdjustManufacturedProductsPage extends StatefulWidget {
+class AdjustManufacturedProductsPage extends ConsumerStatefulWidget {
   const AdjustManufacturedProductsPage({super.key});
 
   @override
-  State<AdjustManufacturedProductsPage> createState() => _AdjustManufacturedProductsPageState();
+  ConsumerState<AdjustManufacturedProductsPage> createState() => _AdjustManufacturedProductsPageState();
 }
 
-class _AdjustManufacturedProductsPageState extends State<AdjustManufacturedProductsPage> {
+class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufacturedProductsPage> {
   final TextEditingController _searchController = TextEditingController();
   final List<_AdjustItem> _items = [];
   final Set<int> _selectedProducts = {};
+  List<Map<String, dynamic>> _allProducts = [];
 
-  static const List<Map<String, dynamic>> _dummyProducts = [
-    {'name': 'White T-Shirt', 'stock': 120},
-    {'name': 'Denim Jeans', 'stock': 8},
-    {'name': 'Cotton Hoodie', 'stock': 45},
-    {'name': 'Linen Shirt', 'stock': 0},
-    {'name': 'Sport Shorts', 'stock': 60},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  Future<void> _loadProducts() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getMfManufacturedProducts();
+      final body = res.data;
+      List<Map<String, dynamic>> products = [];
+      if (body is Map) {
+        final data = body['data'] ?? body['products'] ?? body;
+        if (data is List) {
+          products = data.map((e) {
+            final m = Map<String, dynamic>.from(e as Map);
+            return {
+              'name': m['product_name'] ?? m['name'] ?? '',
+              'stock': (m['quantity'] ?? m['stock'] ?? 0) as num,
+            };
+          }).toList();
+        }
+      }
+      setState(() => _allProducts = products);
+    } catch (_) {}
+  }
 
   List<Map<String, dynamic>> get _filteredProducts {
     final query = _searchController.text.toLowerCase().trim();
-    if (query.isEmpty) return _dummyProducts;
-    return _dummyProducts.where((p) => (p['name'] as String).toLowerCase().contains(query)).toList();
+    if (query.isEmpty) return _allProducts;
+    return _allProducts.where((p) => (p['name'] as String).toLowerCase().contains(query)).toList();
   }
 
   int get _totalAdjustedQuantity => _items.fold(0, (sum, item) => sum + item.adjustQuantity);
@@ -59,7 +82,7 @@ class _AdjustManufacturedProductsPageState extends State<AdjustManufacturedProdu
       final product = products[index];
       final name = product['name'] as String;
       if (_items.any((item) => item.name == name)) continue;
-      _items.add(_AdjustItem(name: name, currentStock: product['stock'] as int));
+      _items.add(_AdjustItem(name: name, currentStock: (product['stock'] as num).toInt()));
       addedCount++;
     }
     setState(() => _selectedProducts.clear());

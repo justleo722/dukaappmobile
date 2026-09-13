@@ -1,49 +1,66 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
-class _ManufacturedProduct {
-  final String name;
-  final String recipeName;
-  final int quantity;
-  final double unitCost;
-  final double sellingPrice;
-  final String status;
-
-  const _ManufacturedProduct({
-    required this.name,
-    required this.recipeName,
-    required this.quantity,
-    required this.unitCost,
-    required this.sellingPrice,
-    required this.status,
-  });
-
-  double get totalValue => unitCost * quantity;
-}
-
-class ManufacturingPage extends StatefulWidget {
+class ManufacturingPage extends ConsumerStatefulWidget {
   const ManufacturingPage({super.key});
 
   @override
-  State<ManufacturingPage> createState() => _ManufacturingPageState();
+  ConsumerState<ManufacturingPage> createState() => _ManufacturingPageState();
 }
 
-class _ManufacturingPageState extends State<ManufacturingPage> {
-  static const List<_ManufacturedProduct> _products = [
-    _ManufacturedProduct(name: 'White T-Shirt', recipeName: 'Basic Tee', quantity: 120, unitCost: 450, sellingPrice: 850, status: 'In Stock'),
-    _ManufacturedProduct(name: 'Denim Jeans', recipeName: 'Slim Fit Denim', quantity: 8, unitCost: 1200, sellingPrice: 2500, status: 'Running Low'),
-    _ManufacturedProduct(name: 'Cotton Hoodie', recipeName: 'Winter Hoodie', quantity: 45, unitCost: 900, sellingPrice: 1800, status: 'In Stock'),
-    _ManufacturedProduct(name: 'Linen Shirt', recipeName: 'Casual Linen', quantity: 0, unitCost: 700, sellingPrice: 1400, status: 'Expired'),
-    _ManufacturedProduct(name: 'Sport Shorts', recipeName: 'Active Shorts', quantity: 60, unitCost: 350, sellingPrice: 700, status: 'In Stock'),
-  ];
+class _ManufacturingPageState extends ConsumerState<ManufacturingPage> {
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _products = [];
+  int _recipeCount = 0;
 
-  double get _totalRawMaterialValue => _products.fold(0.0, (sum, p) => sum + (p.unitCost * p.quantity));
-  int get _manufacturedCount => _products.length;
-  int get _recipeCount => 5;
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getMfManufacturedProducts();
+      final body = res.data;
+      List<Map<String, dynamic>> products = [];
+      if (body is Map) {
+        final data = body['data'] ?? body['products'] ?? body;
+        if (data is List) {
+          products = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+      }
+      // Also fetch recipe count
+      try {
+        final recipeRes = await api.getMfRecipes();
+        final rb = recipeRes.data;
+        if (rb is Map) {
+          final rd = rb['data'] ?? rb['recipes'] ?? rb;
+          if (rd is List) _recipeCount = rd.length;
+        }
+      } catch (_) {}
+      setState(() {
+        _products = products;
+        _isLoading = false;
+      });
+    } catch (_) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  double get _totalRawMaterialValue => _products.fold(0.0, (sum, p) {
+    final cost = (p['unit_cost'] ?? p['buying_price'] ?? p['cost_price'] ?? 0);
+    final qty = (p['quantity'] ?? p['stock'] ?? 0);
+    return sum + ((cost as num).toDouble() * (qty as num).toDouble());
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +72,9 @@ class _ManufacturingPageState extends State<ManufacturingPage> {
         const SizedBox(height: 12),
         _buildActionButtons(context),
         const SizedBox(height: 12),
-        Expanded(child: _products.isEmpty ? _buildEmptyState() : _buildProductList()),
+        Expanded(child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _products.isEmpty ? _buildEmptyState() : _buildProductList()),
       ]),
     );
   }
@@ -70,6 +89,12 @@ class _ManufacturingPageState extends State<ManufacturingPage> {
       leadingWidth: 56,
       title: Text('Manage Manufactured Products', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
       centerTitle: true,
+      actions: [
+        Padding(padding: const EdgeInsets.only(right: 8), child: IconButton(
+          icon: const Icon(Icons.refresh_rounded, color: AppColors.textSecondary, size: 20),
+          onPressed: _loadData,
+        )),
+      ],
       bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(height: 1, color: AppColors.divider)),
     );
   }
@@ -84,8 +109,8 @@ class _ManufacturingPageState extends State<ManufacturingPage> {
         separatorBuilder: (_, index) => const SizedBox(width: 10),
         itemBuilder: (_, i) {
           switch (i) {
-            case 0: return _summaryCard('Total Raw Material Value', _fmt(_totalRawMaterialValue), AppColors.textSecondary, const Color(0xFFF1F5F9), Icons.inventory_2_rounded);
-            case 1: return _summaryCard('Manufactured Products', _manufacturedCount.toString(), AppColors.primary, const Color(0xFFEBF2FF), Icons.factory_rounded);
+            case 0: return _summaryCard('Total Cost Value', _fmt(_totalRawMaterialValue), AppColors.textSecondary, const Color(0xFFF1F5F9), Icons.inventory_2_rounded);
+            case 1: return _summaryCard('Manufactured Products', _products.length.toString(), AppColors.primary, const Color(0xFFEBF2FF), Icons.factory_rounded);
             case 2: return _summaryCard('Total Recipes', _recipeCount.toString(), AppColors.success, AppColors.successLight, Icons.receipt_long_rounded);
             default: return const SizedBox.shrink();
           }
@@ -134,9 +159,7 @@ class _ManufacturingPageState extends State<ManufacturingPage> {
         itemCount: buttons.length + 1,
         separatorBuilder: (_, index) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
-          if (i == buttons.length) {
-            return _addProductBtn();
-          }
+          if (i == buttons.length) return _addProductBtn();
           final b = buttons[i];
           return _actionBtn(b['icon'] as IconData, b['label'] as String, b['color'] as Color, b['onTap'] as VoidCallback);
         },
@@ -176,15 +199,21 @@ class _ManufacturingPageState extends State<ManufacturingPage> {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       itemCount: _products.length,
-      itemBuilder: (ctx, i) {
-        return _buildProductCard(_products[i]);
-      },
+      itemBuilder: (ctx, i) => _buildProductCard(_products[i]),
     );
   }
 
-  Widget _buildProductCard(_ManufacturedProduct product) {
-    final statusColor = _statusColor(product.status);
-    final statusBg = _statusBg(product.status);
+  Widget _buildProductCard(Map<String, dynamic> p) {
+    final name = p['product_name'] ?? p['name'] ?? 'Unknown';
+    final recipe = p['recipe_name'] ?? p['recipe'] ?? '—';
+    final qty = (p['quantity'] ?? p['stock'] ?? 0) as num;
+    final unitCost = (p['unit_cost'] ?? p['buying_price'] ?? p['cost_price'] ?? 0) as num;
+    final sellingPrice = (p['selling_price'] ?? p['price'] ?? 0) as num;
+    final totalValue = unitCost.toDouble() * qty.toDouble();
+    final rawStatus = (p['status'] ?? 'In Stock').toString();
+    final status = rawStatus.isEmpty ? 'In Stock' : rawStatus;
+    final statusColor = _statusColor(status);
+    final statusBg = _statusBg(status);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -194,50 +223,51 @@ class _ManufacturingPageState extends State<ManufacturingPage> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(width: 40, height: 40, decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(10)),
-            child: Icon(Icons.factory_rounded, color: AppColors.primary, size: 20)),
+            child: const Icon(Icons.factory_rounded, color: AppColors.primary, size: 20)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(product.name, style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+            Text(name.toString(), style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
-            Text('Recipe: ${product.recipeName}', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11)),
+            Text('Recipe: $recipe', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11)),
           ])),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(6)),
-            child: Text(product.status, style: AppTypography.caption.copyWith(color: statusColor, fontWeight: FontWeight.w600, fontSize: 10)),
+            child: Text(status, style: AppTypography.caption.copyWith(color: statusColor, fontWeight: FontWeight.w600, fontSize: 10)),
           ),
         ]),
         const Divider(height: 20),
         Row(children: [
-          _infoChip('Qty', product.quantity.toString()),
+          _infoChip('Qty', qty.toString()),
           const SizedBox(width: 8),
-          _infoChip('Unit Cost', _fmt(product.unitCost)),
+          _infoChip('Unit Cost', _fmt(unitCost.toDouble())),
           const SizedBox(width: 8),
-          _infoChip('Selling', _fmt(product.sellingPrice)),
+          _infoChip('Selling', _fmt(sellingPrice.toDouble())),
           const Spacer(),
           GestureDetector(
             onTap: () => context.push('/manufacturing/edit-product', extra: {
-              'name': product.name, 'recipe': product.recipeName, 'quantity': product.quantity,
-              'unitCost': product.unitCost, 'sellingPrice': product.sellingPrice, 'wholesalePrice': product.sellingPrice * 0.85,
-              'alertLevel': 10,
+              'name': name, 'recipe': recipe, 'quantity': qty.toInt(),
+              'unitCost': unitCost.toDouble(), 'sellingPrice': sellingPrice.toDouble(),
+              'wholesalePrice': sellingPrice.toDouble() * 0.85, 'alertLevel': 10,
+              ...p,
             }),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.edit_rounded, size: 14, color: AppColors.primary), const SizedBox(width: 4),
+                const Icon(Icons.edit_rounded, size: 14, color: AppColors.primary), const SizedBox(width: 4),
                 Text('Edit', style: AppTypography.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 11)),
               ]),
             ),
           ),
           const SizedBox(width: 6),
           GestureDetector(
-            onTap: () => _showDeleteConfirmation(product.name),
+            onTap: () => _showDeleteConfirmation(name.toString(), p),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.delete_rounded, size: 14, color: AppColors.danger), const SizedBox(width: 4),
+                const Icon(Icons.delete_rounded, size: 14, color: AppColors.danger), const SizedBox(width: 4),
                 Text('Delete', style: AppTypography.caption.copyWith(color: AppColors.danger, fontWeight: FontWeight.w600, fontSize: 11)),
               ]),
             ),
@@ -247,7 +277,7 @@ class _ManufacturingPageState extends State<ManufacturingPage> {
         Row(children: [
           Text('Total Value:', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
           const Spacer(),
-          Text(_fmt(product.totalValue), style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+          Text(_fmt(totalValue), style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
         ]),
       ]),
     );
@@ -270,36 +300,31 @@ class _ManufacturingPageState extends State<ManufacturingPage> {
       Container(width: 100, height: 100, decoration: BoxDecoration(color: const Color(0xFFEEF2FF), shape: BoxShape.circle),
         child: Icon(Icons.factory_rounded, size: 48, color: AppColors.primary.withValues(alpha: 0.4))),
       const SizedBox(height: 20),
-      Text('No Manufactured Products Found', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+      Text('No Manufactured Products', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
       const SizedBox(height: 6),
       Text('Tap "Add Product" to get started.', style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
     ])));
   }
 
   Color _statusColor(String status) {
-    switch (status) {
-      case 'In Stock': return AppColors.success;
-      case 'Running Low': return const Color(0xFFF59E0B);
-      case 'Expired': return AppColors.danger;
-      default: return AppColors.textSecondary;
-    }
+    final s = status.toLowerCase();
+    if (s.contains('low') || s.contains('alert')) return const Color(0xFFF59E0B);
+    if (s.contains('expired') || s.contains('out')) return AppColors.danger;
+    return AppColors.success;
   }
 
   Color _statusBg(String status) {
-    switch (status) {
-      case 'In Stock': return AppColors.successLight;
-      case 'Running Low': return const Color(0xFFFEF3C7);
-      case 'Expired': return AppColors.dangerLight;
-      default: return const Color(0xFFF1F5F9);
-    }
+    final s = status.toLowerCase();
+    if (s.contains('low') || s.contains('alert')) return const Color(0xFFFEF3C7);
+    if (s.contains('expired') || s.contains('out')) return AppColors.dangerLight;
+    return AppColors.successLight;
   }
 
   String _fmt(double v) {
-    if (v == v.roundToDouble() && v < 1000000) return 'TZS ${v.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
     return 'TZS ${v.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
   }
 
-  void _showDeleteConfirmation(String productName) {
+  void _showDeleteConfirmation(String productName, Map<String, dynamic> p) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -315,7 +340,15 @@ class _ManufacturingPageState extends State<ManufacturingPage> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx),
             child: Text('Cancel', style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600))),
-          TextButton(onPressed: () => Navigator.pop(ctx),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                final api = ref.read(apiServiceProvider);
+                await api.postMfProductionDelete({'product_id': p['id'] ?? p['product_id'] ?? ''});
+                _loadData();
+              } catch (_) {}
+            },
             style: TextButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: AppColors.textWhite,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
             child: Text('Delete', style: AppTypography.bodySmall.copyWith(color: AppColors.textWhite, fontWeight: FontWeight.w600))),

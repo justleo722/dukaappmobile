@@ -9,25 +9,10 @@ class PurchaseInformationCard extends StatelessWidget {
   final ValueChanged<String?> onAccountChanged;
   final String? selectedSupplier;
   final ValueChanged<String?> onSupplierChanged;
-
-  static const List<String> _accounts = [
-    'Cash',
-    'Bank',
-    'Supplier Credit',
-    'Mobile Money',
-  ];
-
-  static const List<String> _suppliers = [
-    'TANZANIA BEVERAGES LTD',
-    'KILIMANJARO PREMIUM LTD',
-    'Coca-Cola Kwanza Ltd',
-    'SAFARI BREWERIES LTD',
-    'Local Wholesaler',
-    'JUMA SUPPLIERS',
-    'AMINA TRADERS',
-    'HASSAN WHOLESALE',
-    'FATIMA ENTERPRISES',
-  ];
+  /// Optional dynamic list of accounts loaded from API. Falls back to empty list.
+  final List<String> accounts;
+  /// Optional dynamic list of suppliers loaded from API. Falls back to empty list.
+  final List<String> suppliers;
 
   const PurchaseInformationCard({
     super.key,
@@ -36,6 +21,8 @@ class PurchaseInformationCard extends StatelessWidget {
     required this.onAccountChanged,
     this.selectedSupplier,
     required this.onSupplierChanged,
+    this.accounts = const [],
+    this.suppliers = const [],
   });
 
   @override
@@ -119,7 +106,7 @@ class PurchaseInformationCard extends StatelessWidget {
             label: 'From Account',
             value: selectedAccount,
             hint: 'Select account',
-            items: _accounts,
+            items: accounts,
             onChanged: onAccountChanged,
           ),
         ),
@@ -132,7 +119,7 @@ class PurchaseInformationCard extends StatelessWidget {
       label: 'Supplier (Optional)',
       value: selectedSupplier,
       hint: 'Select supplier',
-      items: _suppliers,
+      items: suppliers,
       onChanged: onSupplierChanged,
     );
   }

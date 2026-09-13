@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/services/api_service.dart';
 
 class _ReproduceProduct {
   final String name;
@@ -31,24 +33,48 @@ class _ReproduceProduct {
   }
 }
 
-class ReproduceProductsPage extends StatefulWidget {
+class ReproduceProductsPage extends ConsumerStatefulWidget {
   const ReproduceProductsPage({super.key});
 
   @override
-  State<ReproduceProductsPage> createState() => _ReproduceProductsPageState();
+  ConsumerState<ReproduceProductsPage> createState() => _ReproduceProductsPageState();
 }
 
-class _ReproduceProductsPageState extends State<ReproduceProductsPage> {
+class _ReproduceProductsPageState extends ConsumerState<ReproduceProductsPage> {
   DateTime _productionDate = DateTime.now();
   final List<_ReproduceProduct> _items = [];
+  List<Map<String, dynamic>> _allProducts = [];
 
-  static const List<Map<String, dynamic>> _dummyProducts = [
-    {'name': 'White T-Shirt', 'recipe': 'Basic Tee', 'productionCost': 450.0, 'sellingPrice': 850.0, 'wholesalePrice': 750.0},
-    {'name': 'Denim Jeans', 'recipe': 'Slim Fit Denim', 'productionCost': 1200.0, 'sellingPrice': 2500.0, 'wholesalePrice': 2200.0},
-    {'name': 'Cotton Hoodie', 'recipe': 'Winter Hoodie', 'productionCost': 900.0, 'sellingPrice': 1800.0, 'wholesalePrice': 1600.0},
-    {'name': 'Linen Shirt', 'recipe': 'Casual Linen', 'productionCost': 700.0, 'sellingPrice': 1400.0, 'wholesalePrice': 1200.0},
-    {'name': 'Sport Shorts', 'recipe': 'Active Shorts', 'productionCost': 350.0, 'sellingPrice': 700.0, 'wholesalePrice': 600.0},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  Future<void> _loadProducts() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getMfManufacturedProducts();
+      final body = res.data;
+      List<Map<String, dynamic>> products = [];
+      if (body is Map) {
+        final data = body['data'] ?? body['products'] ?? body;
+        if (data is List) {
+          products = data.map((e) {
+            final m = Map<String, dynamic>.from(e as Map);
+            return {
+              'name': m['product_name'] ?? m['name'] ?? '',
+              'recipe': m['recipe_name'] ?? m['recipe'] ?? '',
+              'productionCost': (m['unit_cost'] ?? m['cost_price'] ?? 0.0) as num,
+              'sellingPrice': (m['selling_price'] ?? m['price'] ?? 0.0) as num,
+              'wholesalePrice': (m['wholesale_price'] ?? 0.0) as num,
+            };
+          }).toList();
+        }
+      }
+      setState(() => _allProducts = products);
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -65,11 +91,11 @@ class _ReproduceProductsPageState extends State<ReproduceProductsPage> {
       if (_items.any((item) => item.name == name)) continue;
       _items.add(_ReproduceProduct(
         name: name,
-        recipe: product['recipe'] as String,
+        recipe: (product['recipe'] ?? '').toString(),
         quantity: 1,
-        productionCost: product['productionCost'] as double,
-        sellingPrice: product['sellingPrice'] as double,
-        wholesalePrice: product['wholesalePrice'] as double,
+        productionCost: (product['productionCost'] as num).toDouble(),
+        sellingPrice: (product['sellingPrice'] as num).toDouble(),
+        wholesalePrice: (product['wholesalePrice'] as num).toDouble(),
       ));
       addedCount++;
     }
@@ -85,7 +111,7 @@ class _ReproduceProductsPageState extends State<ReproduceProductsPage> {
 
   void _showSearchSheet() {
     final searchController = TextEditingController();
-    List<Map<String, dynamic>> filtered = List.from(_dummyProducts);
+    List<Map<String, dynamic>> filtered = List.from(_allProducts);
     final Set<int> selectedIndices = {};
 
     showModalBottomSheet(
@@ -146,7 +172,7 @@ class _ReproduceProductsPageState extends State<ReproduceProductsPage> {
                           final query = value.toLowerCase().trim();
                           setSheetState(() {
                             selectedIndices.clear();
-                            filtered = query.isEmpty ? List.from(_dummyProducts) : _dummyProducts.where((p) => (p['name'] as String).toLowerCase().contains(query)).toList();
+                            filtered = query.isEmpty ? List.from(_allProducts) : _allProducts.where((p) => (p['name'] as String).toLowerCase().contains(query)).toList();
                           });
                         },
                         style: AppTypography.bodyMedium,

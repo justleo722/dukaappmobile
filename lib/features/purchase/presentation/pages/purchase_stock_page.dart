@@ -67,17 +67,15 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
   DateTime _purchaseDate = DateTime.now();
   final List<_PurchaseItem> _items = [];
 
-  static const List<Map<String, dynamic>> _dummyProducts = [
-    {'name': 'AIR', 'stock': 15, 'buyingPrice': 4500.0, 'sellingPrice': 7000.0, 'wholesalePrice': 6500.0},
-    {'name': 'AIR FRESH', 'stock': 8, 'buyingPrice': 3500.0, 'sellingPrice': 5500.0, 'wholesalePrice': 5000.0},
-    {'name': 'APPLE JUICE', 'stock': 20, 'buyingPrice': 1200.0, 'sellingPrice': 2000.0, 'wholesalePrice': 1800.0},
-    {'name': 'COCA COLA 600ML', 'stock': 3, 'buyingPrice': 800.0, 'sellingPrice': 1000.0, 'wholesalePrice': 1000.0},
-    {'name': 'COKE', 'stock': 12, 'buyingPrice': 800.0, 'sellingPrice': 1000.0, 'wholesalePrice': 950.0},
-  ];
+  List<Map<String, dynamic>> _allProducts = [];
+  List<String> _accounts = [];
+  List<String> _suppliers = [];
 
   @override
   void initState() {
     super.initState();
+    _loadProductList();
+    _loadAccountsAndSuppliers();
     if (widget.editMode && widget.editProducts != null) {
       _selectedSupplier = widget.initialSupplier;
       for (final product in widget.editProducts!) {
@@ -99,6 +97,58 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
     } else if (widget.initialProduct != null) {
       _addInitialProduct(widget.initialProduct!);
     }
+  }
+
+  Future<void> _loadProductList() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getProducts();
+      final body = res.data;
+      List<Map<String, dynamic>> products = [];
+      if (body is Map) {
+        final data = body['data'] ?? body['products'] ?? body;
+        if (data is List) {
+          products = data.map((e) {
+            final m = Map<String, dynamic>.from(e as Map);
+            return {
+              'name': m['product_name'] ?? m['name'] ?? '',
+              'stock': (m['quantity'] ?? m['stock'] ?? 0) as num,
+              'buyingPrice': (m['buying_price'] ?? m['cost_price'] ?? 0.0) as num,
+              'sellingPrice': (m['selling_price'] ?? m['price'] ?? 0.0) as num,
+              'wholesalePrice': (m['wholesale_price'] ?? 0.0) as num,
+            };
+          }).toList();
+        }
+      }
+      if (mounted) setState(() => _allProducts = products);
+    } catch (_) {}
+  }
+
+  Future<void> _loadAccountsAndSuppliers() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      // Load accounts
+      final acctRes = await api.getCashbookAccounts();
+      final acctBody = acctRes.data;
+      List<String> accounts = [];
+      if (acctBody is Map) {
+        final data = acctBody['data'] ?? acctBody['accounts'] ?? acctBody;
+        if (data is List) {
+          accounts = data.map((e) => (e['account_name'] ?? e['name'] ?? '').toString()).where((s) => s.isNotEmpty).toList();
+        }
+      }
+      // Load suppliers
+      final suppRes = await api.getSuppliers();
+      final suppBody = suppRes.data;
+      List<String> suppliers = [];
+      if (suppBody is Map) {
+        final data = suppBody['data'] ?? suppBody['suppliers'] ?? suppBody;
+        if (data is List) {
+          suppliers = data.map((e) => (e['supplier_name'] ?? e['name'] ?? '').toString()).where((s) => s.isNotEmpty).toList();
+        }
+      }
+      if (mounted) setState(() { _accounts = accounts; _suppliers = suppliers; });
+    } catch (_) {}
   }
 
   void _addInitialProduct(Map<String, dynamic> product) {
@@ -174,7 +224,7 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
 
   void _showSearchSheet() {
     final searchController = TextEditingController();
-    List<Map<String, dynamic>> filtered = List.from(_dummyProducts);
+    List<Map<String, dynamic>> filtered = List.from(_allProducts);
     final Set<int> selectedIndices = {};
 
     showModalBottomSheet(
@@ -296,8 +346,8 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                             setSheetState(() {
                               selectedIndices.clear();
                               filtered = query.isEmpty
-                                  ? List.from(_dummyProducts)
-                                  : _dummyProducts.where((p) {
+                                  ? List.from(_allProducts)
+                                  : _allProducts.where((p) {
                                       final name = (p['name'] as String).toLowerCase();
                                       return name.contains(query);
                                     }).toList();
@@ -335,8 +385,8 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                                     setSheetState(() {
                                       selectedIndices.clear();
                                       filtered = query.isEmpty
-                                          ? List.from(_dummyProducts)
-                                          : _dummyProducts.where((p) {
+                                          ? List.from(_allProducts)
+                                          : _allProducts.where((p) {
                                               final name = (p['name'] as String).toLowerCase();
                                               return name.contains(query);
                                             }).toList();
@@ -600,6 +650,8 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                       onAccountChanged: (v) => setState(() => _selectedAccount = v),
                       selectedSupplier: _selectedSupplier,
                       onSupplierChanged: (v) => setState(() => _selectedSupplier = v),
+                      accounts: _accounts,
+                      suppliers: _suppliers,
                     ),
                     const SizedBox(height: 14),
                     _buildDateSection(),

@@ -7,9 +7,11 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:excel/excel.dart' as xls;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _CostItem {
@@ -31,23 +33,63 @@ class _CostItem {
   });
 }
 
-class ProductionCostAnalysisReportPage extends StatefulWidget {
+class ProductionCostAnalysisReportPage extends ConsumerStatefulWidget {
   const ProductionCostAnalysisReportPage({super.key});
 
   @override
-  State<ProductionCostAnalysisReportPage> createState() => _ProductionCostAnalysisReportPageState();
+  ConsumerState<ProductionCostAnalysisReportPage> createState() => _ProductionCostAnalysisReportPageState();
 }
 
-class _ProductionCostAnalysisReportPageState extends State<ProductionCostAnalysisReportPage> {
+class _ProductionCostAnalysisReportPageState extends ConsumerState<ProductionCostAnalysisReportPage> {
   final TextEditingController _searchController = TextEditingController();
+  bool _isLoading = true;
+  List<_CostItem> _items = [];
 
-  static const List<_CostItem> _items = [
-    _CostItem(sn: 1, productName: 'White T-Shirt', recipe: 'Basic Tee', qtyProduced: 120, costPerUnit: 450, totalProductionCost: 54000, sellingPrice: 850, expectedRevenue: 102000, expectedProfit: 48000, profitMargin: 47.1),
-    _CostItem(sn: 2, productName: 'Denim Jeans', recipe: 'Slim Fit Denim', qtyProduced: 8, costPerUnit: 1200, totalProductionCost: 9600, sellingPrice: 2500, expectedRevenue: 20000, expectedProfit: 10400, profitMargin: 52.0),
-    _CostItem(sn: 3, productName: 'Cotton Hoodie', recipe: 'Winter Hoodie', qtyProduced: 45, costPerUnit: 900, totalProductionCost: 40500, sellingPrice: 1800, expectedRevenue: 81000, expectedProfit: 40500, profitMargin: 50.0),
-    _CostItem(sn: 4, productName: 'Sport Shorts', recipe: 'Active Shorts', qtyProduced: 60, costPerUnit: 350, totalProductionCost: 21000, sellingPrice: 700, expectedRevenue: 42000, expectedProfit: 21000, profitMargin: 50.0),
-    _CostItem(sn: 5, productName: 'Linen Shirt', recipe: 'Casual Linen', qtyProduced: 30, costPerUnit: 700, totalProductionCost: 21000, sellingPrice: 1400, expectedRevenue: 42000, expectedProfit: 21000, profitMargin: 50.0),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getMfCostAnalysis();
+      final body = res.data;
+      List<_CostItem> items = [];
+      if (body is Map) {
+        final data = body['data'] ?? body['items'] ?? body;
+        if (data is List) {
+          for (int i = 0; i < data.length; i++) {
+            final m = data[i] as Map;
+            final qty = (m['quantity'] ?? m['qty_produced'] ?? 0) as num;
+            final costUnit = (m['cost_per_unit'] ?? m['unit_cost'] ?? 0.0) as num;
+            final totalCost = (m['total_cost'] ?? m['total_production_cost'] ?? costUnit * qty) as num;
+            final selling = (m['selling_price'] ?? m['price'] ?? 0.0) as num;
+            final revenue = (m['expected_revenue'] ?? selling * qty) as num;
+            final profit = (m['expected_profit'] ?? revenue - totalCost) as num;
+            final margin = totalCost > 0 ? (profit / revenue * 100) : 0.0;
+            items.add(_CostItem(
+              sn: i + 1,
+              productName: (m['product_name'] ?? m['name'] ?? '').toString(),
+              recipe: (m['recipe_name'] ?? m['recipe'] ?? '').toString(),
+              qtyProduced: qty.toInt(),
+              costPerUnit: costUnit.toDouble(),
+              totalProductionCost: totalCost.toDouble(),
+              sellingPrice: selling.toDouble(),
+              expectedRevenue: revenue.toDouble(),
+              expectedProfit: profit.toDouble(),
+              profitMargin: margin.toDouble(),
+            ));
+          }
+        }
+      }
+      setState(() { _items = items; _isLoading = false; });
+    } catch (_) {
+      setState(() => _isLoading = false);
+    }
+  }
 
   List<_CostItem> get _filteredItems {
     final q = _searchController.text.toLowerCase().trim();
@@ -118,7 +160,8 @@ class _ProductionCostAnalysisReportPageState extends State<ProductionCostAnalysi
         child: Column(children: [
           _buildActionButtons(context), const SizedBox(height: 12),
           _buildSearchField(), const SizedBox(height: 12),
-          if (items.isEmpty) _buildEmptyState() else _buildTable(items),
+          if (_isLoading) const Padding(padding: EdgeInsets.symmetric(vertical: 60), child: Center(child: CircularProgressIndicator()))
+          else if (items.isEmpty) _buildEmptyState() else _buildTable(items),
           const SizedBox(height: 24),
         ]),
       )),

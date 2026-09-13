@@ -7,9 +7,11 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:excel/excel.dart' as xls;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class _LowStockItem {
@@ -29,23 +31,56 @@ class _LowStockItem {
   });
 }
 
-class LowStockAlertReportPage extends StatefulWidget {
+class LowStockAlertReportPage extends ConsumerStatefulWidget {
   const LowStockAlertReportPage({super.key});
 
   @override
-  State<LowStockAlertReportPage> createState() => _LowStockAlertReportPageState();
+  ConsumerState<LowStockAlertReportPage> createState() => _LowStockAlertReportPageState();
 }
 
-class _LowStockAlertReportPageState extends State<LowStockAlertReportPage> {
+class _LowStockAlertReportPageState extends ConsumerState<LowStockAlertReportPage> {
   final TextEditingController _searchController = TextEditingController();
+  bool _isLoading = true;
+  List<_LowStockItem> _items = [];
 
-  static const List<_LowStockItem> _items = [
-    _LowStockItem(sn: 1, rawMaterial: 'Cotton Fabric', unit: 'meters', currentStock: 15, minimumStock: 50, difference: -35, lastPurchaseDate: '10/08/2026', status: 'Critical'),
-    _LowStockItem(sn: 2, rawMaterial: 'Denim Fabric', unit: 'meters', currentStock: 20, minimumStock: 40, difference: -20, lastPurchaseDate: '08/08/2026', status: 'Low'),
-    _LowStockItem(sn: 3, rawMaterial: 'Dye', unit: 'liters', currentStock: 5, minimumStock: 20, difference: -15, lastPurchaseDate: '05/08/2026', status: 'Critical'),
-    _LowStockItem(sn: 4, rawMaterial: 'Thread', unit: 'rolls', currentStock: 10, minimumStock: 30, difference: -20, lastPurchaseDate: '01/08/2026', status: 'Low'),
-    _LowStockItem(sn: 5, rawMaterial: 'Elastic Band', unit: 'meters', currentStock: 8, minimumStock: 25, difference: -17, lastPurchaseDate: '12/08/2026', status: 'Critical'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getMfLowStockAlerts();
+      final body = res.data;
+      List<_LowStockItem> items = [];
+      if (body is Map) {
+        final data = body['data'] ?? body['alerts'] ?? body;
+        if (data is List) {
+          for (int i = 0; i < data.length; i++) {
+            final m = data[i] as Map;
+            final curr = (m['current_stock'] ?? m['quantity'] ?? 0) as num;
+            final min = (m['minimum_stock'] ?? m['alert_level'] ?? m['min_stock'] ?? 0) as num;
+            items.add(_LowStockItem(
+              sn: i + 1,
+              rawMaterial: (m['material_name'] ?? m['name'] ?? '').toString(),
+              unit: (m['unit'] ?? '').toString(),
+              currentStock: curr.toInt(),
+              minimumStock: min.toInt(),
+              difference: (curr - min).toInt(),
+              lastPurchaseDate: (m['last_purchase_date'] ?? m['date'] ?? '').toString(),
+              status: (m['status'] ?? (curr < min ? 'Critical' : 'Low')).toString(),
+            ));
+          }
+        }
+      }
+      setState(() { _items = items; _isLoading = false; });
+    } catch (_) {
+      setState(() => _isLoading = false);
+    }
+  }
 
   List<_LowStockItem> get _filteredItems {
     final q = _searchController.text.toLowerCase().trim();
@@ -114,7 +149,8 @@ class _LowStockAlertReportPageState extends State<LowStockAlertReportPage> {
         child: Column(children: [
           _buildActionButtons(context), const SizedBox(height: 12),
           _buildSearchField(), const SizedBox(height: 12),
-          if (items.isEmpty) _buildEmptyState() else _buildTable(items),
+          if (_isLoading) const Padding(padding: EdgeInsets.symmetric(vertical: 60), child: Center(child: CircularProgressIndicator()))
+          else if (items.isEmpty) _buildEmptyState() else _buildTable(items),
           const SizedBox(height: 24),
         ]),
       )),

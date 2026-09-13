@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/transfer_shop_dropdown.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/transfer_product_card.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/transfer_summary_card.dart';
@@ -16,30 +18,54 @@ class _TransferItem {
   _TransferItem({required this.name, required this.availableStock}) : transferQuantity = 0;
 }
 
-class TransferProductsPage extends StatefulWidget {
+class TransferProductsPage extends ConsumerStatefulWidget {
   const TransferProductsPage({super.key});
 
   @override
-  State<TransferProductsPage> createState() => _TransferProductsPageState();
+  ConsumerState<TransferProductsPage> createState() => _TransferProductsPageState();
 }
 
-class _TransferProductsPageState extends State<TransferProductsPage> {
+class _TransferProductsPageState extends ConsumerState<TransferProductsPage> {
   String? _selectedShop;
   final TextEditingController _searchController = TextEditingController();
   final List<_TransferItem> _items = [];
+  List<Map<String, dynamic>> _allProducts = [];
+  bool _isLoadingProducts = true;
 
-  static const List<Map<String, dynamic>> _dummyProducts = [
-    {'name': 'White T-Shirt', 'stock': 120},
-    {'name': 'Denim Jeans', 'stock': 8},
-    {'name': 'Cotton Hoodie', 'stock': 45},
-    {'name': 'Linen Shirt', 'stock': 30},
-    {'name': 'Sport Shorts', 'stock': 60},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  Future<void> _loadProducts() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getMfManufacturedProducts();
+      final body = res.data;
+      List<Map<String, dynamic>> products = [];
+      if (body is Map) {
+        final data = body['data'] ?? body['products'] ?? body;
+        if (data is List) {
+          products = data.map((e) {
+            final m = Map<String, dynamic>.from(e as Map);
+            return {
+              'name': m['product_name'] ?? m['name'] ?? '',
+              'stock': (m['quantity'] ?? m['stock'] ?? 0) as num,
+            };
+          }).toList();
+        }
+      }
+      setState(() { _allProducts = products; _isLoadingProducts = false; });
+    } catch (_) {
+      setState(() => _isLoadingProducts = false);
+    }
+  }
 
   List<Map<String, dynamic>> get _filteredProducts {
     final query = _searchController.text.toLowerCase().trim();
-    if (query.isEmpty) return _dummyProducts;
-    return _dummyProducts.where((p) => (p['name'] as String).toLowerCase().contains(query)).toList();
+    if (query.isEmpty) return _allProducts;
+    return _allProducts.where((p) => (p['name'] as String).toLowerCase().contains(query)).toList();
   }
 
   int get _totalTransferQuantity => _items.fold(0, (sum, item) => sum + item.transferQuantity);
@@ -176,7 +202,17 @@ class _TransferProductsPageState extends State<TransferProductsPage> {
   }
 
   Widget _buildProductList() {
+    if (_isLoadingProducts) return const Padding(padding: EdgeInsets.symmetric(vertical: 40), child: Center(child: CircularProgressIndicator()));
     final products = _filteredProducts;
+    if (_allProducts.isEmpty) {
+      return Center(child: Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingXXL, vertical: 60),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.inventory_2_rounded, size: 56, color: AppColors.textHint),
+          const SizedBox(height: 16),
+          Text('No manufactured products found', style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
+        ]),
+      ));
+    }
     if (_searchController.text.isNotEmpty && products.isEmpty) {
       return Center(child: Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingXXL, vertical: 60),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
