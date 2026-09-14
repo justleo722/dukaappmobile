@@ -412,7 +412,10 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
             icon: Icons.add_rounded,
             label: 'Add Sale',
             isHighlighted: true,
-            onTap: () => context.push('/sales/add'),
+            onTap: () async {
+              await context.push('/sales/add');
+              if (mounted) await _loadSales();
+            },
           ),
         ],
       ),
@@ -485,9 +488,8 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
             onEdit: () async {
               await context.push('/sales/add', extra: sale);
               if (mounted) {
-                setState(() {
-                  _expandedSaleIndex = null;
-                });
+                setState(() => _expandedSaleIndex = null);
+                await _loadSales();
               }
             },
             onDelete: () => _deleteSale(index),
