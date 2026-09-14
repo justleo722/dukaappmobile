@@ -1,21 +1,24 @@
 // features/online_shop/presentation/pages/online_shop_manage_orders_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/online_shop/presentation/widgets/online_shop_sidebar.dart';
 
-class OnlineShopManageOrdersPage extends StatefulWidget {
+class OnlineShopManageOrdersPage extends ConsumerStatefulWidget {
   const OnlineShopManageOrdersPage({super.key});
 
   @override
-  State<OnlineShopManageOrdersPage> createState() =>
+  ConsumerState<OnlineShopManageOrdersPage> createState() =>
       _OnlineShopManageOrdersPageState();
 }
 
 class _OnlineShopManageOrdersPageState
-    extends State<OnlineShopManageOrdersPage> {
+    extends ConsumerState<OnlineShopManageOrdersPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final String _activeSidebarItem = 'Orders';
   String _selectedStatus = 'All Status';
@@ -24,11 +27,74 @@ class _OnlineShopManageOrdersPageState
   final TextEditingController _fromDateController = TextEditingController();
   final TextEditingController _toDateController = TextEditingController();
 
+  List<Map<String, dynamic>> _allOrders = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
+
   @override
   void dispose() {
     _fromDateController.dispose();
     _toDateController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getOnlineShopAdmin();
+      final raw = res.data;
+      final data = raw is Map ? (raw as Map<String, dynamic>) : <String, dynamic>{};
+      final orders = (data['orders'] ?? []) as List;
+      final fmt = NumberFormat('#,###');
+      setState(() {
+        _allOrders = orders.map((o) {
+          final m = o as Map<String, dynamic>;
+          final total = double.tryParse(m['total_amount']?.toString() ?? '') ?? 0;
+          final dateStr = (m['record_date'] ?? '').toString();
+          // Format date for display: YYYY-MM-DD → "Jan 1, 2024"
+          String displayDate = dateStr;
+          try {
+            if (dateStr.isNotEmpty) {
+              final d = DateTime.parse(dateStr.length > 10 ? dateStr : '${dateStr}T00:00:00');
+              displayDate = DateFormat('MMM d, y').format(d);
+            }
+          } catch (_) {}
+          return {
+            'orderId': 'ORD-${m['sale_id'] ?? m['invoice_no'] ?? ''}',
+            'customer': m['customer'] ?? 'Unknown',
+            'items': int.tryParse(m['items_count']?.toString() ?? '') ?? 0,
+            'total': 'Tsh ${fmt.format(total.round())}',
+            'payment': m['payment_method'] ?? '-',
+            'date': displayDate,
+            'status': _normalizeStatus(m['status']?.toString() ?? 'Pending'),
+            '_rawDate': dateStr,
+          };
+        }).toList();
+      });
+    } catch (_) {
+      if (mounted) setState(() => _allOrders = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  String _normalizeStatus(String s) {
+    switch (s.toLowerCase()) {
+      case 'received': return 'Received';
+      case 'processing': return 'Processing';
+      case 'delivering': return 'Delivering';
+      case 'delivered': return 'Delivered';
+      case 'cancelled':
+      case 'canceled':
+      case 'decline order': return 'Cancelled';
+      default: return 'Received';
+    }
   }
 
   void _onSidebarItemTap(String label) {
@@ -71,38 +137,29 @@ class _OnlineShopManageOrdersPageState
   }
 
   List<Map<String, dynamic>> get _filteredOrders {
-    var orders = _mockOrders;
+    var orders = _allOrders;
     if (_selectedStatus != 'All Status') {
-      orders = orders
-          .where((o) => o['status'] == _selectedStatus)
-          .toList();
+      orders = orders.where((o) => o['status'] == _selectedStatus).toList();
     }
     if (_fromDate != null) {
       orders = orders.where((o) {
-        final orderDate = _parseOrderDate(o['date'] as String);
-        return orderDate.isAfter(_fromDate!.subtract(const Duration(days: 1)));
+        final raw = o['_rawDate']?.toString() ?? '';
+        try {
+          final d = DateTime.parse(raw.length > 10 ? raw : '${raw}T00:00:00');
+          return !d.isBefore(_fromDate!);
+        } catch (_) { return true; }
       }).toList();
     }
     if (_toDate != null) {
       orders = orders.where((o) {
-        final orderDate = _parseOrderDate(o['date'] as String);
-        return orderDate.isBefore(_toDate!.add(const Duration(days: 1)));
+        final raw = o['_rawDate']?.toString() ?? '';
+        try {
+          final d = DateTime.parse(raw.length > 10 ? raw : '${raw}T00:00:00');
+          return !d.isAfter(_toDate!);
+        } catch (_) { return true; }
       }).toList();
     }
     return orders;
-  }
-
-  DateTime _parseOrderDate(String dateStr) {
-    final months = {
-      'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4,
-      'May': 5, 'Jun': 6, 'Jul': 7, 'Aug': 8,
-      'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
-    };
-    final parts = dateStr.split(' ');
-    final month = months[parts[0]] ?? 1;
-    final day = int.parse(parts[1].replaceAll(',', ''));
-    final year = int.parse(parts[2]);
-    return DateTime(year, month, day);
   }
 
   @override
@@ -388,12 +445,6 @@ class _OnlineShopManageOrdersPageState
       child: ElevatedButton(
         onPressed: () {
           setState(() {});
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Filters applied'),
-              duration: Duration(seconds: 1),
-            ),
-          );
         },
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
@@ -644,119 +695,4 @@ const List<String> _statusOptions = [
   'Cancelled',
 ];
 
-const List<Map<String, dynamic>> _mockOrders = [
-  {
-    'orderId': 'ORD-1001',
-    'customer': 'Juma Juma',
-    'address': '123 Main St, Dar es Salaam',
-    'items': 3,
-    'total': 'Tsh 132,000',
-    'payment': 'Cash',
-    'date': 'Jul 31, 2026',
-    'status': 'Delivered',
-    'products': [
-      {'name': 'Beauty Cream', 'qty': 1, 'price': 18000, 'total': 18000},
-      {'name': 'Face Mask', 'qty': 2, 'price': 9000, 'total': 18000},
-      {'name': 'Dish Soap', 'qty': 3, 'price': 3500, 'total': 10500},
-    ],
-    'subtotal': 'Tsh 46,500',
-    'delivery': 'Tsh 5,000',
-    'discount': 'Tsh 0',
-    'finalTotal': 'Tsh 51,500',
-  },
-  {
-    'orderId': 'ORD-1002',
-    'customer': 'Amina Hassan',
-    'address': '456Uhuru St, Dar es Salaam',
-    'items': 2,
-    'total': 'Tsh 36,000',
-    'payment': 'Mobile Money',
-    'date': 'Jul 30, 2026',
-    'status': 'Delivering',
-    'products': [
-      {'name': 'Beauty Cream', 'qty': 1, 'price': 18000, 'total': 18000},
-      {'name': 'Face Mask', 'qty': 2, 'price': 9000, 'total': 18000},
-    ],
-    'subtotal': 'Tsh 36,000',
-    'delivery': 'Tsh 3,000',
-    'discount': 'Tsh 0',
-    'finalTotal': 'Tsh 39,000',
-  },
-  {
-    'orderId': 'ORD-1003',
-    'customer': 'Hassan Ali',
-    'address': '789 Market Rd, Arusha',
-    'items': 5,
-    'total': 'Tsh 48,000',
-    'payment': 'Card',
-    'date': 'Jul 29, 2026',
-    'status': 'Received',
-    'products': [
-      {
-        'name': 'Car Phone Holder',
-        'qty': 2,
-        'price': 15000,
-        'total': 30000
-      },
-      {'name': 'Charger Cable', 'qty': 3, 'price': 6000, 'total': 18000},
-    ],
-    'subtotal': 'Tsh 48,000',
-    'delivery': 'Tsh 4,000',
-    'discount': 'Tsh 2,000',
-    'finalTotal': 'Tsh 50,000',
-  },
-  {
-    'orderId': 'ORD-1004',
-    'customer': 'Fatima Osman',
-    'address': '321 Palm Ave, Dodoma',
-    'items': 1,
-    'total': 'Tsh 25,000',
-    'payment': 'Cash',
-    'date': 'Jul 28, 2026',
-    'status': 'Processing',
-    'products': [
-      {'name': 'Hand Sanitizer', 'qty': 5, 'price': 4500, 'total': 22500},
-    ],
-    'subtotal': 'Tsh 22,500',
-    'delivery': 'Tsh 2,500',
-    'discount': 'Tsh 0',
-    'finalTotal': 'Tsh 25,000',
-  },
-  {
-    'orderId': 'ORD-1005',
-    'customer': 'Salum Bakari',
-    'address': '654 Lake St, Mwanza',
-    'items': 2,
-    'total': 'Tsh 85,000',
-    'payment': 'Mobile Money',
-    'date': 'Jul 27, 2026',
-    'status': 'Cancelled',
-    'products': [
-      {'name': 'USB Fan', 'qty': 2, 'price': 12000, 'total': 24000},
-      {'name': 'Air Freshener', 'qty': 4, 'price': 7000, 'total': 28000},
-    ],
-    'subtotal': 'Tsh 52,000',
-    'delivery': 'Tsh 3,000',
-    'discount': 'Tsh 0',
-    'finalTotal': 'Tsh 55,000',
-  },
-  {
-    'orderId': 'ORD-1006',
-    'customer': 'Rehema Kilonzo',
-    'address': '987 Uhuru St, Dar es Salaam',
-    'items': 4,
-    'total': 'Tsh 67,500',
-    'payment': 'Card',
-    'date': 'Jul 26, 2026',
-    'status': 'Delivered',
-    'products': [
-      {'name': 'Beauty Cream', 'qty': 2, 'price': 18000, 'total': 36000},
-      {'name': 'Face Mask', 'qty': 1, 'price': 9000, 'total': 9000},
-      {'name': 'Dish Soap', 'qty': 2, 'price': 3500, 'total': 7000},
-    ],
-    'subtotal': 'Tsh 52,000',
-    'delivery': 'Tsh 4,500',
-    'discount': 'Tsh 1,000',
-    'finalTotal': 'Tsh 55,500',
-  },
-];
+// Orders loaded from API in _loadData()

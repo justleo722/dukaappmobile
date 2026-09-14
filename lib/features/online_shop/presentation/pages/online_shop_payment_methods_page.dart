@@ -1,43 +1,60 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/online_shop/presentation/widgets/online_shop_sidebar.dart';
 
-class OnlineShopPaymentMethodsPage extends StatefulWidget {
+class OnlineShopPaymentMethodsPage extends ConsumerStatefulWidget {
   const OnlineShopPaymentMethodsPage({super.key});
 
   @override
-  State<OnlineShopPaymentMethodsPage> createState() =>
+  ConsumerState<OnlineShopPaymentMethodsPage> createState() =>
       _OnlineShopPaymentMethodsPageState();
 }
 
 class _OnlineShopPaymentMethodsPageState
-    extends State<OnlineShopPaymentMethodsPage> {
+    extends ConsumerState<OnlineShopPaymentMethodsPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final String _activeSidebarItem = 'Payments';
 
-  final List<Map<String, dynamic>> _methods = [
-    {
-      'accountName': 'DukaApp Business Account',
-      'category': 'MPESA',
-      'accountType': 'Revenue',
-      'status': 'Active',
-    },
-    {
-      'accountName': 'Cash on Delivery',
-      'category': 'Cash on Delivery',
-      'accountType': 'Revenue',
-      'status': 'Active',
-    },
-    {
-      'accountName': 'Tigo Pesa Wallet',
-      'category': 'Mobile Payment',
-      'accountType': 'Revenue',
-      'status': 'Inactive',
-    },
-  ];
+  List<Map<String, dynamic>> _methods = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getOnlineShopAdmin();
+      final raw = res.data;
+      final data = raw is Map ? (raw as Map<String, dynamic>) : <String, dynamic>{};
+      final methods = (data['payments'] ?? []) as List;
+      setState(() {
+        _methods = methods.map((m) {
+          final a = m as Map<String, dynamic>;
+          return {
+            'account_id': a['account_id']?.toString() ?? '',
+            'accountName': a['account_name'] ?? '',
+            'category': a['category_name'] ?? a['type_name'] ?? '',
+            'accountType': a['type_name'] ?? 'Revenue',
+            'status': (a['record_status'] ?? 'active').toString().toLowerCase() == 'active' ? 'Active' : 'Inactive',
+          };
+        }).toList();
+      });
+    } catch (_) {
+      if (mounted) setState(() => _methods = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   void _onSidebarItemTap(String label) {
     Navigator.of(context).pop();
@@ -102,19 +119,24 @@ class _OnlineShopPaymentMethodsPageState
             ),
           ),
           TextButton(
-            onPressed: () {
-              setState(() {
-                _methods.removeAt(index);
-              });
+            onPressed: () async {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Payment method "${method['accountName']}" deleted',
+              final accountId = method['account_id']?.toString() ?? '';
+              if (accountId.isNotEmpty) {
+                try {
+                  final api = ref.read(apiServiceProvider);
+                  await api.postOnlineshopPaymentAccountDelete({'account_id': accountId});
+                } catch (_) {}
+              }
+              setState(() => _methods.removeAt(index));
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Payment method "${method['accountName']}" deleted'),
+                    backgroundColor: AppColors.danger,
                   ),
-                  backgroundColor: AppColors.danger,
-                ),
-              );
+                );
+              }
             },
             child: Text(
               'Delete',
@@ -269,53 +291,40 @@ class _OnlineShopPaymentMethodsPageState
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       final category = categoryController.text.trim();
                       final accountName = accountNameController.text.trim();
                       if (category.isEmpty || accountName.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content:
-                                Text('Please fill in all fields'),
+                            content: Text('Please fill in all fields'),
                             backgroundColor: AppColors.danger,
                           ),
                         );
                         return;
                       }
-                      setState(() {
-                        if (isEditing) {
-                          final index = _methods.indexWhere(
-                            (m) =>
-                                m['accountName'] ==
-                                existingMethod['accountName'],
-                          );
-                          if (index != -1) {
-                            _methods[index] = {
-                              ..._methods[index],
-                              'category': category,
-                              'accountName': accountName,
-                            };
-                          }
-                        } else {
-                          _methods.add({
-                            'accountName': accountName,
-                            'category': category,
-                            'accountType': 'Revenue',
-                            'status': 'Active',
-                          });
-                        }
-                      });
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            isEditing
-                                ? 'Payment method updated'
-                                : 'Payment method added',
-                          ),
-                          backgroundColor: AppColors.success,
-                        ),
-                      );
+                      try {
+                        final api = ref.read(apiServiceProvider);
+                        final body = <String, dynamic>{
+                          'account_name': accountName,
+                          'category_name': category,
+                        };
+                        if (isEditing && (existingMethod['account_id']?.toString() ?? '').isNotEmpty) {
+                          body['account_id'] = existingMethod['account_id'].toString();
+                        }
+                        await api.postOnlineshopPaymentAccountSave(body);
+                        await _loadData();
+                      } catch (_) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(isEditing ? 'Payment method updated' : 'Payment method added'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,

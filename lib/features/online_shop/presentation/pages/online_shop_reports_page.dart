@@ -1,61 +1,117 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/online_shop/presentation/widgets/online_shop_sidebar.dart';
 
-class OnlineShopReportsPage extends StatefulWidget {
+class OnlineShopReportsPage extends ConsumerStatefulWidget {
   const OnlineShopReportsPage({super.key});
 
   @override
-  State<OnlineShopReportsPage> createState() => _OnlineShopReportsPageState();
+  ConsumerState<OnlineShopReportsPage> createState() => _OnlineShopReportsPageState();
 }
 
-class _OnlineShopReportsPageState extends State<OnlineShopReportsPage> {
+class _OnlineShopReportsPageState extends ConsumerState<OnlineShopReportsPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final String _activeSidebarItem = 'Reports';
 
-  // KPI data
-  final double _thisMonthRevenue = 2450000.0;
-  final double _avgOrderValue = 48500.0;
-  final int _conversionRate = 124;
-  final double _cancellationRate = 4.2;
+  // KPI data (loaded from API)
+  double _thisMonthRevenue = 0;
+  double _avgOrderValue = 0;
+  int _conversionRate = 0;
+  double _cancellationRate = 0;
 
-  // Monthly revenue data
-  final List<Map<String, dynamic>> _monthlyRevenue = [
-    {'month': 'Jan', 'revenue': 1800000.0},
-    {'month': 'Feb', 'revenue': 2100000.0},
-    {'month': 'Mar', 'revenue': 1650000.0},
-    {'month': 'Apr', 'revenue': 2400000.0},
-    {'month': 'May', 'revenue': 1950000.0},
-    {'month': 'Jun', 'revenue': 2450000.0},
-  ];
+  List<Map<String, dynamic>> _monthlyRevenue = [];
+  List<Map<String, dynamic>> _orderStatus = [];
+  List<Map<String, dynamic>> _salesByCategory = [];
+  List<Map<String, dynamic>> _paymentMethods = [];
+  bool _isLoading = false;
 
-  // Order status data
-  final List<Map<String, dynamic>> _orderStatus = [
-    {'status': 'Received', 'count': 18, 'color': const Color(0xFF22C55E)},
-    {'status': 'Processing', 'count': 12, 'color': const Color(0xFF2563EB)},
-    {'status': 'Delivering', 'count': 8, 'color': const Color(0xFFFF7A00)},
-    {'status': 'Delivered', 'count': 80, 'color': const Color(0xFF14B8A6)},
-    {'status': 'Cancelled', 'count': 4, 'color': const Color(0xFFEF4444)},
-  ];
+  static const _statusColors = {
+    'Received': Color(0xFF22C55E),
+    'Processing': Color(0xFF2563EB),
+    'Delivering': Color(0xFFFF7A00),
+    'Delivered': Color(0xFF14B8A6),
+    'Cancelled': Color(0xFFEF4444),
+  };
 
-  // Sales by category
-  final List<Map<String, dynamic>> _salesByCategory = [
-    {'category': 'Cosmetics', 'sales': 48, 'revenue': 864000.0},
-    {'category': 'Household', 'sales': 35, 'revenue': 245000.0},
-    {'category': 'Electronics', 'sales': 22, 'revenue': 132000.0},
-    {'category': 'Health', 'sales': 18, 'revenue': 81000.0},
-    {'category': 'Accessories', 'sales': 15, 'revenue': 90000.0},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
 
-  // Payment methods
-  final List<Map<String, dynamic>> _paymentMethods = [
-    {'method': 'MPESA', 'orders': 62, 'share': 49.6},
-    {'method': 'Cash on Delivery', 'orders': 45, 'share': 36.0},
-    {'method': 'Tigo Pesa', 'orders': 18, 'share': 14.4},
-  ];
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getOnlineShopAdmin();
+      final raw = res.data;
+      final data = raw is Map ? (raw as Map<String, dynamic>) : <String, dynamic>{};
+      final reports = data['reports'] is Map ? (data['reports'] as Map<String, dynamic>) : <String, dynamic>{};
+      final summary = data['summary'] is Map ? (data['summary'] as Map<String, dynamic>) : <String, dynamic>{};
+
+      // Monthly revenue
+      final monthlyList = (reports['monthly_revenue'] ?? []) as List;
+      final monthly = monthlyList.map((m) {
+        final mm = m as Map<String, dynamic>;
+        return {
+          'month': mm['label'] ?? '',
+          'revenue': double.tryParse(mm['revenue']?.toString() ?? '') ?? 0.0,
+        };
+      }).toList();
+
+      // Order status counts
+      final statusCountsRaw = reports['status_counts'];
+      final statusMap = statusCountsRaw is Map ? statusCountsRaw : {};
+      final statuses = statusMap.entries.map((e) {
+        final label = e.key.toString();
+        final count = int.tryParse(e.value?.toString() ?? '') ?? 0;
+        return {
+          'status': label,
+          'count': count,
+          'color': _statusColors[label] ?? const Color(0xFF9CA3AF),
+        };
+      }).toList()..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+
+      // Category sales
+      final catList = (reports['category_sales'] ?? []) as List;
+      final cats = catList.map((c) {
+        final m = c as Map<String, dynamic>;
+        return {
+          'category': m['category'] ?? '',
+          'sales': (double.tryParse(m['sales']?.toString() ?? '') ?? 0).toInt(),
+          'revenue': double.tryParse(m['revenue']?.toString() ?? '') ?? 0.0,
+        };
+      }).toList();
+
+      // KPIs from summary
+      final revenue = double.tryParse(reports['current_month_revenue']?.toString() ?? '') ?? 0;
+      final totalOrders = int.tryParse(summary['orders']?.toString() ?? '') ?? 0;
+      final totalRevenue = double.tryParse(summary['revenue']?.toString() ?? '') ?? 0;
+      final cancelled = int.tryParse(summary['cancelled']?.toString() ?? '') ?? 0;
+      final avg = totalOrders > 0 ? totalRevenue / totalOrders : 0.0;
+      final cancRate = totalOrders > 0 ? (cancelled / totalOrders * 100) : 0.0;
+
+      setState(() {
+        _thisMonthRevenue = revenue;
+        _avgOrderValue = avg;
+        _conversionRate = totalOrders;
+        _cancellationRate = cancRate;
+        _monthlyRevenue = monthly;
+        _orderStatus = statuses;
+        _salesByCategory = cats;
+        _paymentMethods = []; // Payment method breakdown not in reports data
+      });
+    } catch (_) {
+      // keep zeros
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   void _onSidebarItemTap(String label) {
     Navigator.of(context).pop();
@@ -257,9 +313,10 @@ class _OnlineShopReportsPageState extends State<OnlineShopReportsPage> {
   }
 
   Widget _buildMonthlyRevenueChart() {
+    if (_monthlyRevenue.isEmpty) return const SizedBox.shrink();
     final maxRevenue = _monthlyRevenue
         .map((e) => e['revenue'] as double)
-        .reduce((a, b) => a > b ? a : b);
+        .fold<double>(1.0, (prev, e) => e > prev ? e : prev);
 
     return _SectionCard(
       title: 'Monthly Revenue',
@@ -310,8 +367,10 @@ class _OnlineShopReportsPageState extends State<OnlineShopReportsPage> {
   }
 
   Widget _buildOrderStatusSection() {
+    if (_orderStatus.isEmpty) return const SizedBox.shrink();
     final totalOrders =
-        _orderStatus.map((e) => e['count'] as int).reduce((a, b) => a + b);
+        _orderStatus.map((e) => e['count'] as int).fold<int>(0, (a, b) => a + b);
+    if (totalOrders == 0) return const SizedBox.shrink();
 
     return _SectionCard(
       title: 'Order Status',
@@ -362,6 +421,7 @@ class _OnlineShopReportsPageState extends State<OnlineShopReportsPage> {
   }
 
   Widget _buildSalesByCategoryTable() {
+    if (_salesByCategory.isEmpty) return const SizedBox.shrink();
     return _SectionCard(
       title: 'Sales by Category',
       child: Padding(
@@ -387,6 +447,7 @@ class _OnlineShopReportsPageState extends State<OnlineShopReportsPage> {
   }
 
   Widget _buildPaymentMethodsTable() {
+    if (_paymentMethods.isEmpty) return const SizedBox.shrink();
     return _SectionCard(
       title: 'Payment Methods',
       child: Padding(

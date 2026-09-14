@@ -1,46 +1,61 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/online_shop/presentation/widgets/online_shop_sidebar.dart';
 
-class OnlineShopDeliveryMethodsPage extends StatefulWidget {
+class OnlineShopDeliveryMethodsPage extends ConsumerStatefulWidget {
   const OnlineShopDeliveryMethodsPage({super.key});
 
   @override
-  State<OnlineShopDeliveryMethodsPage> createState() =>
+  ConsumerState<OnlineShopDeliveryMethodsPage> createState() =>
       _OnlineShopDeliveryMethodsPageState();
 }
 
 class _OnlineShopDeliveryMethodsPageState
-    extends State<OnlineShopDeliveryMethodsPage> {
+    extends ConsumerState<OnlineShopDeliveryMethodsPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final String _activeSidebarItem = 'Delivery';
 
-  final List<Map<String, dynamic>> _methods = [
-    {
-      'name': 'Express Delivery',
-      'fee': 3000,
-      'estimatedDelivery': '20 minutes',
-      'minimumOrder': 10000,
-      'status': 'Active',
-    },
-    {
-      'name': 'Standard Delivery',
-      'fee': 1500,
-      'estimatedDelivery': '3–5 hours',
-      'minimumOrder': 5000,
-      'status': 'Active',
-    },
-    {
-      'name': 'Same Day Delivery',
-      'fee': 2000,
-      'estimatedDelivery': 'Within 24 hours',
-      'minimumOrder': 15000,
-      'status': 'Inactive',
-    },
-  ];
+  List<Map<String, dynamic>> _methods = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getOnlineShopAdmin();
+      final raw = res.data;
+      final data = raw is Map ? (raw as Map<String, dynamic>) : <String, dynamic>{};
+      final methods = (data['delivery_methods'] ?? []) as List;
+      setState(() {
+        _methods = methods.map((m) {
+          final d = m as Map<String, dynamic>;
+          return {
+            'delivery_id': d['delivery_id']?.toString() ?? '',
+            'name': d['name'] ?? d['method_name'] ?? '',
+            'fee': int.tryParse(d['fee']?.toString() ?? '') ?? 0,
+            'estimatedDelivery': d['estimated_time'] ?? d['estimated_delivery'] ?? '',
+            'minimumOrder': int.tryParse(d['min_order_amount']?.toString() ?? '') ?? 0,
+            'status': (d['record_status'] ?? 'active').toString().toLowerCase() == 'active' ? 'Active' : 'Inactive',
+          };
+        }).toList();
+      });
+    } catch (_) {
+      if (mounted) setState(() => _methods = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   void _onSidebarItemTap(String label) {
     Navigator.of(context).pop();
@@ -105,19 +120,24 @@ class _OnlineShopDeliveryMethodsPageState
             ),
           ),
           TextButton(
-            onPressed: () {
-              setState(() {
-                _methods.removeAt(index);
-              });
+            onPressed: () async {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Delivery method "${method['name']}" deleted',
+              final deliveryId = method['delivery_id']?.toString() ?? '';
+              if (deliveryId.isNotEmpty) {
+                try {
+                  final api = ref.read(apiServiceProvider);
+                  await api.postOnlineshopDeliveryMethodDelete({'delivery_id': deliveryId});
+                } catch (_) {}
+              }
+              setState(() => _methods.removeAt(index));
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Delivery method "${method['name']}" deleted'),
+                    backgroundColor: AppColors.danger,
                   ),
-                  backgroundColor: AppColors.danger,
-                ),
-              );
+                );
+              }
             },
             child: Text(
               'Delete',

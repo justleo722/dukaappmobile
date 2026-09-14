@@ -4,19 +4,61 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 
 class OnlineShopSummaryCards extends StatelessWidget {
-  const OnlineShopSummaryCards({super.key});
+  final String revenue;
+  final String productCount;
+  final String orderCount;
+  final String customerCount;
+
+  const OnlineShopSummaryCards({
+    super.key,
+    this.revenue = 'Tsh 0',
+    this.productCount = '0',
+    this.orderCount = '0',
+    this.customerCount = '0',
+  });
 
   @override
   Widget build(BuildContext context) {
+    final cards = [
+      {
+        'title': 'Online Shop\nRevenue',
+        'value': revenue,
+        'icon': Icons.attach_money_rounded,
+        'color': const Color(0xFF22C55E),
+        'bgColor': const Color(0xFFE8FAF0),
+      },
+      {
+        'title': 'Online Shop\nProducts',
+        'value': productCount,
+        'icon': Icons.inventory_2_rounded,
+        'color': const Color(0xFF14B8A6),
+        'bgColor': const Color(0xFFE0FFF9),
+      },
+      {
+        'title': 'Online\nOrders',
+        'value': orderCount,
+        'icon': Icons.shopping_bag_rounded,
+        'color': const Color(0xFFFF7A00),
+        'bgColor': const Color(0xFFFFF0E0),
+      },
+      {
+        'title': 'Online\nCustomers',
+        'value': customerCount,
+        'icon': Icons.people_rounded,
+        'color': const Color(0xFF9333EA),
+        'bgColor': const Color(0xFFF3E8FF),
+      },
+    ];
+
     return SizedBox(
       height: 110,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMD),
-        itemCount: _cards.length,
+        itemCount: cards.length,
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
-          final card = _cards[index];
+          final card = cards[index];
           return _SummaryCard(
             title: card['title'] as String,
             value: card['value'] as String,
@@ -29,36 +71,6 @@ class OnlineShopSummaryCards extends StatelessWidget {
     );
   }
 
-  static const List<Map<String, dynamic>> _cards = [
-    {
-      'title': 'Online Shop\nRevenue',
-      'value': 'Tsh 0',
-      'icon': Icons.attach_money_rounded,
-      'color': Color(0xFF22C55E),
-      'bgColor': Color(0xFFE8FAF0),
-    },
-    {
-      'title': 'Online Shop\nProducts',
-      'value': '0',
-      'icon': Icons.inventory_2_rounded,
-      'color': Color(0xFF14B8A6),
-      'bgColor': Color(0xFFE0FFF9),
-    },
-    {
-      'title': 'Online\nOrders',
-      'value': '0',
-      'icon': Icons.shopping_bag_rounded,
-      'color': Color(0xFFFF7A00),
-      'bgColor': Color(0xFFFFF0E0),
-    },
-    {
-      'title': 'Online\nCustomers',
-      'value': '0',
-      'icon': Icons.people_rounded,
-      'color': Color(0xFF9333EA),
-      'bgColor': Color(0xFFF3E8FF),
-    },
-  ];
 }
 
 class _SummaryCard extends StatelessWidget {

@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
-import 'package:dukaapp/features/online_shop/presentation/constants/online_shop_constants.dart';
 
 class RecentOrdersTable extends StatelessWidget {
-  const RecentOrdersTable({super.key});
+  final List<Map<String, dynamic>> orders;
+
+  const RecentOrdersTable({super.key, this.orders = const []});
 
   @override
   Widget build(BuildContext context) {
@@ -35,12 +36,10 @@ class RecentOrdersTable extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          if (OnlineShopConstants.recentOrders.isEmpty)
+          if (orders.isEmpty)
             _buildEmptyState()
           else
-            ...OnlineShopConstants.recentOrders.map(
-              (order) => _OrderCard(order: order),
-            ),
+            ...orders.map((order) => _OrderCard(order: order)),
         ],
       ),
     );

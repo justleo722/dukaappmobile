@@ -1,87 +1,60 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/online_shop/presentation/widgets/online_shop_sidebar.dart';
 
-class OnlineShopCategoriesPage extends StatefulWidget {
+class OnlineShopCategoriesPage extends ConsumerStatefulWidget {
   const OnlineShopCategoriesPage({super.key});
 
   @override
-  State<OnlineShopCategoriesPage> createState() =>
+  ConsumerState<OnlineShopCategoriesPage> createState() =>
       _OnlineShopCategoriesPageState();
 }
 
-class _OnlineShopCategoriesPageState extends State<OnlineShopCategoriesPage> {
+class _OnlineShopCategoriesPageState extends ConsumerState<OnlineShopCategoriesPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final String _activeSidebarItem = 'Categories';
 
-  final List<Map<String, dynamic>> _categories = [
-    {
-      'name': 'Cosmetics',
-      'icon': Icons.face_rounded,
-      'products': 4,
-      'status': 'Active',
-      'description': 'Beauty and cosmetic products',
-    },
-    {
-      'name': 'Beauty',
-      'icon': Icons.auto_awesome_rounded,
-      'products': 3,
-      'status': 'Active',
-      'description': 'Skincare and beauty items',
-    },
-    {
-      'name': 'Household',
-      'icon': Icons.home_rounded,
-      'products': 5,
-      'status': 'Active',
-      'description': 'Home and household essentials',
-    },
-    {
-      'name': 'Electronics',
-      'icon': Icons.devices_rounded,
-      'products': 2,
-      'status': 'Active',
-      'description': 'Electronic devices and gadgets',
-    },
-    {
-      'name': 'Accessories',
-      'icon': Icons.watch_rounded,
-      'products': 6,
-      'status': 'Inactive',
-      'description': 'Fashion and tech accessories',
-    },
-    {
-      'name': 'Health',
-      'icon': Icons.favorite_rounded,
-      'products': 3,
-      'status': 'Active',
-      'description': 'Health and wellness products',
-    },
-    {
-      'name': 'Fashion',
-      'icon': Icons.checkroom_rounded,
-      'products': 0,
-      'status': 'Active',
-      'description': 'Clothing and fashion wear',
-    },
-    {
-      'name': 'Food & Drinks',
-      'icon': Icons.restaurant_rounded,
-      'products': 0,
-      'status': 'Inactive',
-      'description': 'Food and beverage items',
-    },
-    {
-      'name': 'Sports',
-      'icon': Icons.sports_tennis_rounded,
-      'products': 0,
-      'status': 'Inactive',
-      'description': 'Sports and fitness gear',
-    },
-  ];
+  List<Map<String, dynamic>> _categories = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getOnlineShopAdmin();
+      final raw = res.data;
+      final data = raw is Map ? (raw as Map<String, dynamic>) : <String, dynamic>{};
+      final cats = (data['categories'] ?? []) as List;
+      setState(() {
+        _categories = cats.map((c) {
+          final m = c as Map<String, dynamic>;
+          return {
+            'category_id': m['category_id'] ?? '',
+            'name': m['category'] ?? m['name'] ?? '',
+            'icon': Icons.category_rounded,
+            'products': int.tryParse(m['products_count']?.toString() ?? '') ?? 0,
+            'status': 'Active',
+            'description': '',
+          };
+        }).toList();
+      });
+    } catch (_) {
+      if (mounted) setState(() => _categories = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   void _onSidebarItemTap(String label) {
     Navigator.of(context).pop();
@@ -146,17 +119,24 @@ class _OnlineShopCategoriesPageState extends State<OnlineShopCategoriesPage> {
             ),
           ),
           TextButton(
-            onPressed: () {
-              setState(() {
-                _categories.removeAt(index);
-              });
+            onPressed: () async {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Category "${category['name']}" deleted'),
-                  backgroundColor: AppColors.danger,
-                ),
-              );
+              final catId = category['category_id']?.toString() ?? '';
+              if (catId.isNotEmpty) {
+                try {
+                  final api = ref.read(apiServiceProvider);
+                  await api.postOnlineshopCategoryDelete({'category_id': catId});
+                } catch (_) {}
+              }
+              setState(() => _categories.removeAt(index));
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Category "${category['name']}" deleted'),
+                    backgroundColor: AppColors.danger,
+                  ),
+                );
+              }
             },
             child: Text(
               'Delete',

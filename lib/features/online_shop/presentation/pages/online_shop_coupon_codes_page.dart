@@ -1,70 +1,74 @@
 // features/online_shop/presentation/pages/online_shop_coupon_codes_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/online_shop/presentation/widgets/online_shop_sidebar.dart';
 
-class OnlineShopCouponCodesPage extends StatefulWidget {
+class OnlineShopCouponCodesPage extends ConsumerStatefulWidget {
   const OnlineShopCouponCodesPage({super.key});
 
   @override
-  State<OnlineShopCouponCodesPage> createState() =>
+  ConsumerState<OnlineShopCouponCodesPage> createState() =>
       _OnlineShopCouponCodesPageState();
 }
 
-class _OnlineShopCouponCodesPageState extends State<OnlineShopCouponCodesPage> {
+class _OnlineShopCouponCodesPageState extends ConsumerState<OnlineShopCouponCodesPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final String _activeSidebarItem = 'Coupons';
 
-  List<Map<String, dynamic>> coupons = [
-    {
-      'id': 'CPN-001',
-      'code': 'SAVE20',
-      'discountType': 'Percentage',
-      'discountValue': '20%',
-      'minOrder': 'Tsh 50,000',
-      'maxUses': '100',
-      'usedCount': 45,
-      'expiryDate': '2026-12-31',
-      'status': 'Active',
-    },
-    {
-      'id': 'CPN-002',
-      'code': 'FLAT5000',
-      'discountType': 'Fixed',
-      'discountValue': 'Tsh 5,000',
-      'minOrder': 'Tsh 30,000',
-      'maxUses': '50',
-      'usedCount': 50,
-      'expiryDate': '2026-06-30',
-      'status': 'Expired',
-    },
-    {
-      'id': 'CPN-003',
-      'code': 'WELCOME10',
-      'discountType': 'Percentage',
-      'discountValue': '10%',
-      'minOrder': 'Tsh 0',
-      'maxUses': 'Unlimited',
-      'usedCount': 120,
-      'expiryDate': '2027-01-01',
-      'status': 'Active',
-    },
-    {
-      'id': 'CPN-004',
-      'code': 'FREESHIP',
-      'discountType': 'Free Shipping',
-      'discountValue': 'Free',
-      'minOrder': 'Tsh 100,000',
-      'maxUses': '200',
-      'usedCount': 89,
-      'expiryDate': '2026-09-30',
-      'status': 'Active',
-    },
-  ];
+  List<Map<String, dynamic>> coupons = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getOnlineShopAdmin();
+      final raw = res.data;
+      final data = raw is Map ? (raw as Map<String, dynamic>) : <String, dynamic>{};
+      final items = (data['coupons'] ?? []) as List;
+      final fmt = NumberFormat('#,###');
+      setState(() {
+        coupons = items.map((c) {
+          final m = c as Map<String, dynamic>;
+          final discType = (m['discount_type'] ?? 'percentage').toString().toLowerCase();
+          final discVal = double.tryParse(m['discount_value']?.toString() ?? '') ?? 0;
+          final minAmt = double.tryParse(m['min_order_amount']?.toString() ?? '') ?? 0;
+          final maxUses = m['max_uses']?.toString() ?? '';
+          final usedCount = int.tryParse(m['used_count']?.toString() ?? '') ?? 0;
+          final expiryDate = m['expiry_date']?.toString() ?? '';
+          final isActive = (m['record_status'] ?? 'active').toString().toLowerCase() == 'active';
+          return {
+            'coupon_id': m['coupon_id']?.toString() ?? '',
+            'code': m['code'] ?? '',
+            'discountType': discType == 'percentage' ? 'Percentage' : discType == 'fixed' ? 'Fixed' : 'Free Shipping',
+            'discountValue': discType == 'percentage' ? '${discVal.round()}%' : 'Tsh ${fmt.format(discVal.round())}',
+            'minOrder': minAmt > 0 ? 'Tsh ${fmt.format(minAmt.round())}' : 'Tsh 0',
+            'maxUses': maxUses.isNotEmpty && maxUses != '0' ? maxUses : 'Unlimited',
+            'usedCount': usedCount,
+            'expiryDate': m['expiry_display'] ?? expiryDate,
+            'status': isActive ? 'Active' : 'Inactive',
+          };
+        }).toList();
+      });
+    } catch (_) {
+      if (mounted) setState(() => coupons = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   void _onSidebarItemTap(String label) {
     Navigator.of(context).pop();
@@ -109,17 +113,24 @@ class _OnlineShopCouponCodesPageState extends State<OnlineShopCouponCodesPage> {
     }
   }
 
-  void _deleteCoupon(int index) {
+  Future<void> _deleteCoupon(int index) async {
     final coupon = coupons[index];
-    setState(() {
-      coupons.removeAt(index);
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Coupon "${coupon['code']}" deleted'),
-        backgroundColor: AppColors.danger,
-      ),
-    );
+    final couponId = coupon['coupon_id']?.toString() ?? '';
+    if (couponId.isNotEmpty) {
+      try {
+        final api = ref.read(apiServiceProvider);
+        await api.postOnlineshopCouponDelete({'coupon_id': couponId});
+      } catch (_) {}
+    }
+    setState(() => coupons.removeAt(index));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Coupon "${coupon['code']}" deleted'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    }
   }
 
   void _showDeleteDialog(int index) {

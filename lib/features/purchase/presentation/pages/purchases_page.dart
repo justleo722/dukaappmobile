@@ -960,7 +960,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
     ReceiptWidget.show(
       context,
       title: 'Purchase Receipt',
-      receiptNumber: 'PUR-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+      receiptNumber: 'PUR-${purchase['purchase_id'] ?? DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
       date: purchase['date'].split(' ').take(2).join(' '),
       time: purchase['date'].split(' ').last,
       cashier: purchase['createdBy'],
@@ -980,7 +980,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
       (sum, p) => sum + _toD(p['price']) * _toI(p['quantity']),
     );
     final dateTime = purchase['date'] as String;
-    final receiptNumber = 'PUR-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
+    final receiptNumber = 'PUR-${purchase['purchase_id'] ?? DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
 
     doc.addPage(
       pw.MultiPage(
@@ -1153,7 +1153,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
 
     context.push('/purchase', extra: {
       'editMode': true,
-      'poNumber': 'PUR-${index + 1}',
+      'poNumber': 'PUR-${purchase['purchase_id'] ?? (index + 1)}',
       'supplier': purchase['supplier'],
       'products': products,
     });

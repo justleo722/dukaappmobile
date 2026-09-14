@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -11,20 +12,26 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/core/providers.dart';
 
-class ProfitExpensesReportPage extends StatefulWidget {
+class ProfitExpensesReportPage extends ConsumerStatefulWidget {
   final String reportKey;
   final String title;
 
   const ProfitExpensesReportPage({required this.reportKey, required this.title, super.key});
 
   @override
-  State<ProfitExpensesReportPage> createState() => _ProfitExpensesReportPageState();
+  ConsumerState<ProfitExpensesReportPage> createState() => _ProfitExpensesReportPageState();
 }
 
-class _ProfitExpensesReportPageState extends State<ProfitExpensesReportPage> {
+class _ProfitExpensesReportPageState extends ConsumerState<ProfitExpensesReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
+
+  List<String> _apiHeaders = [];
+  List<List<String>> _apiRows = [];
+  bool _isLoading = false;
 
   String get _exportDateTime => DateFormat('dd-MM-yyyy_HH-mm').format(DateTime.now());
 
@@ -33,6 +40,107 @@ class _ProfitExpensesReportPageState extends State<ProfitExpensesReportPage> {
     final date = DateFormat('dd MMM yyyy').format(now);
     final time = DateFormat('hh:mm a').format(now);
     return '$date • $time';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final filter = ref.read(filterProvider);
+      final from = filter.from;
+      final to = filter.to;
+      final api = ref.read(apiServiceProvider);
+      final fmt = NumberFormat('#,###');
+      double _d(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0;
+
+      switch (widget.reportKey) {
+        case 'all-expenses':
+          final res = await api.getExpenses(from: from, to: to);
+          final list = _unwrapList(res.data);
+          _apiHeaders = ['S/N', 'Date', 'Title', 'Category', 'Amount', 'Status'];
+          _apiRows = list.asMap().entries.map((e) {
+            final j = e.value;
+            return [
+              '${e.key + 1}',
+              (j['record_date'] ?? j['date'] ?? '').toString(),
+              (j['title'] ?? j['description'] ?? j['note'] ?? '').toString(),
+              (j['category'] ?? j['account_name'] ?? '').toString(),
+              fmt.format(_d(j['amount'])),
+              (j['status'] ?? 'Paid').toString(),
+            ];
+          }).toList();
+          break;
+        case 'profits':
+          final res = await api.getReportProfit(from: from, to: to);
+          final list = _unwrapList(res.data);
+          _apiHeaders = ['S/N', 'Item Name', 'Sold', 'Sales', 'Profit'];
+          _apiRows = list.asMap().entries.map((e) {
+            final j = e.value;
+            return [
+              '${e.key + 1}',
+              (j['product_name'] ?? j['name'] ?? '').toString(),
+              fmt.format(_d(j['sold'] ?? j['quantity_sold'])),
+              fmt.format(_d(j['total_sales'] ?? j['sales'])),
+              fmt.format(_d(j['profit'] ?? j['gross_profit'])),
+            ];
+          }).toList();
+          break;
+        case 'loss':
+          final res = await api.getReportProfit(from: from, to: to);
+          final list = _unwrapList(res.data);
+          _apiHeaders = ['S/N', 'Item Name', 'Bad', 'Lost', 'Expired', 'Loss'];
+          _apiRows = list.asMap().entries.map((e) {
+            final j = e.value;
+            return [
+              '${e.key + 1}',
+              (j['product_name'] ?? j['name'] ?? '').toString(),
+              fmt.format(_d(j['bad'])),
+              fmt.format(_d(j['lost'])),
+              fmt.format(_d(j['expired'])),
+              fmt.format(_d(j['loss'])),
+            ];
+          }).toList();
+          break;
+        case 'daily-profit':
+          final res = await api.getReportProfit(from: from, to: to);
+          final list = _unwrapList(res.data);
+          _apiHeaders = ['S/N', 'Item Name', 'Sold', 'Sales', 'Cost', 'Profit'];
+          _apiRows = list.asMap().entries.map((e) {
+            final j = e.value;
+            return [
+              '${e.key + 1}',
+              (j['product_name'] ?? j['name'] ?? '').toString(),
+              fmt.format(_d(j['sold'] ?? j['quantity_sold'])),
+              fmt.format(_d(j['total_sales'] ?? j['sales'])),
+              fmt.format(_d(j['total_cost'] ?? j['cost'])),
+              fmt.format(_d(j['profit'] ?? j['gross_profit'])),
+            ];
+          }).toList();
+          break;
+        default:
+          _apiHeaders = [];
+          _apiRows = [];
+      }
+    } catch (_) {
+      _apiHeaders = [];
+      _apiRows = [];
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  List<Map<String, dynamic>> _unwrapList(dynamic raw) {
+    if (raw is List) return raw.whereType<Map<String, dynamic>>().toList();
+    if (raw is Map<String, dynamic>) {
+      final v = raw['data'] ?? raw['result'] ?? raw['items'];
+      if (v is List) return v.whereType<Map<String, dynamic>>().toList();
+    }
+    return [];
   }
 
   @override
@@ -53,8 +161,7 @@ class _ProfitExpensesReportPageState extends State<ProfitExpensesReportPage> {
   }
 
   List<List<String>> get _filteredRows {
-    final map = _reportData();
-    final rows = List<List<String>>.from(map['rows'] as List);
+    final rows = _apiRows;
     final query = _searchController.text.toLowerCase().trim();
     if (query.isEmpty) return rows;
     return rows.where((row) {
@@ -62,7 +169,7 @@ class _ProfitExpensesReportPageState extends State<ProfitExpensesReportPage> {
     }).toList();
   }
 
-  List<String> get _headers => List<String>.from((_reportData()['headers'] as List));
+  List<String> get _headers => _apiHeaders;
 
   List<String> _computeTotals(List<List<String>> rows, List<String> headers) {
     final totals = List<String>.filled(headers.length, '');
@@ -190,64 +297,6 @@ class _ProfitExpensesReportPageState extends State<ProfitExpensesReportPage> {
   }
 
   // ─── DATA ────────────────────────────────────────────────────────────
-  Map<String, dynamic> _reportData() {
-    switch (widget.reportKey) {
-      case 'daily-profit':
-        return {
-          'headers': ['S/N', 'Date', 'Total Sales', 'Gross Profit', 'Bad/Lost/Expired Stock', 'Expenses', 'Net Profit', 'Cash In Hand'],
-          'rows': [
-            ['1', '13 Aug 2026', '350,000', '98,000', '5,000', '65,000', '28,000', '380,000'],
-            ['2', '12 Aug 2026', '285,000', '76,500', '3,000', '40,000', '33,500', '352,000'],
-            ['3', '11 Aug 2026', '412,000', '115,000', '8,000', '55,000', '52,000', '318,500'],
-            ['4', '10 Aug 2026', '198,000', '52,000', '2,500', '45,000', '4,500', '266,500'],
-            ['5', '09 Aug 2026', '520,000', '145,000', '12,000', '70,000', '63,000', '262,000'],
-          ]
-        };
-      case 'all-expenses':
-        return {
-          'headers': ['S/N', 'Date', 'Title', 'Category', 'Amount', 'Status'],
-          'rows': [
-            ['1', '13 Aug 2026', 'Rent Payment', 'Utilities', '500,000', 'Paid'],
-            ['2', '13 Aug 2026', 'Electricity Bill', 'Utilities', '85,000', 'Paid'],
-            ['3', '12 Aug 2026', 'Staff Lunch', 'Food', '25,000', 'Paid'],
-            ['4', '12 Aug 2026', 'Transport Fare', 'Transport', '15,000', 'Pending'],
-            ['5', '11 Aug 2026', 'Cleaning Supplies', 'Maintenance', '12,000', 'Paid'],
-            ['6', '10 Aug 2026', 'Internet Subscription', 'Utilities', '45,000', 'Paid'],
-            ['7', '09 Aug 2026', 'Packaging Materials', 'Operations', '30,000', 'Paid'],
-            ['8', '08 Aug 2026', 'Water Bill', 'Utilities', '18,000', 'Pending'],
-          ]
-        };
-      case 'profits':
-        return {
-          'headers': ['S/N', 'Item Name', 'Sold', 'Sales', 'Profit'],
-          'rows': [
-            ['1', 'Coca Cola 600ML', '24', '24,000', '4,300'],
-            ['2', 'Fanta Orange', '18', '18,000', '3,600'],
-            ['3', 'Pepsi 500ML', '12', '12,000', '3,000'],
-            ['4', 'Minute Maid', '10', '18,000', '6,000'],
-            ['5', 'Mango Juice', '15', '22,500', '7,500'],
-            ['6', 'Energy Drink', '8', '20,000', '8,000'],
-            ['7', 'Chips', '30', '15,000', '6,000'],
-            ['8', 'Biscuits', '40', '14,000', '5,500'],
-          ]
-        };
-      case 'loss':
-        return {
-          'headers': ['S/N', 'Item Name', 'Bad', 'Lost', 'Expired', 'Loss'],
-          'rows': [
-            ['1', 'Coca Cola 600ML', '2', '0', '3', '5,000'],
-            ['2', 'Fanta Orange', '1', '1', '0', '2,000'],
-            ['3', 'Pepsi 500ML', '0', '2', '1', '3,000'],
-            ['4', 'Minute Maid', '1', '0', '2', '5,400'],
-            ['5', 'Energy Drink', '0', '1', '1', '4,000'],
-            ['6', 'Biscuits', '3', '0', '4', '2,100'],
-          ]
-        };
-      default:
-        return {'headers': <String>[], 'rows': <List<String>>[]};
-    }
-  }
-
   double _columnWidth(String header) {
     switch (header) {
       case 'S/N':
@@ -269,6 +318,7 @@ class _ProfitExpensesReportPageState extends State<ProfitExpensesReportPage> {
   // ─── UI ──────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, __) => _loadData());
     final rows = _filteredRows;
     final headers = _headers;
 

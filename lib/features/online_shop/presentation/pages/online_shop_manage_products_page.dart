@@ -1,23 +1,70 @@
 // features/online_shop/presentation/pages/online_shop_manage_products_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/online_shop/presentation/widgets/online_shop_sidebar.dart';
 
-class OnlineShopManageProductsPage extends StatefulWidget {
+class OnlineShopManageProductsPage extends ConsumerStatefulWidget {
   const OnlineShopManageProductsPage({super.key});
 
   @override
-  State<OnlineShopManageProductsPage> createState() =>
+  ConsumerState<OnlineShopManageProductsPage> createState() =>
       _OnlineShopManageProductsPageState();
 }
 
 class _OnlineShopManageProductsPageState
-    extends State<OnlineShopManageProductsPage> {
+    extends ConsumerState<OnlineShopManageProductsPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final String _activeSidebarItem = 'Products';
+
+  List<Map<String, dynamic>> _products = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getOnlineShopAdmin();
+      final raw = res.data;
+      final data = raw is Map ? (raw as Map<String, dynamic>) : <String, dynamic>{};
+      final products = (data['products'] ?? []) as List;
+      final fmt = NumberFormat('#,###');
+      setState(() {
+        _products = products.map((p) {
+          final m = p as Map<String, dynamic>;
+          final price = double.tryParse(m['price']?.toString() ?? '') ?? 0;
+          final avail = (double.tryParse(m['available']?.toString() ?? '') ?? 0).toInt();
+          final reorder = (double.tryParse(m['reorder_level']?.toString() ?? '') ?? 0).toInt();
+          return {
+            'name': m['product_name'] ?? m['name'] ?? '',
+            'shop': m['shop_name'] ?? '',
+            'price': 'Tsh ${fmt.format(price.round())}',
+            'sales': (double.tryParse(m['sales_count']?.toString() ?? '') ?? 0).toInt(),
+            'stock': avail,
+            'alertLevel': reorder,
+            'status': m['status_label'] ?? (avail <= reorder ? 'Low Stock' : 'In Stock'),
+            'category': m['category'] ?? '',
+            'product_id': m['product_id'] ?? '',
+          };
+        }).toList();
+      });
+    } catch (_) {
+      if (mounted) setState(() => _products = []);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   void _onSidebarItemTap(String label) {
     Navigator.of(context).pop();
@@ -402,101 +449,4 @@ class _ProductCard extends StatelessWidget {
   }
 }
 
-const List<Map<String, dynamic>> _products = [
-  {
-    'name': 'Beauty Cream',
-    'shop': 'SON COLLECTION',
-    'buyingPrice': 12000.0,
-    'sellingPrice': 18000.0,
-    'price': 'Tsh 18,000',
-    'sales': 48,
-    'stock': 25,
-    'alertLevel': 5,
-    'status': 'In Stock',
-    'category': 'Cosmetics',
-  },
-  {
-    'name': 'Face Mask',
-    'shop': 'SON COLLECTION',
-    'buyingPrice': 5000.0,
-    'sellingPrice': 9000.0,
-    'price': 'Tsh 9,000',
-    'sales': 35,
-    'stock': 4,
-    'alertLevel': 5,
-    'status': 'Low Stock',
-    'category': 'Beauty',
-  },
-  {
-    'name': 'Air Freshener',
-    'shop': 'SON COLLECTION',
-    'buyingPrice': 4000.0,
-    'sellingPrice': 7000.0,
-    'price': 'Tsh 7,000',
-    'sales': 22,
-    'stock': 12,
-    'alertLevel': 3,
-    'status': 'In Stock',
-    'category': 'Household',
-  },
-  {
-    'name': 'Dish Soap',
-    'shop': 'SON COLLECTION',
-    'buyingPrice': 2000.0,
-    'sellingPrice': 3500.0,
-    'price': 'Tsh 3,500',
-    'sales': 60,
-    'stock': 30,
-    'alertLevel': 10,
-    'status': 'In Stock',
-    'category': 'Household',
-  },
-  {
-    'name': 'Charger Cable',
-    'shop': 'SON COLLECTION',
-    'buyingPrice': 3500.0,
-    'sellingPrice': 6000.0,
-    'price': 'Tsh 6,000',
-    'sales': 18,
-    'stock': 2,
-    'alertLevel': 5,
-    'status': 'Low Stock',
-    'category': 'Electronics',
-  },
-  {
-    'name': 'Car Phone Holder',
-    'shop': 'SON COLLECTION',
-    'buyingPrice': 8000.0,
-    'sellingPrice': 15000.0,
-    'price': 'Tsh 15,000',
-    'sales': 15,
-    'stock': 8,
-    'alertLevel': 3,
-    'status': 'In Stock',
-    'category': 'Accessories',
-  },
-  {
-    'name': 'Hand Sanitizer',
-    'shop': 'SON COLLECTION',
-    'buyingPrice': 2500.0,
-    'sellingPrice': 4500.0,
-    'price': 'Tsh 4,500',
-    'sales': 42,
-    'stock': 20,
-    'alertLevel': 8,
-    'status': 'In Stock',
-    'category': 'Health',
-  },
-  {
-    'name': 'USB Fan',
-    'shop': 'SON COLLECTION',
-    'buyingPrice': 7000.0,
-    'sellingPrice': 12000.0,
-    'price': 'Tsh 12,000',
-    'sales': 10,
-    'stock': 6,
-    'alertLevel': 3,
-    'status': 'In Stock',
-    'category': 'Electronics',
-  },
-];
+// Products loaded from API in _loadData()
