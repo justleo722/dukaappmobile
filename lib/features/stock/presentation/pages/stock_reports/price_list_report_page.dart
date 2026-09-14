@@ -13,6 +13,7 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class _PriceItem {
   final int sn;
@@ -193,6 +194,7 @@ class _PriceListReportPageState extends ConsumerState<PriceListReportPage> {
   // ─── UI ──────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, __) => _loadItems());
     final items = _filteredItems;
 
     return Scaffold(

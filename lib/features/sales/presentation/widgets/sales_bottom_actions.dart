@@ -9,6 +9,8 @@ class SalesBottomActions extends StatelessWidget {
   final VoidCallback? onPreview;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  /// Pay callback — when non-null a green "Pay" button is shown (for credit/unpaid sales).
+  final VoidCallback? onPay;
 
   const SalesBottomActions({
     super.key,
@@ -18,6 +20,7 @@ class SalesBottomActions extends StatelessWidget {
     this.onPreview,
     this.onEdit,
     this.onDelete,
+    this.onPay,
   });
 
   @override
@@ -56,6 +59,16 @@ class SalesBottomActions extends StatelessWidget {
             label: 'Edit',
             onTap: onEdit,
           ),
+          const SizedBox(width: 8),
+          if (onPay != null) ...[
+            const SizedBox(width: 8),
+            _buildActionButton(
+              icon: Icons.payment_rounded,
+              label: 'Pay',
+              color: AppColors.success,
+              onTap: onPay,
+            ),
+          ],
           const SizedBox(width: 8),
           _buildActionButton(
             icon: Icons.delete_rounded,

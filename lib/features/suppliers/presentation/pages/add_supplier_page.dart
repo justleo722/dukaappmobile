@@ -64,6 +64,9 @@ class _AddSupplierPageState extends ConsumerState<AddSupplierPage> {
         if (_companyController.text.trim().isNotEmpty) 'company_name': _companyController.text.trim(),
         if (_addressController.text.trim().isNotEmpty) 'address': _addressController.text.trim(),
         if (_tinController.text.trim().isNotEmpty) 'tin': _tinController.text.trim(),
+        // Include supplier_id when editing so backend performs UPDATE not INSERT
+        if (_isEditing && (widget.supplier?.id ?? '').isNotEmpty)
+          'supplier_id': widget.supplier!.id,
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

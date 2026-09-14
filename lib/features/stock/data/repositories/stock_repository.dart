@@ -23,7 +23,7 @@ class StockRepository {
     return _fetchAndCache();
   }
 
-  Future<StockState> refresh() => _fetchAndCache();
+  Future<StockState> refresh({String? from, String? to}) => _fetchAndCache(from: from, to: to);
 
   Future<List<StockProduct>> fetchProducts() => _remote.fetchProducts();
   Future<List<Map<String, dynamic>>> fetchProductsByShop(String shopId) =>
@@ -66,11 +66,11 @@ class StockRepository {
 
   // ── CACHE ────────────────────────────────────────────────────────────────
 
-  Future<StockState> _fetchAndCache() async {
+  Future<StockState> _fetchAndCache({String? from, String? to}) async {
     final results = await Future.wait([
-      _remote.fetchStock(),
+      _remote.fetchStock(from: from, to: to),
       _remote.fetchCategories(),
-      _remote.fetchSummary(),
+      _remote.fetchSummary(from: from, to: to),
     ]);
     final state = StockState(
       products: results[0] as List<StockProduct>,

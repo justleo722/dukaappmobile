@@ -53,7 +53,9 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
         _purchases = list.map((p) => {
           'purchase_id': p.purchaseId,
           'date': p.date,
-          'status': p.paymentStatus.toUpperCase() == 'PAID' ? 'PAID' : 'PENDING',
+          'status': ['paid', 'cleared', 'completed'].contains(p.paymentStatus.toLowerCase())
+              ? 'PAID'
+              : 'PENDING',
           'createdBy': p.createdBy,
           'supplier': p.supplier,
           'products': p.items,

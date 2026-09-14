@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 
-class RenewPage extends StatelessWidget {
+class RenewPage extends ConsumerWidget {
   const RenewPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
@@ -66,7 +68,7 @@ class RenewPage extends StatelessWidget {
                         'Advanced Reports',
                       ],
                       isPopular: false,
-                      onChoose: () => _onChoosePackage(context, 'Starter', 'TZS 150,000'),
+                      onChoose: () => _onChoosePackage(context, ref, 'Starter', 'TZS 150,000'),
                     ),
                     const SizedBox(height: 16),
                     _buildPackageCard(
@@ -84,7 +86,7 @@ class RenewPage extends StatelessWidget {
                         'Advanced Reports',
                       ],
                       isPopular: true,
-                      onChoose: () => _onChoosePackage(context, 'Business', 'TZS 350,000'),
+                      onChoose: () => _onChoosePackage(context, ref, 'Business', 'TZS 350,000'),
                     ),
                     const SizedBox(height: 16),
                     _buildPackageCard(
@@ -103,7 +105,7 @@ class RenewPage extends StatelessWidget {
                         'Advanced Reports',
                       ],
                       isPopular: false,
-                      onChoose: () => _onChoosePackage(context, 'Enterprise', 'TZS 600,000'),
+                      onChoose: () => _onChoosePackage(context, ref, 'Enterprise', 'TZS 600,000'),
                     ),
                   ],
                 )
@@ -125,7 +127,7 @@ class RenewPage extends StatelessWidget {
                           'Advanced Reports',
                         ],
                         isPopular: false,
-                        onChoose: () => _onChoosePackage(context, 'Starter', 'TZS 150,000'),
+                        onChoose: () => _onChoosePackage(context, ref, 'Starter', 'TZS 150,000'),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -145,7 +147,7 @@ class RenewPage extends StatelessWidget {
                           'Advanced Reports',
                         ],
                         isPopular: true,
-                        onChoose: () => _onChoosePackage(context, 'Business', 'TZS 350,000'),
+                        onChoose: () => _onChoosePackage(context, ref, 'Business', 'TZS 350,000'),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -166,7 +168,7 @@ class RenewPage extends StatelessWidget {
                           'Advanced Reports',
                         ],
                         isPopular: false,
-                        onChoose: () => _onChoosePackage(context, 'Enterprise', 'TZS 600,000'),
+                        onChoose: () => _onChoosePackage(context, ref, 'Enterprise', 'TZS 600,000'),
                       ),
                     ),
                   ],
@@ -177,8 +179,16 @@ class RenewPage extends StatelessWidget {
     );
   }
 
-  void _onChoosePackage(BuildContext context, String packageName, String price) {
-    final phoneController = TextEditingController(text: '+255769651495');
+  void _onChoosePackage(BuildContext context, WidgetRef ref, String packageName, String price) {
+    // Read user's phone from auth state and convert to local format (0XXXXXXXXX)
+    final rawPhone = ref.read(authProvider).user?.phone ?? '';
+    String phone = rawPhone;
+    if (phone.startsWith('+255')) {
+      phone = '0${phone.substring(4)}';
+    } else if (phone.startsWith('255') && phone.length > 3) {
+      phone = '0${phone.substring(3)}';
+    }
+    final phoneController = TextEditingController(text: phone);
 
     showDialog(
       context: context,
@@ -217,7 +227,7 @@ class RenewPage extends StatelessWidget {
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
-                  hintText: '+255 7XX XXX XXX',
+                  hintText: '07XX XXX XXX',
                   hintStyle: AppTypography.bodySmall.copyWith(color: AppColors.textHint),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),

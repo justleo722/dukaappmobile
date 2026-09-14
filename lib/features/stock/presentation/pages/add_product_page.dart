@@ -373,7 +373,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                       hintText: '0',
                       keyboardType: TextInputType.number,
                       validator: (v) =>
-                          v == null || v.isEmpty ? 'Required' : null,
+                          !_isEditing && (v == null || v.isEmpty) ? 'Required' : null,
                     ),
                   ]),
                   const SizedBox(height: 16),

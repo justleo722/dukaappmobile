@@ -13,6 +13,8 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class _StockItem {
   final int sn;
@@ -66,15 +68,29 @@ class _AllStockReportPageState extends ConsumerState<AllStockReportPage> {
   Future<void> _loadItems() async {
     setState(() => _isLoading = true);
     try {
-      final stockState = ref.read(stockProvider);
-      final products = stockState.whenOrNull(data: (s) => s.products) ?? [];
-      final items = products.asMap().entries.map((e) {
-        final p = e.value;
+      final filter = ref.read(filterProvider);
+      final api = ref.read(apiServiceProvider);
+      final resp = await api.getStock(from: filter.from, to: filter.to);
+      final raw = resp.data;
+      List<dynamic> rows = [];
+      if (raw is Map) {
+        rows = (raw['data'] ?? raw['stock'] ?? raw['products'] ?? []) as List;
+      } else if (raw is List) {
+        rows = raw;
+      }
+      final items = rows.asMap().entries.map((e) {
+        final j = e.value as Map<String, dynamic>;
+        double _d(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0;
         return _StockItem(
-          sn: e.key + 1, name: p.name,
-          bp: p.buyingPrice, sp: p.sellingPrice,
-          inStock: p.available.toInt(),
-          sold: 0, bad: 0, lost: 0, expired: 0,
+          sn: e.key + 1,
+          name: (j['product_name'] ?? j['name'] ?? '').toString(),
+          bp: _d(j['bp'] ?? j['buying_price']),
+          sp: _d(j['sp'] ?? j['selling_price']),
+          inStock: _d(j['available'] ?? j['quantity'] ?? j['qty']).toInt(),
+          sold: _d(j['sold']).toInt(),
+          bad: _d(j['bad']).toInt(),
+          lost: _d(j['lost']).toInt(),
+          expired: _d(j['expired']).toInt(),
         );
       }).toList();
       if (mounted) setState(() => _allItems = items);
@@ -250,6 +266,7 @@ class _AllStockReportPageState extends ConsumerState<AllStockReportPage> {
   // ─── UI ──────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, __) => _loadItems());
     final items = _filteredItems;
 
     return Scaffold(

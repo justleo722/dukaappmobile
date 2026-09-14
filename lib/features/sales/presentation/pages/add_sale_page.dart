@@ -497,7 +497,12 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
             : (res['message']?.toString() ?? 'Failed to save sale')),
         backgroundColor: ok ? AppColors.success : AppColors.danger,
       ));
-      if (ok) context.pop();
+      if (ok) {
+        // Refresh sales list and stock so real-time data shows immediately
+        ref.read(salesProvider.notifier).refresh();
+        ref.read(stockProvider.notifier).refresh();
+        context.pop();
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

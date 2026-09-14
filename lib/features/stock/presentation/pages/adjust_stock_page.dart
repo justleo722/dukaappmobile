@@ -77,7 +77,7 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
       if (_items.any((item) => item.name == name)) continue;
       _items.add(_AdjustItem(
         name: name,
-        currentStock: product['stock'] as int,
+        currentStock: (product['stock'] as num?)?.toInt() ?? 0,
         productId: product['product_id'],
       ));
       addedCount++;

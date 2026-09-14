@@ -1,6 +1,7 @@
 // features/purchase/presentation/pages/purchase_reports/purchase_report_page.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -11,21 +12,116 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:go_router/go_router.dart';
 
-class PurchaseReportPage extends StatefulWidget {
+class PurchaseReportPage extends ConsumerStatefulWidget {
   final String reportKey;
   final String title;
 
   const PurchaseReportPage({required this.reportKey, required this.title, super.key});
 
   @override
-  State<PurchaseReportPage> createState() => _PurchaseReportPageState();
+  ConsumerState<PurchaseReportPage> createState() => _PurchaseReportPageState();
 }
 
-class _PurchaseReportPageState extends State<PurchaseReportPage> {
+class _PurchaseReportPageState extends ConsumerState<PurchaseReportPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalController = ScrollController();
+
+  List<String> _apiHeaders = [];
+  List<List<String>> _apiRows = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final filter = ref.read(filterProvider);
+      final from = filter.from;
+      final to = filter.to;
+      final api = ref.read(apiServiceProvider);
+      final fmt = NumberFormat('#,###');
+      double _d(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0;
+
+      switch (widget.reportKey) {
+        case 'purchase_history':
+          final res = await api.getPurchaseHistory(from: from, to: to);
+          final list = _unwrapList(res.data);
+          _apiHeaders = ['S/N', 'Date', 'Products', 'Total', 'Paid', 'Balance'];
+          _apiRows = list.asMap().entries.map((e) {
+            final j = e.value;
+            final items = (j['products'] ?? j['items'] ?? []) as List;
+            final summary = items.isEmpty ? '' : '${items.length} item(s)';
+            return [
+              '${e.key + 1}',
+              (j['record_date'] ?? j['date'] ?? '').toString(),
+              summary,
+              fmt.format(_d(j['total_amount'] ?? j['total'])),
+              fmt.format(_d(j['paid_amount'] ?? j['paid'])),
+              fmt.format(_d(j['balance_amount'] ?? j['balance'])),
+            ];
+          }).toList();
+          break;
+        case 'orders':
+          final res = await api.getPurchaseOrders(from: from, to: to);
+          final list = _unwrapList(res.data);
+          _apiHeaders = ['S/N', 'PO Number', 'Supplier', 'Total', 'Paid', 'Balance'];
+          _apiRows = list.asMap().entries.map((e) {
+            final j = e.value;
+            return [
+              '${e.key + 1}',
+              (j['po_number'] ?? j['purchase_id'] ?? '').toString(),
+              (j['supplier_name'] ?? j['supplier'] ?? '').toString(),
+              fmt.format(_d(j['total_amount'] ?? j['total'])),
+              fmt.format(_d(j['paid_amount'] ?? j['paid'])),
+              fmt.format(_d(j['balance_amount'] ?? j['balance'])),
+            ];
+          }).toList();
+          break;
+        case 'by_supplier':
+        case 'suppliers':
+          final res = await api.getReportSuppliers(from: from, to: to);
+          final list = _unwrapList(res.data);
+          _apiHeaders = ['S/N', 'Supplier', 'Phone', 'Total', 'Paid', 'Balance'];
+          _apiRows = list.asMap().entries.map((e) {
+            final j = e.value;
+            return [
+              '${e.key + 1}',
+              (j['supplier_name'] ?? j['name'] ?? '').toString(),
+              (j['phone'] ?? '').toString(),
+              fmt.format(_d(j['total_amount'] ?? j['total'])),
+              fmt.format(_d(j['paid_amount'] ?? j['paid'])),
+              fmt.format(_d(j['balance_amount'] ?? j['balance'])),
+            ];
+          }).toList();
+          break;
+        default:
+          _apiHeaders = [];
+          _apiRows = [];
+      }
+    } catch (_) {
+      _apiHeaders = [];
+      _apiRows = [];
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  List<Map<String, dynamic>> _unwrapList(dynamic raw) {
+    if (raw is List) return raw.whereType<Map<String, dynamic>>().toList();
+    if (raw is Map<String, dynamic>) {
+      final v = raw['data'] ?? raw['result'] ?? raw['items'];
+      if (v is List) return v.whereType<Map<String, dynamic>>().toList();
+    }
+    return [];
+  }
 
   String get _currentDateTime {
     final now = DateTime.now();
@@ -51,8 +147,7 @@ class _PurchaseReportPageState extends State<PurchaseReportPage> {
   }
 
   List<List<String>> get _filteredRows {
-    final map = _reportData();
-    final rows = List<List<String>>.from(map['rows'] as List);
+    final rows = _apiRows;
     final query = _searchController.text.toLowerCase().trim();
     if (query.isEmpty) return rows;
     return rows.where((row) {
@@ -60,7 +155,7 @@ class _PurchaseReportPageState extends State<PurchaseReportPage> {
     }).toList();
   }
 
-  List<String> get _headers => List<String>.from((_reportData()['headers'] as List));
+  List<String> get _headers => _apiHeaders;
 
   List<String> _computeTotals(List<List<String>> rows, List<String> headers) {
     final totals = List<String>.filled(headers.length, '');
@@ -187,85 +282,6 @@ class _PurchaseReportPageState extends State<PurchaseReportPage> {
     await OpenFile.open(file.path);
   }
 
-  // ─── DATA ────────────────────────────────────────────────────────────
-  Map<String, dynamic> _reportData() {
-    switch (widget.reportKey) {
-      case 'purchase_history':
-        return {
-          'headers': ['S/N', 'Date', 'Products', 'Total', 'Paid', 'Balance'],
-          'rows': [
-            ['1', '01 Jul 2026', 'AIR x20', '90,000', '90,000', '0'],
-            ['2', '02 Jul 2026', 'CREAM x15', '180,000', '180,000', '0'],
-          ]
-        };
-      case 'total_purchase':
-        return {
-          'headers': ['S/N', 'Purchases', 'Items', 'Total', 'Paid', 'Balance'],
-          'rows': [
-            ['1', 'PUR-001', '25', '270,000', '200,000', '70,000'],
-          ]
-        };
-      case 'orders':
-        return {
-          'headers': ['S/N', 'Purchases', 'Items', 'Total', 'Paid', 'Balance'],
-          'rows': [
-            ['1', 'ORD-001', '50', '450,000', '450,000', '0'],
-          ]
-        };
-      case 'suppliers':
-        return {
-          'headers': ['S/N', 'Supplier', 'Phone', 'Wallet'],
-          'rows': [
-            ['1', 'JUMA SUPPLIERS', '0712 345678', 'MPESA: 12345'],
-          ]
-        };
-      case 'cash_purchase':
-        return {
-          'headers': ['S/N', 'Supplier', 'Total', 'Paid', 'Balance'],
-          'rows': [
-            ['1', 'AMINA TRADERS', '120,000', '120,000', '0'],
-          ]
-        };
-      case 'credit_purchase':
-        return {
-          'headers': ['S/N', 'Date', 'Supplier', 'Total', 'Paid', 'Balance', 'Status'],
-          'rows': [
-            ['1', '03 Jul 2026', 'HASSAN WHOLESALE', '240,000', '200,000', '40,000', 'PENDING'],
-          ]
-        };
-      case 'by_category':
-        return {
-          'headers': ['S/N', 'Category', 'Qty', 'Total'],
-          'rows': [
-            ['1', 'Beverages', '120', '450,000'],
-          ]
-        };
-      case 'by_products':
-        return {
-          'headers': ['S/N', 'Product', 'Category', 'Qty', 'Total'],
-          'rows': [
-            ['1', 'AIR', 'Cleaning', '30', '135,000'],
-          ]
-        };
-      case 'by_supplier':
-        return {
-          'headers': ['S/N', 'Supplier', 'Total', 'Paid', 'Balance'],
-          'rows': [
-            ['1', 'FATIMA ENTERPRISES', '287,500', '0', '287,500'],
-          ]
-        };
-      case 'stock_returned':
-        return {
-          'headers': ['S/N', 'Date', 'Supplier', 'Qty', 'Total'],
-          'rows': [
-            ['1', '05 Jul 2026', 'JUMA SUPPLIERS', '10', '50,000'],
-          ]
-        };
-      default:
-        return {'headers': <String>[], 'rows': <List<String>>[]};
-    }
-  }
-
   double _columnWidth(String header) {
     switch (header) {
       case 'S/N':
@@ -299,6 +315,7 @@ class _PurchaseReportPageState extends State<PurchaseReportPage> {
   // ─── UI ──────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, __) => _loadData());
     final rows = _filteredRows;
     final headers = _headers;
 

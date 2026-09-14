@@ -16,6 +16,7 @@ import 'package:dukaapp/core/providers.dart';
 
 class _PurchaseItem {
   final String name;
+  final dynamic productId;
   final int currentStock;
   int quantity;
   final TextEditingController buyingPrice;
@@ -25,6 +26,7 @@ class _PurchaseItem {
 
   _PurchaseItem({
     required this.name,
+    this.productId,
     required this.currentStock,
     double buyingPriceValue = 0,
     double sellingPriceValue = 0,
@@ -72,6 +74,9 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
   List<Map<String, dynamic>> _allProducts = [];
   List<String> _accounts = [];
   List<String> _suppliers = [];
+  // id→name maps for submitting correct IDs to backend
+  Map<String, String> _supplierIdMap = {}; // name → id
+  Map<String, String> _accountIdMap  = {}; // name → id
 
   @override
   void initState() {
@@ -102,26 +107,30 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
   }
 
   Future<void> _loadProductList() async {
+    double _d(dynamic v) => num.tryParse(v?.toString() ?? '')?.toDouble() ?? 0.0;
     try {
       final api = ref.read(apiServiceProvider);
       final res = await api.getProducts();
       final body = res.data;
       List<Map<String, dynamic>> products = [];
-      if (body is Map) {
-        final data = body['data'] ?? body['products'] ?? body;
-        if (data is List) {
-          products = data.map((e) {
-            final m = Map<String, dynamic>.from(e as Map);
-            return {
-              'name': m['product_name'] ?? m['name'] ?? '',
-              'stock': (m['quantity'] ?? m['stock'] ?? 0) as num,
-              'buyingPrice': (m['buying_price'] ?? m['cost_price'] ?? 0.0) as num,
-              'sellingPrice': (m['selling_price'] ?? m['price'] ?? 0.0) as num,
-              'wholesalePrice': (m['wholesale_price'] ?? 0.0) as num,
-            };
-          }).toList();
-        }
+      List raw = [];
+      if (body is List) {
+        raw = body;
+      } else if (body is Map) {
+        final data = body['data'] ?? body['products'] ?? body['stock'] ?? body;
+        if (data is List) raw = data;
       }
+      products = raw.whereType<Map>().map((e) {
+        final m = Map<String, dynamic>.from(e);
+        return {
+          'name': (m['product_name'] ?? m['name'] ?? '').toString(),
+          'product_id': (m['product_id'] ?? m['id'])?.toString() ?? '',
+          'stock': _d(m['available'] ?? m['quantity'] ?? m['stock'] ?? 0),
+          'buyingPrice': _d(m['bp'] ?? m['buying_price'] ?? m['cost_price']),
+          'sellingPrice': _d(m['sp'] ?? m['selling_price'] ?? m['price']),
+          'wholesalePrice': _d(m['wp'] ?? m['wholesale_price']),
+        };
+      }).where((p) => (p['name'] as String).isNotEmpty).toList();
       if (mounted) setState(() => _allProducts = products);
     } catch (_) {}
   }
@@ -133,23 +142,38 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
       final acctRes = await api.getCashbookAccounts();
       final acctBody = acctRes.data;
       List<String> accounts = [];
+      Map<String, String> accountIdMap = {};
       if (acctBody is Map) {
         final data = acctBody['data'] ?? acctBody['accounts'] ?? acctBody;
         if (data is List) {
-          accounts = data.map((e) => (e['account_name'] ?? e['name'] ?? '').toString()).where((s) => s.isNotEmpty).toList();
+          for (final e in data) {
+            final name = (e['account_name'] ?? e['name'] ?? '').toString();
+            final id   = (e['account_id'] ?? e['id'] ?? '').toString();
+            if (name.isNotEmpty) { accounts.add(name); accountIdMap[name] = id; }
+          }
         }
       }
       // Load suppliers
       final suppRes = await api.getSuppliers();
       final suppBody = suppRes.data;
       List<String> suppliers = [];
+      Map<String, String> supplierIdMap = {};
       if (suppBody is Map) {
         final data = suppBody['data'] ?? suppBody['suppliers'] ?? suppBody;
         if (data is List) {
-          suppliers = data.map((e) => (e['supplier_name'] ?? e['name'] ?? '').toString()).where((s) => s.isNotEmpty).toList();
+          for (final e in data) {
+            final name = (e['supplier_name'] ?? e['name'] ?? '').toString();
+            final id   = (e['supplier_id'] ?? e['id'] ?? '').toString();
+            if (name.isNotEmpty) { suppliers.add(name); supplierIdMap[name] = id; }
+          }
         }
       }
-      if (mounted) setState(() { _accounts = accounts; _suppliers = suppliers; });
+      if (mounted) setState(() {
+        _accounts = accounts;
+        _suppliers = suppliers;
+        _accountIdMap  = accountIdMap;
+        _supplierIdMap = supplierIdMap;
+      });
     } catch (_) {}
   }
 
@@ -158,6 +182,7 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
     if (!_items.any((item) => item.name == name)) {
       _items.add(_PurchaseItem(
         name: name,
+        productId: product['product_id'],
         currentStock: (product['stock'] as num?)?.toInt() ?? 0,
         buyingPriceValue: (product['buyingPrice'] as num?)?.toDouble() ?? 0.0,
         sellingPriceValue: (product['sellingPrice'] as num?)?.toDouble() ?? 0.0,
@@ -192,6 +217,7 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
       if (_items.any((item) => item.name == name)) continue;
       _items.add(_PurchaseItem(
         name: name,
+        productId: product['product_id'],
         currentStock: (product['stock'] as num?)?.toInt() ?? 0,
         buyingPriceValue: (product['buyingPrice'] as num?)?.toDouble() ?? 0.0,
         sellingPriceValue: (product['sellingPrice'] as num?)?.toDouble() ?? 0.0,
@@ -689,21 +715,26 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                   ? () async {
                       try {
                         final repo = ref.read(purchaseRepositoryProvider);
-                        final products = _items.map((item) => {
-                          'name': item.name,
-                          'quantity': item.quantity,
-                          'buying_price': double.tryParse(item.buyingPrice.text) ?? 0,
-                          'selling_price': double.tryParse(item.sellingPrice.text) ?? 0,
-                          'wholesale_price': double.tryParse(item.wholesalePrice.text) ?? 0,
-                          if (item.expiryDate != null)
-                            'expiry_date': DateFormat('yyyy-MM-dd').format(item.expiryDate!),
-                        }).toList();
+                        // Backend expects parallel arrays: product_id[], quantity[], bp[], sp[], wp[], expiry_date[]
+                        final productIds   = _items.map((i) => i.productId?.toString() ?? '').toList();
+                        final quantities   = _items.map((i) => i.quantity).toList();
+                        final bps          = _items.map((i) => double.tryParse(i.buyingPrice.text) ?? 0).toList();
+                        final sps          = _items.map((i) => double.tryParse(i.sellingPrice.text) ?? 0).toList();
+                        final wps          = _items.map((i) => double.tryParse(i.wholesalePrice.text) ?? 0).toList();
+                        final expiries     = _items.map((i) => i.expiryDate != null ? DateFormat('yyyy-MM-dd').format(i.expiryDate!) : '').toList();
+                        final supplierId   = _supplierIdMap[_selectedSupplier ?? ''] ?? '';
+                        final accountId    = _accountIdMap[_selectedAccount ?? ''] ?? (_selectedAccount ?? '');
                         await repo.createPurchase({
-                          'supplier': _selectedSupplier ?? '',
-                          'record_date': DateFormat('yyyy-MM-dd').format(_purchaseDate),
-                          'payment_type': _selectedAccount ?? 'cash',
-                          'products': products,
-                          if (widget.createMode) 'order_type': 'order',
+                          'product_id'  : productIds,
+                          'quantity'    : quantities,
+                          'bp'          : bps,
+                          'sp'          : sps,
+                          'wp'          : wps,
+                          'expiry_date' : expiries,
+                          'supplier_id' : supplierId,
+                          'payment_mode': accountId,
+                          'record_date' : DateFormat('yyyy-MM-dd').format(_purchaseDate),
+                          'type'        : widget.createMode ? 'order' : 'restock',
                         });
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(

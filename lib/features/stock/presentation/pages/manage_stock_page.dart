@@ -18,6 +18,7 @@ import 'package:dukaapp/features/stock/presentation/widgets/stock_categories_gri
 import 'package:dukaapp/features/stock/presentation/pages/import_stock_page.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/product_reports_helper.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class ManageStockPage extends ConsumerStatefulWidget {
   const ManageStockPage({super.key});
@@ -239,6 +240,8 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
                   'sellingPrice': p.sellingPrice,
                   'stock': p.available,
                   'product_id': p.productId,
+                  'imageUrl': p.imageUrl,
+                  'type': p.type,
                 })
             .toList(),
       },
@@ -247,6 +250,10 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Reload stock when global date filter changes
+    ref.listen<FilterState>(filterProvider, (_, __) {
+      ref.read(stockProvider.notifier).refresh();
+    });
     final stockAsync = ref.watch(stockProvider);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
@@ -556,16 +563,20 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
           buyingPrice: product.buyingPrice,
           sellingPrice: product.sellingPrice,
           currentStock: product.available.toInt(),
+          type: product.type,
           isSelected: _selectedIds.contains(id),
           onSelectionChanged: (_) => _toggleSelection(id),
           isExpanded: _expandedProductId == id,
           onExpandToggle: () => _toggleExpansion(id),
           onEdit: () => context.push('/stock/manage/add', extra: {
+            'product_id': product.productId,
             'name': product.name,
             'category': product.category,
             'buyingPrice': product.buyingPrice,
             'sellingPrice': product.sellingPrice,
             'stock': product.available,
+            'imageUrl': product.imageUrl,
+            'type': product.type,
           }),
           onHistory: () => ProductReportsHelper.exportHistoryPdf(
             context: context,
@@ -587,11 +598,15 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
           ),
           onRestock: () =>
               context.push('/stock/manage/purchase', extra: {
-                'name': product.name,
-                'category': product.category,
-                'buyingPrice': product.buyingPrice,
-                'sellingPrice': product.sellingPrice,
-                'stock': product.available,
+                'initialProduct': {
+                  'name': product.name,
+                  'product_id': product.productId,
+                  'category': product.category,
+                  'buyingPrice': product.buyingPrice,
+                  'sellingPrice': product.sellingPrice,
+                  'wholesalePrice': product.wholesalePrice,
+                  'stock': product.available,
+                },
               }),
           onAdjust: () => context.push('/adjust'),
           onDelete: () => _deleteProduct(product),

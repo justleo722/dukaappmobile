@@ -167,7 +167,7 @@ class _StaffManagementPageState extends ConsumerState<StaffManagementPage> {
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(attendant.name, style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
-            Text('ID: ${attendant.roleId.toString().padLeft(4, '0')}  •  ${attendant.isManager ? 'Manager' : 'Attendant'}', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11)),
+            Text('ID: ${(attendant.attendantId ?? attendant.roleId)?.toString() ?? '-'}  •  ${attendant.isManager ? 'Manager' : 'Attendant'}', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11)),
           ])),
           Switch(
             value: attendant.isActive,
@@ -194,6 +194,9 @@ class _StaffManagementPageState extends ConsumerState<StaffManagementPage> {
             'roleId': attendant.roleId?.toString(),
             'isManager': attendant.isManager,
           })),
+          const SizedBox(width: 8),
+          _actionChip(Icons.security_rounded, 'Permissions', const Color(0xFF8B5CF6),
+              () => context.push('/staff/permissions', extra: {'roleId': attendant.roleId?.toString()})),
           const SizedBox(width: 8),
           _actionChip(Icons.delete_rounded, 'Delete', AppColors.danger, () => _confirmDelete(attendant)),
         ]),

@@ -26,6 +26,8 @@ class SaleAccordionCard extends StatelessWidget {
   final VoidCallback? onPreview;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  /// Pay callback — supply for credit/unpaid sales to show the Pay button.
+  final VoidCallback? onPay;
 
   const SaleAccordionCard({
     super.key,
@@ -48,6 +50,7 @@ class SaleAccordionCard extends StatelessWidget {
     this.onPreview,
     this.onEdit,
     this.onDelete,
+    this.onPay,
   });
 
   @override
@@ -270,6 +273,7 @@ class SaleAccordionCard extends StatelessWidget {
                     onPreview: onPreview,
                     onEdit: onEdit,
                     onDelete: onDelete,
+                    onPay: onPay,
                   ),
                 ],
               ),

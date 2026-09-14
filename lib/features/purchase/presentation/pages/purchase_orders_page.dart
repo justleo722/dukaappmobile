@@ -32,68 +32,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
   int? _expandedIndex;
   bool _isLoading = false;
 
-  List<Map<String, dynamic>> _orders = [
-    {
-      'poNumber': 'PO-001',
-      'date': 'Aug 05, 2026 10:30',
-      'status': 'PENDING',
-      'createdBy': 'SON',
-      'supplier': 'JUMA SUPPLIERS',
-      'products': [
-        {'name': 'AIR FRESHENER', 'quantity': 50, 'price': 2500.0, 'total': 125000.0},
-        {'name': 'DISHWASH LIQUID', 'quantity': 30, 'price': 3500.0, 'total': 105000.0},
-      ],
-      'discount': 5000.0,
-      'paid': 100000.0,
-      'balance': 125000.0,
-      'paymentMode': 'Credit',
-    },
-    {
-      'poNumber': 'PO-002',
-      'date': 'Aug 03, 2026 14:15',
-      'status': 'PAID',
-      'createdBy': 'MKE',
-      'supplier': 'AMINA TRADERS',
-      'products': [
-        {'name': 'BEAUTY CREAM', 'quantity': 25, 'price': 12000.0, 'total': 300000.0},
-        {'name': 'FACE MASK', 'quantity': 40, 'price': 5000.0, 'total': 200000.0},
-      ],
-      'discount': 10000.0,
-      'paid': 490000.0,
-      'balance': 0.0,
-      'paymentMode': 'Cash',
-    },
-    {
-      'poNumber': 'PO-003',
-      'date': 'Aug 01, 2026 09:00',
-      'status': 'PENDING',
-      'createdBy': 'JUM',
-      'supplier': 'HASSAN WHOLESALE',
-      'products': [
-        {'name': 'CAR PHONE HOLDER', 'quantity': 100, 'price': 8000.0, 'total': 800000.0},
-        {'name': 'CHARGER CABLE', 'quantity': 200, 'price': 3500.0, 'total': 700000.0},
-      ],
-      'discount': 20000.0,
-      'paid': 500000.0,
-      'balance': 980000.0,
-      'paymentMode': 'Credit',
-    },
-    {
-      'poNumber': 'PO-004',
-      'date': 'Jul 29, 2026 16:45',
-      'status': 'PAID',
-      'createdBy': 'SON',
-      'supplier': 'FATIMA ENTERPRISES',
-      'products': [
-        {'name': 'DISH SOAP', 'quantity': 150, 'price': 2000.0, 'total': 300000.0},
-        {'name': 'LAUNDRY DETERGENT', 'quantity': 80, 'price': 4500.0, 'total': 360000.0},
-      ],
-      'discount': 0.0,
-      'paid': 660000.0,
-      'balance': 0.0,
-      'paymentMode': 'Bank',
-    },
-  ];
+  List<Map<String, dynamic>> _orders = [];
 
   @override
   void initState() {
@@ -113,7 +52,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
           'purchase_id': item.purchaseId,
           'poNumber': item.purchaseId,
           'date': item.date,
-          'status': item.paymentStatus.toUpperCase(),
+          'status': ['paid', 'cleared', 'completed'].contains(item.paymentStatus.toLowerCase()) ? 'PAID' : 'PENDING',
           'createdBy': item.createdBy,
           'supplier': item.supplier,
           'products': (item.items ?? []).map((p) => {

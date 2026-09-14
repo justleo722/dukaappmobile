@@ -17,6 +17,18 @@ class StockProduct {
   final String? status;     // 'active' | 'deleted'
   final String? imageUrl;
 
+  // Movement/report fields (populated when fetched with date range)
+  final double sold;
+  final double bad;
+  final double lost;
+  final double stolen;
+  final double totalIn;
+  final double totalRevenue;
+  final double totalCost;
+  final double profitEstimate;
+  final double stockValue;
+  final double loss;
+
   const StockProduct({
     required this.productId,
     this.stockId,
@@ -34,6 +46,16 @@ class StockProduct {
     this.expiryDate,
     this.status,
     this.imageUrl,
+    this.sold = 0,
+    this.bad = 0,
+    this.lost = 0,
+    this.stolen = 0,
+    this.totalIn = 0,
+    this.totalRevenue = 0,
+    this.totalCost = 0,
+    this.profitEstimate = 0,
+    this.stockValue = 0,
+    this.loss = 0,
   });
 
   bool get isLowStock =>
@@ -60,7 +82,20 @@ class StockProduct {
       barcode: j['barcode']?.toString(),
       expiryDate: j['expiry_date']?.toString(),
       status: j['record_status']?.toString(),
-      imageUrl: j['image']?.toString() ?? j['image_url']?.toString(),
+      imageUrl: _resolveImageUrl(
+          j['photo']?.toString() ??
+          j['image']?.toString() ??
+          j['image_url']?.toString()),
+      sold: _d(j['sold']),
+      bad: _d(j['bad']),
+      lost: _d(j['lost']),
+      stolen: _d(j['stolen']),
+      totalIn: _d(j['total_in']),
+      totalRevenue: _d(j['total_revenue']),
+      totalCost: _d(j['total_cost']),
+      profitEstimate: _d(j['profit_estimate']),
+      stockValue: _d(j['stock_value']),
+      loss: _d(j['loss']),
     );
   }
 
@@ -86,6 +121,17 @@ class StockProduct {
   static double _d(dynamic v) {
     if (v == null) return 0;
     return double.tryParse(v.toString()) ?? 0;
+  }
+
+  /// Convert a relative image path from the API to a full URL.
+  /// The API returns paths like "uploads/shops/1/products/image.jpg".
+  static String? _resolveImageUrl(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    final path = raw.trim();
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    // Remove leading slash if present, then prepend base URL
+    const baseUrl = 'https://dukaapp.com';
+    return '$baseUrl/${path.replaceFirst(RegExp(r'^/+'), '')}';
   }
 }
 

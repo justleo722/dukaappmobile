@@ -1,7 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
@@ -374,8 +380,8 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
           const SizedBox(width: 10),
           SalesActionButton(
             icon: Icons.receipt_rounded,
-            label: 'Purchase',
-            onTap: () => context.push('/sales/purchases'),
+            label: 'Receipt',
+            onTap: () => context.push('/sales/invoices'),
           ),
           const SizedBox(width: 10),
           SalesActionButton(
@@ -472,7 +478,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
             paid: sale['paid'],
             discount: sale['discount'],
             balance: sale['balance'],
-            onDownload: () {},
+            onDownload: () => _downloadReceiptPdf(sale),
             onBackdate: () => _showBackdateDialog(index),
             onPrint: () => _showReceiptPreview(sale),
             onPreview: () => _showReceiptPreview(sale),
@@ -485,9 +491,92 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
               }
             },
             onDelete: () => _deleteSale(index),
+            // Show Pay button only for unpaid/credit sales
+            onPay: (sale['balance'] as double? ?? 0) > 0.01
+                ? () => _showPayDialog(index)
+                : null,
           );
         }),
       ],
+    );
+  }
+
+  /// Payment dialog for credit / unpaid sales.
+  void _showPayDialog(int index) {
+    final sale = _sales[index];
+    final balance = (sale['balance'] as double? ?? 0.0);
+    final saleId = sale['sale_id']?.toString() ?? '';
+    final amountController = TextEditingController(text: balance.toStringAsFixed(0));
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Pay Credit Balance',
+            style: AppTypography.h6.copyWith(color: AppColors.textPrimary)),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Balance: TZS ${balance.toStringAsFixed(0)}',
+                  style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary)),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: amountController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Amount Paid',
+                  prefixText: 'TZS ',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  final d = double.tryParse(v ?? '');
+                  if (d == null || d <= 0) return 'Enter valid amount';
+                  if (d > balance) return 'Exceeds balance';
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.pop(ctx);
+              try {
+                final repo = ref.read(salesRepositoryProvider);
+                final res = await repo.addPayment({
+                  'sale_id': saleId,
+                  'amount': amountController.text.trim(),
+                  'payment_mode': 'Cash',
+                });
+                final ok = res['status']?.toString() == '1' ||
+                    res['status'] == true ||
+                    res['status']?.toString() == 'success';
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(ok ? 'Payment recorded' : (res['message']?.toString() ?? 'Payment failed')),
+                  backgroundColor: ok ? AppColors.success : AppColors.danger,
+                ));
+                if (ok) await _loadSales();
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger));
+                }
+              }
+            },
+            child: const Text('Pay', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -774,6 +863,62 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
   String _fmt(double v) => v == v.roundToDouble()
       ? v.toInt().toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},')
       : v.toStringAsFixed(2).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+\.)'), (m) => '${m[1]},');
+
+  Future<void> _downloadReceiptPdf(Map<String, dynamic> sale) async {
+    try {
+      final shopName = ref.read(authProvider).activeShop?.shopName ?? 'My Shop';
+      final products = List<Map<String, dynamic>>.from(sale['products']);
+      final receiptNo = 'RCP-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
+
+      final doc = pw.Document();
+      doc.addPage(pw.Page(
+        pageFormat: PdfPageFormat.a5,
+        build: (ctx) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Center(child: pw.Text(shopName, style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold))),
+            pw.Center(child: pw.Text('Sales Receipt', style: const pw.TextStyle(fontSize: 13))),
+            pw.SizedBox(height: 8),
+            pw.Text('Receipt No: $receiptNo'),
+            pw.Text('Date: ${sale['date']}'),
+            pw.Text('Cashier: ${sale['soldBy']}'),
+            pw.Text('Payment: ${sale['paymentMethod']}'),
+            pw.Divider(),
+            ...products.map((p) => pw.Row(children: [
+              pw.Expanded(child: pw.Text('${p['name'] ?? p['product_name'] ?? ''}  x${p['quantity']}')),
+              pw.Text('Tsh ${((p['price'] as num? ?? 0) * (p['quantity'] as num? ?? 1)).toStringAsFixed(0)}'),
+            ])),
+            pw.Divider(),
+            pw.Row(children: [
+              pw.Expanded(child: pw.Text('Total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
+              pw.Text('Tsh ${(sale['total'] as double? ?? 0).toStringAsFixed(0)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            ]),
+            pw.Row(children: [
+              pw.Expanded(child: pw.Text('Paid')),
+              pw.Text('Tsh ${(sale['paid'] as double? ?? 0).toStringAsFixed(0)}'),
+            ]),
+            if ((sale['balance'] as double? ?? 0) > 0) pw.Row(children: [
+              pw.Expanded(child: pw.Text('Balance')),
+              pw.Text('Tsh ${(sale['balance'] as double).toStringAsFixed(0)}'),
+            ]),
+            pw.SizedBox(height: 16),
+            pw.Center(child: pw.Text('Thank you!', style: const pw.TextStyle(fontSize: 12))),
+          ],
+        ),
+      ));
+
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/receipt_$receiptNo.pdf');
+      await file.writeAsBytes(await doc.save());
+      await OpenFile.open(file.path);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Download failed: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
 
   void _showReceiptPreview(Map<String, dynamic> sale) {
     final products = List<Map<String, dynamic>>.from(sale['products']);

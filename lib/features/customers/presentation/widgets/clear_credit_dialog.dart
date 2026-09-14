@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/customers/data/models/customer_model.dart';
 
-class ClearCreditDialog extends StatefulWidget {
+class ClearCreditDialog extends ConsumerStatefulWidget {
   final Customer customer;
+  final VoidCallback? onSuccess;
 
-  const ClearCreditDialog({super.key, required this.customer});
+  const ClearCreditDialog({super.key, required this.customer, this.onSuccess});
 
   @override
-  State<ClearCreditDialog> createState() => _ClearCreditDialogState();
+  ConsumerState<ClearCreditDialog> createState() => _ClearCreditDialogState();
 }
 
-class _ClearCreditDialogState extends State<ClearCreditDialog> {
+class _ClearCreditDialogState extends ConsumerState<ClearCreditDialog> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   String? _selectedAccount;
@@ -32,57 +35,58 @@ class _ClearCreditDialogState extends State<ClearCreditDialog> {
     super.dispose();
   }
 
-  void _submit() {
+  bool _isSaving = false;
+
+  void _snack(String msg, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg, style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+    ));
+  }
+
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedAccount == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please select account',
-            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-          ),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-          ),
-        ),
-      );
+      _snack('Please select account', AppColors.danger);
       return;
     }
 
     final amount = double.tryParse(_amountController.text) ?? 0;
     if (amount > widget.customer.creditBalance) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Amount exceeds credit balance',
-            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-          ),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-          ),
-        ),
-      );
+      _snack('Amount exceeds credit balance', AppColors.danger);
       return;
     }
 
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'TZS ${_amountController.text} credit cleared for ${widget.customer.name}',
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-        ),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-        ),
-      ),
-    );
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final body = {
+        'customer_id': widget.customer.id,
+        'amount': _amountController.text.trim(),
+        'account': _selectedAccount,
+        'type': 'credit_payment',
+        'title': 'Credit Payment',
+      };
+      final res = await api.postWalletCustomerCreate(body);
+      final ok = res['status']?.toString() == '1' ||
+          res['status'] == true ||
+          res['status']?.toString() == 'success';
+      if (!mounted) return;
+      if (ok) {
+        Navigator.pop(context);
+        _snack('TZS ${_amountController.text} credit cleared for ${widget.customer.name}', AppColors.success);
+        widget.onSuccess?.call();
+      } else {
+        _snack(res['message']?.toString() ?? 'Failed to clear credit', AppColors.danger);
+      }
+    } catch (e) {
+      if (mounted) _snack('Error: $e', AppColors.danger);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -380,7 +384,7 @@ class _ClearCreditDialogState extends State<ClearCreditDialog> {
         width: double.infinity,
         height: AppConstants.buttonHeight,
         child: ElevatedButton(
-          onPressed: _submit,
+          onPressed: _isSaving ? null : _submit,
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,
             foregroundColor: AppColors.textWhite,
@@ -389,7 +393,9 @@ class _ClearCreditDialogState extends State<ClearCreditDialog> {
               borderRadius: BorderRadius.circular(AppConstants.radiusMD),
             ),
           ),
-          child: Text(
+          child: _isSaving
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : Text(
             'Clear',
             style: AppTypography.buttonLarge.copyWith(
               color: AppColors.textWhite,

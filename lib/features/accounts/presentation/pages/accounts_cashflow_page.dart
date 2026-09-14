@@ -195,8 +195,12 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
               _buildDialogActions(ctx, () async {
                 final amount = double.tryParse(amountController.text) ?? 0;
                 final title = titleController.text.trim();
-                if (amount <= 0 || title.isEmpty || selectedFromAccountId == null || selectedToAccountId == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fill all fields and select both accounts')));
+                // Accounts are optional if no accounts configured in this shop
+                final requireAccounts = _accounts.isNotEmpty;
+                if (amount <= 0 || title.isEmpty ||
+                    (requireAccounts && selectedFromAccountId == null) ||
+                    (requireAccounts && selectedToAccountId == null)) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(requireAccounts ? 'Fill all fields and select both accounts' : 'Fill title and amount')));
                   return;
                 }
                 Navigator.pop(ctx);
@@ -206,8 +210,8 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
                     'type': 'cashin',
                     'title': title,
                     'amount': amount,
-                    'from_account_id': selectedFromAccountId,
-                    'to_account_id': selectedToAccountId,
+                    if (selectedFromAccountId != null) 'from_account_id': selectedFromAccountId,
+                    if (selectedToAccountId != null) 'to_account_id': selectedToAccountId,
                     'record_date': DateFormat('yyyy-MM-dd').format(selectedDate),
                     if (selectedCategory != null) 'category': selectedCategory,
                   });
@@ -297,8 +301,11 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
               _buildDialogActions(ctx, () async {
                 final amount = double.tryParse(amountController.text) ?? 0;
                 final title = titleController.text.trim();
-                if (amount <= 0 || title.isEmpty || selectedFromAccountId == null || selectedToAccountId == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fill all fields and select both accounts')));
+                final requireAccounts2 = _accounts.isNotEmpty;
+                if (amount <= 0 || title.isEmpty ||
+                    (requireAccounts2 && selectedFromAccountId == null) ||
+                    (requireAccounts2 && selectedToAccountId == null)) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(requireAccounts2 ? 'Fill all fields and select both accounts' : 'Fill title and amount')));
                   return;
                 }
                 Navigator.pop(ctx);
@@ -308,8 +315,8 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
                     'type': 'cashout',
                     'title': title,
                     'amount': amount,
-                    'from_account_id': selectedFromAccountId,
-                    'to_account_id': selectedToAccountId,
+                    if (selectedFromAccountId != null) 'from_account_id': selectedFromAccountId,
+                    if (selectedToAccountId != null) 'to_account_id': selectedToAccountId,
                     'record_date': DateFormat('yyyy-MM-dd').format(selectedDate),
                     if (selectedCategory != null) 'category': selectedCategory,
                   });

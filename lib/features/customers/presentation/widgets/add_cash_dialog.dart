@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/customers/data/models/customer_model.dart';
 
-class AddCashDialog extends StatefulWidget {
+class AddCashDialog extends ConsumerStatefulWidget {
   final Customer customer;
+  final VoidCallback? onSuccess;
 
-  const AddCashDialog({super.key, required this.customer});
+  const AddCashDialog({super.key, required this.customer, this.onSuccess});
 
   @override
-  State<AddCashDialog> createState() => _AddCashDialogState();
+  ConsumerState<AddCashDialog> createState() => _AddCashDialogState();
 }
 
-class _AddCashDialogState extends State<AddCashDialog> {
+class _AddCashDialogState extends ConsumerState<AddCashDialog> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
@@ -69,55 +72,57 @@ class _AddCashDialogState extends State<AddCashDialog> {
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
-  void _submit() {
+  bool _isSaving = false;
+
+  void _snack(String msg, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg, style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+    ));
+  }
+
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedCollectionMode == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please select collection mode',
-            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-          ),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-          ),
-        ),
-      );
+      _snack('Please select collection mode', AppColors.danger);
       return;
     }
     if (_selectedAccount == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please select account',
-            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-          ),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-          ),
-        ),
-      );
+      _snack('Please select account', AppColors.danger);
       return;
     }
-
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'TZS ${_amountController.text} added to ${widget.customer.name}',
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-        ),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-        ),
-      ),
-    );
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final body = {
+        'customer_id': widget.customer.id,
+        'amount': _amountController.text.trim(),
+        'payment_mode': _selectedCollectionMode,
+        'account': _selectedAccount,
+        'date': _formatDate(_selectedDate),
+        'type': 'cash_in',
+        'title': 'Cash Deposit',
+      };
+      final res = await api.postWalletCustomerCreate(body);
+      final ok = res['status']?.toString() == '1' ||
+          res['status'] == true ||
+          res['status']?.toString() == 'success';
+      if (!mounted) return;
+      if (ok) {
+        Navigator.pop(context);
+        _snack('TZS ${_amountController.text} added to ${widget.customer.name}', AppColors.success);
+        widget.onSuccess?.call();
+      } else {
+        _snack(res['message']?.toString() ?? 'Failed to add cash', AppColors.danger);
+      }
+    } catch (e) {
+      if (mounted) _snack('Error: $e', AppColors.danger);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -490,7 +495,7 @@ class _AddCashDialogState extends State<AddCashDialog> {
         width: double.infinity,
         height: AppConstants.buttonHeight,
         child: ElevatedButton(
-          onPressed: _submit,
+          onPressed: _isSaving ? null : _submit,
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,
             foregroundColor: AppColors.textWhite,
@@ -499,12 +504,14 @@ class _AddCashDialogState extends State<AddCashDialog> {
               borderRadius: BorderRadius.circular(AppConstants.radiusMD),
             ),
           ),
-          child: Text(
-            'Add Cash',
-            style: AppTypography.buttonLarge.copyWith(
-              color: AppColors.textWhite,
-            ),
-          ),
+          child: _isSaving
+              ? const SizedBox(
+                  width: 20, height: 20,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : Text(
+                  'Add Cash',
+                  style: AppTypography.buttonLarge.copyWith(color: AppColors.textWhite),
+                ),
         ),
       ),
     );

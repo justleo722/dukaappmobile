@@ -11,8 +11,11 @@ class StockRemoteDatasource {
   // ── GET ──────────────────────────────────────────────────────────────────
 
   /// Full stock ledger (product + qty + costs)
-  Future<List<StockProduct>> fetchStock() async {
-    final res = await _client.get(ApiEndpoints.getDataStock);
+  Future<List<StockProduct>> fetchStock({String? from, String? to}) async {
+    final params = <String, dynamic>{};
+    if (from != null) params['from'] = from;
+    if (to != null) params['to'] = to;
+    final res = await _client.get(ApiEndpoints.getDataStock, queryParameters: params.isEmpty ? null : params);
     return _list(res.data).map(StockProduct.fromJson).toList();
   }
 
@@ -22,9 +25,13 @@ class StockRemoteDatasource {
     return _list(res.data).map(StockCategory.fromJson).toList();
   }
 
-  /// Total stock value & item count
-  Future<StockValueSummary> fetchSummary() async {
-    final res = await _client.get(ApiEndpoints.getDataStockValueSummary);
+  /// Total stock value & item count (optionally filtered by date)
+  Future<StockValueSummary> fetchSummary({String? from, String? to}) async {
+    final params = <String, dynamic>{};
+    if (from != null) params['from'] = from;
+    if (to != null) params['to'] = to;
+    final res = await _client.get(ApiEndpoints.getDataStockValueSummary,
+        queryParameters: params.isEmpty ? null : params);
     final raw = _list(res.data);
     if (raw.isNotEmpty) return StockValueSummary.fromJson(raw.first);
     return StockValueSummary.empty;

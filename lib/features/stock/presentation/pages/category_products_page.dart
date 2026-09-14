@@ -265,17 +265,30 @@ class _CategoryProductsPageState extends ConsumerState<CategoryProductsPage> {
     return Column(
       children: List.generate(products.length, (index) {
         final product = products[index];
+        final stock = (product['stock'] as num?)?.toInt() ?? 0;
+        final bp = (product['buyingPrice'] as num?)?.toDouble() ?? 0.0;
+        final sp = (product['sellingPrice'] as num?)?.toDouble() ?? 0.0;
         return StockProductCard(
-          productName: product['name'],
-          category: product['category'],
-          buyingPrice: product['buyingPrice'],
-          sellingPrice: product['sellingPrice'],
-          currentStock: product['stock'],
+          productName: product['name']?.toString() ?? '',
+          category: product['category']?.toString() ?? '',
+          buyingPrice: bp,
+          sellingPrice: sp,
+          currentStock: stock,
+          imageUrl: product['imageUrl']?.toString(),
           isSelected: _selectedProducts.contains(index),
           onSelectionChanged: (_) => _toggleProductSelection(index),
           isExpanded: _expandedProductIndex == index,
           onExpandToggle: () => _toggleProductExpansion(index),
-          onEdit: () {},
+          onEdit: () => context.push('/stock/manage/add', extra: {
+            'product_id': product['product_id'],
+            'name': product['name'],
+            'category': product['category'],
+            'buyingPrice': bp,
+            'sellingPrice': sp,
+            'stock': stock.toDouble(),
+            'imageUrl': product['imageUrl'],
+            'type': product['type'],
+          }),
           onHistory: () {},
           onStockPdf: () {},
           onSalesPdf: () {},

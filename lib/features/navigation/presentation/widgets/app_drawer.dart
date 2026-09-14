@@ -13,6 +13,7 @@ import 'package:dukaapp/features/navigation/presentation/widgets/shop_selector_b
 import 'package:dukaapp/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
+import 'package:dukaapp/features/customers/presentation/providers/customer_provider.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
@@ -43,6 +44,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       ref.invalidate(salesProvider);
       ref.invalidate(ordersProvider);
       ref.invalidate(invoicesProvider);
+      ref.invalidate(customerProvider);
 
       // Navigate to dashboard so user sees fresh data
       if (mounted) context.go('/dashboard');

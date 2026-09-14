@@ -1,33 +1,82 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/customers/data/models/customer_model.dart';
 import 'package:dukaapp/features/customers/presentation/widgets/add_cash_dialog.dart';
 import 'package:dukaapp/features/customers/presentation/widgets/add_credit_dialog.dart';
 import 'package:dukaapp/features/customers/presentation/widgets/clear_credit_dialog.dart';
 
-class CustomerDashboardPage extends StatefulWidget {
+class CustomerDashboardPage extends ConsumerStatefulWidget {
   final Customer customer;
 
   const CustomerDashboardPage({super.key, required this.customer});
 
   @override
-  State<CustomerDashboardPage> createState() => _CustomerDashboardPageState();
+  ConsumerState<CustomerDashboardPage> createState() => _CustomerDashboardPageState();
 }
 
-class _CustomerDashboardPageState extends State<CustomerDashboardPage> {
+class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
   late Customer _customer;
+
+  // Real data loaded from API
+  List<Map<String, dynamic>> _salesRecords = [];
+  List<Map<String, dynamic>> _walletTransactions = [];
+  bool _isLoadingData = false;
 
   @override
   void initState() {
     super.initState();
     _customer = widget.customer;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCustomerData());
   }
 
-  double get _paid => _customer.totalSpent - _customer.creditBalance;
-  double get _walletBalance => 0;
+  Future<void> _loadCustomerData() async {
+    if (!mounted) return;
+    setState(() => _isLoadingData = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final customerId = _customer.id;
+      final results = await Future.wait([
+        api.getWalletCustomerSalesStatement(customerId),
+        api.getWalletCustomerStatement(customerId),
+      ]);
+
+      // Parse sales records
+      final salesRaw = results[0].data;
+      final salesList = _unwrapList(salesRaw);
+
+      // Parse wallet transactions
+      final walletRaw = results[1].data;
+      final walletList = _unwrapList(walletRaw);
+
+      if (!mounted) return;
+      setState(() {
+        _salesRecords = salesList;
+        _walletTransactions = walletList;
+        _isLoadingData = false;
+      });
+    } catch (e) {
+      debugPrint('[CustomerDashboard] load error: $e');
+      if (mounted) setState(() => _isLoadingData = false);
+    }
+  }
+
+  List<Map<String, dynamic>> _unwrapList(dynamic raw) {
+    if (raw is List) return raw.whereType<Map<String, dynamic>>().toList();
+    if (raw is Map<String, dynamic>) {
+      final v = raw['data'] ?? raw['result'] ?? raw['items'];
+      if (v is List) return v.whereType<Map<String, dynamic>>().toList();
+    }
+    return [];
+  }
+
+  // Paid = total spent minus what's still owed (credit balance). Never negative.
+  double get _paid => (_customer.totalSpent - _customer.creditBalance).clamp(0.0, double.infinity);
+  double get _walletBalance => _customer.creditBalance;
 
   @override
   Widget build(BuildContext context) {
@@ -458,7 +507,28 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage> {
   }
 
   Widget _buildWalletTransactions() {
-    final transactions = _generateSampleTransactions();
+    if (_isLoadingData) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_walletTransactions.isEmpty) {
+      return _buildEmptyPlaceholder(
+        icon: Icons.account_balance_wallet_outlined,
+        message: 'No wallet transactions yet',
+      );
+    }
+    // Build from real API data
+    final transactions = _walletTransactions.map((t) => <String, String>{
+      'date': t['created_at']?.toString() ?? t['date']?.toString() ?? '',
+      'direction': (t['type']?.toString() ?? '').toUpperCase().contains('IN') ||
+              (t['direction']?.toString() ?? '').toUpperCase() == 'IN'
+          ? 'IN'
+          : 'OUT',
+      'from': t['from']?.toString() ?? t['source']?.toString() ?? '-',
+      'to': t['to']?.toString() ?? t['destination']?.toString() ?? '-',
+      'title': t['title']?.toString() ?? t['note']?.toString() ?? '-',
+      'amount': 'TZS ${t['amount']?.toString() ?? '0'}',
+      'balance': 'TZS ${t['balance']?.toString() ?? '0'}',
+    }).toList();
 
     if (transactions.isEmpty) {
       return _buildEmptyPlaceholder(
@@ -645,7 +715,31 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage> {
   }
 
   Widget _buildSalesRecords() {
-    final sales = _generateSampleSales();
+    if (_isLoadingData) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_salesRecords.isEmpty) {
+      return _buildEmptyPlaceholder(
+        icon: Icons.receipt_long_outlined,
+        message: 'No sales records yet',
+      );
+    }
+    double _d(dynamic v) => num.tryParse(v?.toString() ?? '')?.toDouble() ?? 0.0;
+    final sales = _salesRecords.map((s) {
+      final total = _d(s['total'] ?? s['amount']);
+      final paid = _d(s['paid'] ?? s['amount_paid']);
+      final balance = _d(s['balance'] ?? s['amount_due']);
+      final status = balance > 0.01 ? 'Unpaid' : 'Paid';
+      return <String, String>{
+        'sale': '#${s['sale_id'] ?? s['id'] ?? ''}',
+        'date': s['date']?.toString() ?? s['created_at']?.toString() ?? '',
+        'type': s['payment_mode']?.toString() ?? s['type']?.toString() ?? 'Cash',
+        'status': status,
+        'total': 'TZS ${total.toStringAsFixed(0)}',
+        'paid': 'TZS ${paid.toStringAsFixed(0)}',
+        'balance': 'TZS ${balance.toStringAsFixed(0)}',
+      };
+    }).toList();
 
     if (sales.isEmpty) {
       return _buildEmptyPlaceholder(
@@ -854,66 +948,6 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage> {
     );
   }
 
-  List<Map<String, String>> _generateSampleTransactions() {
-    if (_walletBalance == 0 && _customer.creditBalance == 0) {
-      return [];
-    }
-    return [
-      {
-        'date': '01/08/2026',
-        'direction': 'IN',
-        'from': 'Customer',
-        'to': 'Wallet',
-        'title': 'Cash Deposit',
-        'amount': 'TZS 100,000',
-        'balance': 'TZS 100,000',
-      },
-      {
-        'date': '28/07/2026',
-        'direction': 'OUT',
-        'from': 'Wallet',
-        'to': 'Sale #1045',
-        'title': 'Payment',
-        'amount': 'TZS 50,000',
-        'balance': 'TZS 0',
-      },
-    ];
-  }
-
-  List<Map<String, String>> _generateSampleSales() {
-    if (_customer.totalPurchases == 0) {
-      return [];
-    }
-    return [
-      {
-        'sale': '#1045',
-        'date': '01/08/2026',
-        'type': 'Retail',
-        'status': 'Paid',
-        'total': 'TZS 85,000',
-        'paid': 'TZS 85,000',
-        'balance': 'TZS 0',
-      },
-      {
-        'sale': '#1032',
-        'date': '25/07/2026',
-        'type': 'Credit',
-        'status': 'Unpaid',
-        'total': 'TZS 120,000',
-        'paid': 'TZS 0',
-        'balance': 'TZS 120,000',
-      },
-      {
-        'sale': '#1018',
-        'date': '18/07/2026',
-        'type': 'Retail',
-        'status': 'Paid',
-        'total': 'TZS 45,000',
-        'paid': 'TZS 45,000',
-        'balance': 'TZS 0',
-      },
-    ];
-  }
 
   void _showComingSoon(String feature) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -934,7 +968,10 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage> {
   void _showAddCashDialog() {
     showDialog(
       context: context,
-      builder: (context) => AddCashDialog(customer: _customer),
+      builder: (context) => AddCashDialog(
+        customer: _customer,
+        onSuccess: _loadCustomerData,
+      ),
     );
   }
 
@@ -948,7 +985,10 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage> {
   void _showClearCreditDialog() {
     showDialog(
       context: context,
-      builder: (context) => ClearCreditDialog(customer: _customer),
+      builder: (context) => ClearCreditDialog(
+        customer: _customer,
+        onSuccess: _loadCustomerData,
+      ),
     );
   }
 

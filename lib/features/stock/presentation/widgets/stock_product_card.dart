@@ -25,6 +25,7 @@ class StockProductCard extends StatelessWidget {
   final VoidCallback? onRestock;
   final VoidCallback? onAdjust;
   final VoidCallback? onDelete;
+  final String? type;
 
   const StockProductCard({
     super.key,
@@ -48,6 +49,7 @@ class StockProductCard extends StatelessWidget {
     this.onRestock,
     this.onAdjust,
     this.onDelete,
+    this.type,
   });
 
   bool get _isLowStock => currentStock <= lowStockThreshold;
@@ -192,6 +194,24 @@ class StockProductCard extends StatelessWidget {
                 ),
               ),
             ),
+            if (type?.toLowerCase() == 'service') ...[
+              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Service',
+                  style: AppTypography.caption.copyWith(
+                    color: const Color(0xFF8B5CF6),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ],

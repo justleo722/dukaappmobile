@@ -3,6 +3,7 @@ import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/stock/data/datasources/stock_remote_datasource.dart';
 import 'package:dukaapp/features/stock/data/repositories/stock_repository.dart';
 import 'package:dukaapp/features/stock/data/models/stock_models.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 // ── Providers ────────────────────────────────────────────────────────────────
 
@@ -36,8 +37,12 @@ class StockNotifier extends AsyncNotifier<StockState> {
 
   Future<void> refresh() async {
     state = const AsyncLoading();
+    final filter = ref.read(filterProvider);
+    // Only apply date filter when it's not "all time" (avoid unnecessary filtering on first load)
+    final from = filter.key == 'all_time' ? null : filter.from;
+    final to   = filter.key == 'all_time' ? null : filter.to;
     state = await AsyncValue.guard(
-      () => ref.read(stockRepositoryProvider).refresh(),
+      () => ref.read(stockRepositoryProvider).refresh(from: from, to: to),
     );
   }
 }

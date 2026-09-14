@@ -14,6 +14,7 @@ import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class _ShopStock {
   final int sn;
@@ -241,6 +242,7 @@ class _CombinedStockValueReportPageState
   // ─── UI ──────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, __) => _loadItems());
     final items = _filteredItems;
 
     return Scaffold(

@@ -10,8 +10,9 @@ class CustomerRemoteDatasource {
   const CustomerRemoteDatasource(this._api);
 
   /// Fetch all active customers for the active shop.
-  Future<List<Customer>> fetchCustomers() async {
-    final res = await _api.getCustomers();
+  /// Pass [from] and [to] (YYYY-MM-DD) to filter by date range.
+  Future<List<Customer>> fetchCustomers({String? from, String? to}) async {
+    final res = await _api.getCustomers(from: from, to: to);
     final raw = res.data;
     final list = _unwrapList(raw);
     return list.map(Customer.fromJson).toList();
@@ -31,7 +32,8 @@ class CustomerRemoteDatasource {
     String? note,
   }) {
     final body = <String, dynamic>{
-      'name': name,
+      'customer_name': name,
+      'name': name,         // fallback alias
       'phone': phone,
       if (email != null && email.isNotEmpty) 'email': email,
       if (tinNumber != null && tinNumber.isNotEmpty) 'customer_tin': tinNumber,

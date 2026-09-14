@@ -471,7 +471,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'permissions',
             name: 'manage-permissions',
-            builder: (context, state) => const ManagePermissionsPage(),
+            builder: (context, state) {
+              final extra = state.extra;
+              String? roleId;
+              if (extra is Map) {
+                roleId = extra['roleId']?.toString();
+              } else if (extra is String) {
+                roleId = extra;
+              }
+              return ManagePermissionsPage(roleId: roleId);
+            },
           ),
         ],
       ),

@@ -20,7 +20,8 @@ class _TransferItem {
     required this.name,
     required this.availableStock,
     this.productId,
-  }) : transferQuantity = 0;
+    int? transferQuantity,
+  }) : transferQuantity = transferQuantity ?? 1;
 }
 
 class TransferStockPage extends ConsumerStatefulWidget {
@@ -84,8 +85,9 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
       if (_items.any((item) => item.name == name)) continue;
       _items.add(_TransferItem(
         name: name,
-        availableStock: product['stock'] as int,
+        availableStock: (product['stock'] as num?)?.toInt() ?? 0,
         productId: product['product_id'],
+        transferQuantity: 1,
       ));
       addedCount++;
     }

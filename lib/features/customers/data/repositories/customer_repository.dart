@@ -6,7 +6,8 @@ class CustomerRepository {
   final CustomerRemoteDatasource _remote;
   const CustomerRepository(this._remote);
 
-  Future<List<Customer>> fetchCustomers() => _remote.fetchCustomers();
+  Future<List<Customer>> fetchCustomers({String? from, String? to}) =>
+      _remote.fetchCustomers(from: from, to: to);
 
   Future<Map<String, dynamic>> saveCustomer({
     String? customerId,

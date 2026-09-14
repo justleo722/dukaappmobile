@@ -7,6 +7,7 @@ import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/customers/data/models/customer_model.dart';
 import 'package:dukaapp/features/customers/presentation/providers/customer_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class CustomersPage extends ConsumerStatefulWidget {
   const CustomersPage({super.key});
@@ -31,8 +32,9 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
+      final filter = ref.read(filterProvider);
       final repo = ref.read(customerRepositoryProvider);
-      final customers = await repo.fetchCustomers();
+      final customers = await repo.fetchCustomers(from: filter.from, to: filter.to);
       if (!mounted) return;
       setState(() {
         _customers = customers;
@@ -96,6 +98,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, __) => _loadCustomers());
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
