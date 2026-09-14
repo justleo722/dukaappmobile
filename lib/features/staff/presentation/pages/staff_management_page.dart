@@ -184,8 +184,10 @@ class _StaffManagementPageState extends ConsumerState<StaffManagementPage> {
         const Divider(height: 20),
         Row(children: [
           Icon(Icons.phone_rounded, size: 14, color: AppColors.textHint), const SizedBox(width: 6),
-          Text(attendant.phone, style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary)),
-          const Spacer(),
+          Flexible(child: Text(attendant.phone, style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary), overflow: TextOverflow.ellipsis)),
+        ]),
+        const SizedBox(height: 10),
+        Wrap(spacing: 8, runSpacing: 6, children: [
           _actionChip(Icons.edit_rounded, 'Edit', AppColors.primary, () => context.push('/staff/edit', extra: {
             'name': attendant.name,
             'phone': attendant.phone,
@@ -194,10 +196,8 @@ class _StaffManagementPageState extends ConsumerState<StaffManagementPage> {
             'roleId': attendant.roleId?.toString(),
             'isManager': attendant.isManager,
           })),
-          const SizedBox(width: 8),
           _actionChip(Icons.security_rounded, 'Permissions', const Color(0xFF8B5CF6),
               () => context.push('/staff/permissions', extra: {'roleId': attendant.roleId?.toString()})),
-          const SizedBox(width: 8),
           _actionChip(Icons.delete_rounded, 'Delete', AppColors.danger, () => _confirmDelete(attendant)),
         ]),
       ]),
