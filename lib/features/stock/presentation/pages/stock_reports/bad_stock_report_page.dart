@@ -9,6 +9,7 @@ import 'package:excel/excel.dart' as xls;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
@@ -87,7 +88,7 @@ class _BadStockReportPageState extends ConsumerState<BadStockReportPage> {
     doc.addPage(pw.MultiPage(pageFormat: PdfPageFormat.a4.landscape, margin: const pw.EdgeInsets.all(20),
       header: (_) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
         pw.Text('Bad Stock Report', style: pw.TextStyle(font: pw.Font.helveticaBold(), fontSize: 16)),
-        pw.SizedBox(height: 2), pw.Text('DukaApp Main Shop  •  $now', style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
+        pw.SizedBox(height: 2), pw.Text('${ref.read(shopNameProvider).valueOrNull ?? 'My Shop'}  •  $now', style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
         pw.SizedBox(height: 4), pw.Divider(), pw.SizedBox(height: 4)]),
       build: (_) => [pw.TableHelper.fromTextArray(
         headerStyle: pw.TextStyle(font: pw.Font.helveticaBold(), fontSize: 7, color: PdfColors.white),
@@ -146,7 +147,7 @@ class _BadStockReportPageState extends ConsumerState<BadStockReportPage> {
     return Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG, vertical: 12), color: AppColors.card,
       child: Row(children: [Icon(Icons.storefront_rounded, size: 18, color: AppColors.primary), const SizedBox(width: 8),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('DukaApp Main Shop', style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+          Text(ref.read(shopNameProvider).valueOrNull ?? 'My Shop', style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
           const SizedBox(height: 2), Text(_currentDateTime, style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 10))]))]));
   }
 

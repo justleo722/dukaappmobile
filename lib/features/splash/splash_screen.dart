@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
+import 'package:dukaapp/core/services/update_service.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -24,6 +25,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   Future<void> _initialize() async {
     // Wait for splash animation
     await Future.delayed(const Duration(seconds: 2));
+
+    if (!mounted) return;
+
+    // Check Play Store for a newer version — reads build number automatically
+    await UpdateService.instance.checkAndPrompt(context);
 
     if (!mounted) return;
 

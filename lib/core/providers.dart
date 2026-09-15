@@ -10,6 +10,15 @@ import 'package:dukaapp/core/database/database_service.dart';
 import 'package:dukaapp/features/auth/data/datasources/auth_remote_datasource.dart';
 import 'package:dukaapp/features/auth/data/repositories/auth_repository.dart';
 
+/// Async provider that returns the active shop name from secure storage.
+/// Falls back to empty string if not yet loaded.
+/// Invalidate this after a shop switch so reports pick up the new name.
+final shopNameProvider = FutureProvider<String>((ref) async {
+  final secure = ref.watch(secureStorageProvider);
+  final shop = await secure.getActiveShop();
+  return shop?['shop_name']?.toString() ?? shop?['shopname']?.toString() ?? '';
+});
+
 final localStorageProvider = Provider<LocalStorageService>((ref) {
   return LocalStorageService();
 });

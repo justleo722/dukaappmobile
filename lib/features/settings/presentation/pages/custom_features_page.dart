@@ -5,6 +5,7 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/core/network/api_exception.dart';
 
 class CustomFeaturesPage extends ConsumerStatefulWidget {
   const CustomFeaturesPage({super.key});
@@ -237,7 +238,8 @@ class _CustomFeaturesPageState extends ConsumerState<CustomFeaturesPage> {
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Error: $e'), backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating));
+        content: Text(e is ApiException ? e.friendlyMessage : e.toString()),
+        backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

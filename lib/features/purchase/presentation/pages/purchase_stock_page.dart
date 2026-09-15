@@ -12,7 +12,6 @@ import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dar
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_summary_card.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_bottom_bar.dart';
 import 'package:dukaapp/features/purchase/presentation/providers/purchase_provider.dart';
-import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/core/providers.dart';
 
 class _PurchaseItem {
@@ -109,8 +108,9 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
   }
 
   Future<void> _loadProductList() async {
+    if (mounted) setState(() => _isLoadingProducts = true);
     try {
-      // Use stockProvider if already loaded to avoid redundant API call
+      // Try stockProvider first (already loaded → no extra API call)
       final stockState = ref.read(stockProvider);
       final stockProducts = stockState.maybeWhen(
         data: (s) => s.products,
@@ -128,7 +128,7 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
         if (mounted) setState(() { _allProducts = products; _isLoadingProducts = false; });
         return;
       }
-      // Fallback: fetch directly
+      // Fallback: fetch directly from API
       final api = ref.read(apiServiceProvider);
       final res = await api.getProducts();
       final body = res.data;
@@ -281,6 +281,18 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
     if (_isLoadingProducts) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Loading products, please wait...')),
+      );
+      return;
+    }
+    if (_allProducts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Products not loaded. Tap to retry.'),
+          action: SnackBarAction(label: 'Retry', onPressed: () {
+            setState(() => _isLoadingProducts = true);
+            _loadProductList();
+          }),
+        ),
       );
       return;
     }

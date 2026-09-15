@@ -57,6 +57,9 @@ class ShopSettingsPage extends StatelessWidget {
       case 'Data Backup':
         context.push('/shop-settings/data-backup');
         break;
+      case 'Online Store Settings':
+        context.push('/online-shop/settings');
+        break;
       case 'Storage':
         context.push('/shop-settings/storage');
         break;

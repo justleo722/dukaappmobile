@@ -155,7 +155,7 @@ class _AllStockReportPageState extends ConsumerState<AllStockReportPage> {
           children: [
             pw.Text('All Stock Report', style: pw.TextStyle(font: pw.Font.helveticaBold(), fontSize: 16)),
             pw.SizedBox(height: 2),
-            pw.Text('DukaApp Main Shop  •  $now',
+            pw.Text('${ref.read(shopNameProvider).valueOrNull ?? 'My Shop'}  •  $now',
                 style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
             pw.SizedBox(height: 4),
             pw.Divider(),
@@ -352,7 +352,7 @@ class _AllStockReportPageState extends ConsumerState<AllStockReportPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'DukaApp Main Shop',
+                  ref.read(shopNameProvider).valueOrNull ?? 'My Shop',
                   style: AppTypography.bodyMedium.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,

@@ -9,6 +9,7 @@ import 'package:excel/excel.dart' as xls;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
@@ -111,7 +112,7 @@ class _PriceListReportPageState extends ConsumerState<PriceListReportPage> {
             pw.Text('Price List',
                 style: pw.TextStyle(font: pw.Font.helveticaBold(), fontSize: 16)),
             pw.SizedBox(height: 2),
-            pw.Text('DukaApp Main Shop  •  $now',
+            pw.Text('${ref.read(shopNameProvider).valueOrNull ?? 'My Shop'}  •  $now',
                 style: pw.TextStyle(
                     font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
             pw.SizedBox(height: 4),
@@ -278,7 +279,7 @@ class _PriceListReportPageState extends ConsumerState<PriceListReportPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'DukaApp Main Shop',
+                  ref.read(shopNameProvider).valueOrNull ?? 'My Shop',
                   style: AppTypography.bodyMedium.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,

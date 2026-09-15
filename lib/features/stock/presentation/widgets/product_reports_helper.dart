@@ -21,6 +21,7 @@ class ProductReportsHelper {
   static Future<void> exportHistoryPdf({
     required BuildContext context,
     required String productName,
+    String shopName = '',
   }) async {
     final doc = pw.Document();
     final now = DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
@@ -48,7 +49,7 @@ class ProductReportsHelper {
             pw.SizedBox(height: 4),
             pw.Text('Product: $productName', style: pw.TextStyle(font: pw.Font.helveticaBold(), fontSize: 12)),
             pw.SizedBox(height: 2),
-            pw.Text('DukaApp Main Shop  •  $now',
+            pw.Text('$shopName  •  $now',
                 style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
             pw.SizedBox(height: 4),
             pw.Divider(),
@@ -96,6 +97,7 @@ class ProductReportsHelper {
     required BuildContext context,
     required String productName,
     required double buyingPrice,
+    String shopName = '',
   }) async {
     final doc = pw.Document();
     final now = DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
@@ -128,7 +130,7 @@ class ProductReportsHelper {
             pw.SizedBox(height: 4),
             pw.Text('Product: $productName', style: pw.TextStyle(font: pw.Font.helveticaBold(), fontSize: 12)),
             pw.SizedBox(height: 2),
-            pw.Text('DukaApp Main Shop  •  $now',
+            pw.Text('$shopName  •  $now',
                 style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
             pw.SizedBox(height: 4),
             pw.Divider(),
@@ -180,6 +182,7 @@ class ProductReportsHelper {
     required BuildContext context,
     required String productName,
     required double sellingPrice,
+    String shopName = '',
   }) async {
     final doc = pw.Document();
     final now = DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
@@ -210,7 +213,7 @@ class ProductReportsHelper {
             pw.SizedBox(height: 4),
             pw.Text('Product: $productName', style: pw.TextStyle(font: pw.Font.helveticaBold(), fontSize: 12)),
             pw.SizedBox(height: 2),
-            pw.Text('DukaApp Main Shop  •  $now',
+            pw.Text('$shopName  •  $now',
                 style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
             pw.SizedBox(height: 4),
             pw.Divider(),

@@ -5,6 +5,7 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/core/network/api_exception.dart';
 
 class ShopDetailsPage extends ConsumerStatefulWidget {
   const ShopDetailsPage({super.key});
@@ -110,7 +111,7 @@ class _ShopDetailsPageState extends ConsumerState<ShopDetailsPage> {
         _snack(res['message']?.toString() ?? 'Save failed', AppColors.danger);
       }
     } catch (e) {
-      if (mounted) _snack('Error: $e', AppColors.danger);
+      if (mounted) _snack(e is ApiException ? e.friendlyMessage : e.toString(), AppColors.danger);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
