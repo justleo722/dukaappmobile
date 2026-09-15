@@ -40,12 +40,20 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
   Future<void> _loadAccounts() async {
     try {
       final api = ref.read(apiServiceProvider);
-      final res = await api.getPaymentMode();
+      // Cashbook accounts (from the accounts table) are what addfund expects
+      // for from_account_id / to_account_id — not payment mode entries.
+      final res = await api.getCashbookAccounts();
       final data = res.data;
-      final list = data is List ? data : (data is Map ? (data['data'] ?? []) : []);
+      List raw = [];
+      if (data is List) {
+        raw = data;
+      } else if (data is Map) {
+        final v = data['data'] ?? data['accounts'] ?? data['result'] ?? [];
+        if (v is List) raw = v;
+      }
       if (!mounted) return;
       setState(() {
-        _accounts = (list as List).whereType<Map<String, dynamic>>().toList();
+        _accounts = raw.whereType<Map<String, dynamic>>().toList();
       });
     } catch (_) {}
   }
@@ -371,8 +379,8 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
           hint: Text(_accounts.isEmpty ? 'Loading accounts…' : 'Select account…', style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint)),
           isExpanded: true,
           items: _accounts.map((a) {
-            final id = (a['payment_mode_id'] ?? a['id'] ?? '').toString();
-            final name = (a['payment_mode_name'] ?? a['name'] ?? id).toString();
+            final id = (a['account_id'] ?? a['id'] ?? '').toString();
+            final name = (a['account_name'] ?? a['name'] ?? id).toString();
             return DropdownMenuItem(value: id, child: Text(name, style: AppTypography.bodyMedium));
           }).toList(),
           onChanged: onChanged,

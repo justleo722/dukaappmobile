@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/features/manufacturing/presentation/dialogs/sort_raw_materials_dialog.dart';
 
 class _RawMaterial {
+  final String materialId;
   final String name;
   final String unit;
-  final int currentStock;
+  final double currentStock;
   final double unitCost;
   final String status;
 
   const _RawMaterial({
+    required this.materialId,
     required this.name,
     required this.unit,
     required this.currentStock,
@@ -22,36 +26,68 @@ class _RawMaterial {
   });
 
   double get totalValue => unitCost * currentStock;
+
+  factory _RawMaterial.fromJson(Map<String, dynamic> j) {
+    double _d(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
+    final statusLabel = j['status_label']?.toString() ?? j['status']?.toString() ?? '';
+    return _RawMaterial(
+      materialId: j['material_id']?.toString() ?? '',
+      name: j['material_name']?.toString() ?? '',
+      unit: j['unit']?.toString() ?? '',
+      currentStock: _d(j['current_stock'] ?? j['stock']),
+      unitCost: _d(j['unit_cost']),
+      status: statusLabel.isNotEmpty ? statusLabel : 'In Stock',
+    );
+  }
 }
 
-class RawMaterialsPage extends StatefulWidget {
+class RawMaterialsPage extends ConsumerStatefulWidget {
   const RawMaterialsPage({super.key});
 
   @override
-  State<RawMaterialsPage> createState() => _RawMaterialsPageState();
+  ConsumerState<RawMaterialsPage> createState() => _RawMaterialsPageState();
 }
 
-class _RawMaterialsPageState extends State<RawMaterialsPage> {
+class _RawMaterialsPageState extends ConsumerState<RawMaterialsPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   SortField _sortField = SortField.status;
   SortOrder _sortOrder = SortOrder.asc;
   String _selectedStatusLabel = 'All';
+  bool _isLoading = true;
+  List<_RawMaterial> _materials = [];
 
-  final List<_RawMaterial> _materials = [
-    _RawMaterial(name: 'Cotton Fabric (White)', unit: 'kg', currentStock: 250, unitCost: 3500, status: 'In Stock'),
-    _RawMaterial(name: 'Polyester Thread', unit: 'roll', currentStock: 120, unitCost: 1200, status: 'In Stock'),
-    _RawMaterial(name: 'Denim Fabric', unit: 'kg', currentStock: 15, unitCost: 5500, status: 'Running Low'),
-    _RawMaterial(name: 'Zipper (Metal)', unit: 'item', currentStock: 500, unitCost: 200, status: 'In Stock'),
-    _RawMaterial(name: 'Button (Plastic)', unit: 'item', currentStock: 800, unitCost: 50, status: 'In Stock'),
-    _RawMaterial(name: 'Elastic Band', unit: 'mtr', currentStock: 3, unitCost: 150, status: 'Running Low'),
-    _RawMaterial(name: 'Fabric Dye (Blue)', unit: 'ltr', currentStock: 0, unitCost: 4500, status: 'Expired'),
-    _RawMaterial(name: 'Bleach Solution', unit: 'ltr', currentStock: 8, unitCost: 2200, status: 'In Stock'),
-    _RawMaterial(name: 'Interfacing Cloth', unit: 'kg', currentStock: 40, unitCost: 1800, status: 'In Stock'),
-    _RawMaterial(name: 'Sewing Needles', unit: 'pack', currentStock: 25, unitCost: 300, status: 'In Stock'),
-    _RawMaterial(name: 'Linen Fabric', unit: 'kg', currentStock: 0, unitCost: 6000, status: 'Expired'),
-    _RawMaterial(name: 'Silk Thread', unit: 'roll', currentStock: 60, unitCost: 2500, status: 'In Stock'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadMaterials());
+  }
+
+  Future<void> _loadMaterials() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getMfRawMaterials();
+      final body = res.data;
+      List raw = [];
+      if (body is List) {
+        raw = body;
+      } else if (body is Map) {
+        final d = body['data'] ?? body['materials'] ?? body['result'];
+        if (d is List) raw = d;
+      }
+      if (!mounted) return;
+      setState(() {
+        _materials = raw.whereType<Map<String, dynamic>>().map(_RawMaterial.fromJson).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load: $e'), backgroundColor: AppColors.danger));
+    }
+  }
 
   double get _totalValue => _materials.fold(0.0, (sum, m) => sum + m.totalValue);
   int get _totalCount => _materials.length;
@@ -98,28 +134,30 @@ class _RawMaterialsPageState extends State<RawMaterialsPage> {
       appBar: _buildAppBar(context),
       body: SafeArea(
         top: false,
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 12),
-                    _buildSummarySection(),
-                    const SizedBox(height: 14),
-                    _buildActionButtons(context),
-                    const SizedBox(height: 14),
-                    _buildSearchBar(),
-                    const SizedBox(height: 12),
-                    _filteredMaterials.isEmpty ? _buildEmptyState() : _buildMaterialsList(),
-                    const SizedBox(height: 24),
-                  ],
-                ),
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 12),
+                          _buildSummarySection(),
+                          const SizedBox(height: 14),
+                          _buildActionButtons(context),
+                          const SizedBox(height: 14),
+                          _buildSearchBar(),
+                          const SizedBox(height: 12),
+                          _filteredMaterials.isEmpty ? _buildEmptyState() : _buildMaterialsList(),
+                          const SizedBox(height: 24),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -199,7 +237,7 @@ class _RawMaterialsPageState extends State<RawMaterialsPage> {
     final buttons = <Map<String, dynamic>>[
       {'icon': Icons.sort_rounded, 'label': 'Sort', 'color': AppColors.primary, 'onTap': () => _showSortDialog()},
       {'icon': Icons.tune_rounded, 'label': 'Adjust', 'color': AppColors.primary, 'onTap': () => context.push('/adjust')},
-      {'icon': Icons.refresh_rounded, 'label': 'Restock', 'color': AppColors.primary, 'onTap': () => context.push('/manufacturing/raw-materials/restock')},
+      {'icon': Icons.refresh_rounded, 'label': 'Restock', 'color': AppColors.primary, 'onTap': () async { await context.push('/manufacturing/raw-materials/restock'); _loadMaterials(); }},
       {'icon': Icons.filter_list_rounded, 'label': 'Filter', 'color': AppColors.primary, 'onTap': () => AppFilterDialog.show(context)},
     ];
 
@@ -235,7 +273,7 @@ class _RawMaterialsPageState extends State<RawMaterialsPage> {
 
   Widget _addNewBtn() {
     return GestureDetector(
-      onTap: () => context.push('/manufacturing/raw-materials/add'),
+      onTap: () async { await context.push('/manufacturing/raw-materials/add'); _loadMaterials(); },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(AppConstants.radiusMD)),
@@ -340,10 +378,14 @@ class _RawMaterialsPageState extends State<RawMaterialsPage> {
               _infoChip('Total Value', _fmt(material.totalValue)),
               const Spacer(),
               GestureDetector(
-                onTap: () => context.push('/manufacturing/raw-materials/edit', extra: {
-                  'name': material.name, 'unit': material.unit,
-                  'unitCost': material.unitCost, 'status': material.status,
-                }),
+                onTap: () async {
+                  await context.push('/manufacturing/raw-materials/edit', extra: {
+                    'materialId': material.materialId,
+                    'name': material.name, 'unit': material.unit,
+                    'unitCost': material.unitCost, 'status': material.status,
+                  });
+                  _loadMaterials();
+                },
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
@@ -352,7 +394,7 @@ class _RawMaterialsPageState extends State<RawMaterialsPage> {
               ),
               const SizedBox(width: 6),
               GestureDetector(
-                onTap: () => _showDeleteConfirmation(material.name),
+                onTap: () => _showDeleteConfirmation(material),
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
@@ -414,7 +456,7 @@ class _RawMaterialsPageState extends State<RawMaterialsPage> {
     );
   }
 
-  void _showDeleteConfirmation(String materialName) {
+  void _showDeleteConfirmation(_RawMaterial material) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -425,12 +467,29 @@ class _RawMaterialsPageState extends State<RawMaterialsPage> {
           const SizedBox(width: 10),
           Text('Delete Material', style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w700)),
         ]),
-        content: Text('Are you sure you want to delete "$materialName"? This action cannot be undone.',
+        content: Text('Are you sure you want to delete "${material.name}"? This action cannot be undone.',
           style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx),
             child: Text('Cancel', style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600))),
-          TextButton(onPressed: () => Navigator.pop(ctx),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                final api = ref.read(apiServiceProvider);
+                final res = await api.postMfRawMaterialDelete({'material_id': material.materialId});
+                if (!mounted) return;
+                if (res['status'] == true || res['status'] == 'success') {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deleted successfully')));
+                  _loadMaterials();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res['message']?.toString() ?? 'Delete failed')));
+                }
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.danger));
+              }
+            },
             style: TextButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: AppColors.textWhite,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
             child: Text('Delete', style: AppTypography.bodySmall.copyWith(color: AppColors.textWhite, fontWeight: FontWeight.w600))),

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/staff/presentation/providers/staff_provider.dart';
 
 /// A permission entry: [key] is the DB column name, [label] is the display name.
@@ -104,6 +105,7 @@ class _ManagePermissionsPageState extends ConsumerState<ManagePermissionsPage> {
 
   /// Map<dbColumnKey, enabled>
   late Map<String, bool> _permissionValues;
+  bool _isLoadingPerms = false;
 
   @override
   void initState() {
@@ -114,6 +116,36 @@ class _ManagePermissionsPageState extends ConsumerState<ManagePermissionsPage> {
         _permissionValues[p.key] = false;
       }
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCurrentPermissions());
+  }
+
+  Future<void> _loadCurrentPermissions() async {
+    if (widget.roleId == null || !mounted) return;
+    setState(() => _isLoadingPerms = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getTeam();
+      final body = res.data;
+      List raw = [];
+      if (body is List) raw = body;
+      else if (body is Map) {
+        final d = body['data'] ?? body['team'] ?? body['result'];
+        if (d is List) raw = d;
+      }
+      final matching = raw.whereType<Map>().cast<Map<String, dynamic>>()
+          .where((r) => r['role_id']?.toString() == widget.roleId)
+          .toList();
+      final row = matching.isNotEmpty ? matching.first : null;
+      if (row != null && mounted) {
+        setState(() {
+          for (final key in _permissionValues.keys) {
+            final v = row[key];
+            _permissionValues[key] = v == 1 || v == true || v == '1';
+          }
+        });
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _isLoadingPerms = false);
   }
 
   void _toggleAll(bool value) {
@@ -130,7 +162,9 @@ class _ManagePermissionsPageState extends ConsumerState<ManagePermissionsPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: _buildAppBar(context),
-      body: Column(children: [
+      body: _isLoadingPerms
+          ? const Center(child: CircularProgressIndicator())
+          : Column(children: [
         _buildToggleAllBar(allEnabled),
         Expanded(child: ListView.builder(
           padding: const EdgeInsets.only(bottom: 24),

@@ -167,7 +167,7 @@ class _StaffManagementPageState extends ConsumerState<StaffManagementPage> {
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(attendant.name, style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
-            Text('ID: ${(attendant.attendantId ?? attendant.roleId)?.toString() ?? '-'}  •  ${attendant.isManager ? 'Manager' : 'Attendant'}', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11)),
+            Text('ID: ${attendant.userId ?? attendant.roleId?.toString() ?? '-'}  •  ${attendant.isManager ? 'Manager' : 'Attendant'}', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11)),
           ])),
           Switch(
             value: attendant.isActive,

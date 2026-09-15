@@ -1,6 +1,7 @@
 /// Data models for the Staff module.
 class Attendant {
   final dynamic roleId;
+  final String? userId;    // users.user_id — displayed in the card
   final String name;
   final String phone;
   final String email;
@@ -13,6 +14,7 @@ class Attendant {
 
   const Attendant({
     required this.roleId,
+    this.userId,
     required this.name,
     required this.phone,
     required this.email,
@@ -29,6 +31,7 @@ class Attendant {
   factory Attendant.fromJson(Map<String, dynamic> j) {
     return Attendant(
       roleId: j['role_id'],
+      userId: j['user_id']?.toString(),
       name: j['username']?.toString() ?? j['name']?.toString() ?? '',
       phone: j['phone']?.toString() ?? '',
       email: j['email']?.toString() ?? '',
