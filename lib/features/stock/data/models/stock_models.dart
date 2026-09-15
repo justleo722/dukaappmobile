@@ -85,7 +85,7 @@ class StockProduct {
       expiryDate: j['expiry_date']?.toString(),
       status: j['record_status']?.toString(),
       imageUrl: _resolveImageUrl(
-          _firstPhoto(j['photo']?.toString()) ??
+          _firstPhoto(j['photo']?.toString(), shopId: j['shop_id']?.toString()) ??
           j['image']?.toString() ??
           j['image_url']?.toString()),
       sold: _d(j['sold']),
@@ -125,17 +125,28 @@ class StockProduct {
     return double.tryParse(v.toString()) ?? 0;
   }
 
-  /// Photo column is stored as a JSON array of filenames — extract the first one.
-  static String? _firstPhoto(String? raw) {
+  /// Photo column is stored as a JSON array of filenames — extract the first one
+  /// and build the relative path using shopId when available.
+  static String? _firstPhoto(String? raw, {String? shopId}) {
     if (raw == null || raw.trim().isEmpty) return null;
     final trimmed = raw.trim();
+    String? filename;
     if (trimmed.startsWith('[')) {
       try {
         final list = jsonDecode(trimmed) as List;
-        return list.isNotEmpty ? list.first?.toString() : null;
+        filename = list.isNotEmpty ? list.first?.toString() : null;
       } catch (_) {}
+    } else {
+      filename = trimmed;
     }
-    return trimmed;
+    if (filename == null || filename.isEmpty) return null;
+    // If already a full path (contains '/'), return as-is
+    if (filename.contains('/')) return filename;
+    // Build full path using shopId
+    if (shopId != null && shopId.isNotEmpty) {
+      return 'uploads/shops/$shopId/products/$filename';
+    }
+    return filename;
   }
 
   /// Convert a relative image path from the API to a full URL.

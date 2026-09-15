@@ -144,6 +144,8 @@ class StockProductCard extends StatelessWidget {
               child: Image.network(
                 imageUrl!,
                 fit: BoxFit.cover,
+                loadingBuilder: (context, child, progress) =>
+                    progress == null ? child : _buildInitials(initials),
                 errorBuilder: (context, error, stackTrace) =>
                     _buildInitials(initials),
               ),

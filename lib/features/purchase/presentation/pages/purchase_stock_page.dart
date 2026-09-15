@@ -8,6 +8,7 @@ import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_information_card.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_product_card.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_summary_card.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_bottom_bar.dart';
 import 'package:dukaapp/features/purchase/presentation/providers/purchase_provider.dart';
@@ -72,6 +73,7 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
   final List<_PurchaseItem> _items = [];
 
   List<Map<String, dynamic>> _allProducts = [];
+  bool _isLoadingProducts = true;
   List<String> _accounts = [];
   List<String> _suppliers = [];
   // id→name maps for submitting correct IDs to backend
@@ -107,12 +109,29 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
   }
 
   Future<void> _loadProductList() async {
-    double _d(dynamic v) => num.tryParse(v?.toString() ?? '')?.toDouble() ?? 0.0;
     try {
+      // Use stockProvider if already loaded to avoid redundant API call
+      final stockState = ref.read(stockProvider);
+      final stockProducts = stockState.maybeWhen(
+        data: (s) => s.products,
+        orElse: () => null,
+      );
+      if (stockProducts != null && stockProducts.isNotEmpty) {
+        final products = stockProducts.map((p) => {
+          'name': p.name,
+          'product_id': p.productId?.toString() ?? '',
+          'stock': p.type == 'service' ? 9999.0 : p.available,
+          'buyingPrice': p.buyingPrice,
+          'sellingPrice': p.sellingPrice,
+          'wholesalePrice': p.wholesalePrice,
+        }).where((p) => (p['name'] as String).isNotEmpty).toList();
+        if (mounted) setState(() { _allProducts = products; _isLoadingProducts = false; });
+        return;
+      }
+      // Fallback: fetch directly
       final api = ref.read(apiServiceProvider);
       final res = await api.getProducts();
       final body = res.data;
-      List<Map<String, dynamic>> products = [];
       List raw = [];
       if (body is List) {
         raw = body;
@@ -120,7 +139,8 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
         final data = body['data'] ?? body['products'] ?? body['stock'] ?? body;
         if (data is List) raw = data;
       }
-      products = raw.whereType<Map>().map((e) {
+      double _d(dynamic v) => num.tryParse(v?.toString() ?? '')?.toDouble() ?? 0.0;
+      final products = raw.whereType<Map>().map((e) {
         final m = Map<String, dynamic>.from(e);
         return {
           'name': (m['product_name'] ?? m['name'] ?? '').toString(),
@@ -131,8 +151,15 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
           'wholesalePrice': _d(m['wp'] ?? m['wholesale_price']),
         };
       }).where((p) => (p['name'] as String).isNotEmpty).toList();
-      if (mounted) setState(() => _allProducts = products);
-    } catch (_) {}
+      if (mounted) setState(() { _allProducts = products; _isLoadingProducts = false; });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingProducts = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load products: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _loadAccountsAndSuppliers() async {
@@ -251,6 +278,12 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
   }
 
   void _showSearchSheet() {
+    if (_isLoadingProducts) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Loading products, please wait...')),
+      );
+      return;
+    }
     final searchController = TextEditingController();
     List<Map<String, dynamic>> filtered = List.from(_allProducts);
     final Set<int> selectedIndices = {};
