@@ -97,6 +97,8 @@ class SaleProduct {
   final double price;
   final double total;
   final double discount;
+  final String productId;
+  final String stockId;
 
   const SaleProduct({
     required this.name,
@@ -104,15 +106,18 @@ class SaleProduct {
     required this.price,
     required this.total,
     this.discount = 0,
+    this.productId = '',
+    this.stockId = '',
   });
 
   factory SaleProduct.fromJson(Map<String, dynamic> j) => SaleProduct(
         name: (j['product_name'] ?? j['name'] ?? '').toString(),
         quantity: _i(j['qty'] ?? j['quantity']),
         price: _d(j['price_per_unit'] ?? j['unit_price'] ?? j['price'] ?? j['selling_price']),
-        // PHP sale_items uses 'total_price'; also accept common aliases.
         total: _d(j['total_price'] ?? j['subtotal'] ?? j['total'] ?? j['total_amount']),
         discount: _d(j['discount']),
+        productId: (j['product_id'] ?? '').toString(),
+        stockId: (j['stock_id'] ?? '').toString(),
       );
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
@@ -22,57 +23,43 @@ class _AddCashDialogState extends ConsumerState<AddCashDialog> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
-  String? _selectedCollectionMode;
-  String? _selectedAccount;
 
-  final List<String> _collectionModes = [
-    'Cash',
-    'Mobile Money',
-    'Bank Transfer',
-  ];
+  List<Map<String, dynamic>> _accounts = [];
+  String? _selectedAccountId;
+  bool _isLoadingAccounts = false;
+  bool _isSaving = false;
 
-  final List<String> _accounts = [
-    'Main Cash Account',
-    'Bank Account',
-    'Mobile Money Account',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadAccounts());
+  }
+
+  Future<void> _loadAccounts() async {
+    if (!mounted) return;
+    setState(() => _isLoadingAccounts = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getCashbookAccounts();
+      final raw = res.data;
+      final list = raw is List
+          ? raw
+          : (raw is Map ? (raw['data'] ?? raw['result'] ?? raw['items'] ?? []) : []);
+      if (!mounted) return;
+      setState(() {
+        _accounts = (list as List).whereType<Map<String, dynamic>>().toList();
+        _isLoadingAccounts = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingAccounts = false);
+    }
+  }
 
   @override
   void dispose() {
     _amountController.dispose();
     super.dispose();
   }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: AppColors.primary,
-              onPrimary: AppColors.textWhite,
-              surface: AppColors.card,
-              onSurface: AppColors.textPrimary,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
-    }
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
-  }
-
-  bool _isSaving = false;
 
   void _snack(String msg, Color color) {
     if (!mounted) return;
@@ -86,12 +73,8 @@ class _AddCashDialogState extends ConsumerState<AddCashDialog> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedCollectionMode == null) {
-      _snack('Please select collection mode', AppColors.danger);
-      return;
-    }
-    if (_selectedAccount == null) {
-      _snack('Please select account', AppColors.danger);
+    if (_selectedAccountId == null) {
+      _snack('Please select an account', AppColors.danger);
       return;
     }
     setState(() => _isSaving = true);
@@ -100,11 +83,9 @@ class _AddCashDialogState extends ConsumerState<AddCashDialog> {
       final body = {
         'customer_id': widget.customer.id,
         'amount': _amountController.text.trim(),
-        'payment_mode': _selectedCollectionMode,
-        'account': _selectedAccount,
-        'date': _formatDate(_selectedDate),
-        'type': 'cash_in',
-        'title': 'Cash Deposit',
+        'account_id': _selectedAccountId,
+        'date': DateFormat('yyyy-MM-dd').format(_selectedDate),
+        'action': 'add_cash',
       };
       final res = await api.postWalletCustomerCreate(body);
       final ok = res['status']?.toString() == '1' ||
@@ -117,11 +98,13 @@ class _AddCashDialogState extends ConsumerState<AddCashDialog> {
         widget.onSuccess?.call();
       } else {
         _snack(res['message']?.toString() ?? 'Failed to add cash', AppColors.danger);
+        setState(() => _isSaving = false);
       }
     } catch (e) {
-      if (mounted) _snack('Error: $e', AppColors.danger);
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (mounted) {
+        _snack('Error: $e', AppColors.danger);
+        setState(() => _isSaving = false);
+      }
     }
   }
 
@@ -131,9 +114,7 @@ class _AddCashDialogState extends ConsumerState<AddCashDialog> {
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.8,
-        ),
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
         decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.circular(AppConstants.radiusXL),
@@ -144,62 +125,19 @@ class _AddCashDialogState extends ConsumerState<AddCashDialog> {
             _buildHeader(),
             Flexible(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppConstants.paddingLG,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
                 child: Form(
                   key: _formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildReadOnlyField(
-                        label: 'Customer',
-                        value: widget.customer.name,
-                        icon: Icons.person_rounded,
-                      ),
+                      _buildReadOnlyField('Customer', widget.customer.name, Icons.person_rounded),
                       const SizedBox(height: 16),
-                      _buildDropdownField(
-                        label: 'Collection Mode',
-                        value: _selectedCollectionMode,
-                        items: _collectionModes,
-                        icon: Icons.payment_rounded,
-                        onChanged: (value) {
-                          setState(() => _selectedCollectionMode = value);
-                        },
-                      ),
+                      _buildAmountField(),
                       const SizedBox(height: 16),
                       _buildDateField(),
                       const SizedBox(height: 16),
-                      _buildTextField(
-                        controller: _amountController,
-                        label: 'Amount to Add',
-                        hint: 'Enter amount',
-                        icon: Icons.attach_money_rounded,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Please enter amount';
-                          }
-                          if (double.tryParse(value) == null ||
-                              double.parse(value) <= 0) {
-                            return 'Please enter valid amount';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      _buildDropdownField(
-                        label: 'Add From Account',
-                        value: _selectedAccount,
-                        items: _accounts,
-                        icon: Icons.account_balance_rounded,
-                        onChanged: (value) {
-                          setState(() => _selectedAccount = value);
-                        },
-                      ),
+                      _buildAccountDropdown(),
                       const SizedBox(height: 20),
                     ],
                   ),
@@ -214,112 +152,116 @@ class _AddCashDialogState extends ConsumerState<AddCashDialog> {
   }
 
   Widget _buildHeader() {
-    return Container(
+    return Padding(
       padding: const EdgeInsets.all(AppConstants.paddingLG),
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 40, height: 40,
             decoration: BoxDecoration(
               color: AppColors.success.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
-              Icons.add_circle_outline_rounded,
-              color: AppColors.success,
-              size: 20,
-            ),
+            child: const Icon(Icons.add_circle_outline_rounded, color: AppColors.success, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Add Cash',
-                  style: AppTypography.h6.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                Text(
-                  'Add cash to customer wallet',
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.textSecondary,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Add Cash', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+              Text('Add cash to customer wallet', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11)),
+            ]),
           ),
-          IconButton(
-            onPressed: () => context.pop(),
-            icon: const Icon(
-              Icons.close_rounded,
-              color: AppColors.textHint,
-              size: 22,
-            ),
-          ),
+          IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.close_rounded, color: AppColors.textHint, size: 22)),
         ],
       ),
     );
   }
 
-  Widget _buildReadOnlyField({
-    required String label,
-    required String value,
-    required IconData icon,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: AppTypography.label.copyWith(color: AppColors.textPrimary),
+  Widget _buildReadOnlyField(String label, String value, IconData icon) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
+      const SizedBox(height: 8),
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+          border: Border.all(color: AppColors.inputBorder),
         ),
-        const SizedBox(height: 8),
-        Container(
+        child: Row(children: [
+          Icon(icon, color: AppColors.textHint, size: 20),
+          const SizedBox(width: 12),
+          Text(value, style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+        ]),
+      ),
+    ]);
+  }
+
+  Widget _buildAmountField() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Amount', style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
+      const SizedBox(height: 8),
+      TextFormField(
+        controller: _amountController,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        validator: (v) {
+          if (v == null || v.trim().isEmpty) return 'Enter amount';
+          if ((double.tryParse(v) ?? 0) <= 0) return 'Enter valid amount';
+          return null;
+        },
+        style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
+        decoration: InputDecoration(
+          hintText: 'Enter amount',
+          hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
+          prefixIcon: const Icon(Icons.attach_money_rounded, color: AppColors.textHint, size: 20),
+          filled: true, fillColor: AppColors.card,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConstants.textFieldRadius), borderSide: const BorderSide(color: AppColors.inputBorder)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConstants.textFieldRadius), borderSide: const BorderSide(color: AppColors.inputBorder)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConstants.textFieldRadius), borderSide: const BorderSide(color: AppColors.inputFocusBorder, width: 1.5)),
+        ),
+      ),
+    ]);
+  }
+
+  Widget _buildDateField() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Date', style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
+      const SizedBox(height: 8),
+      GestureDetector(
+        onTap: () async {
+          final d = await showDatePicker(context: context, initialDate: _selectedDate, firstDate: DateTime(2020), lastDate: DateTime.now());
+          if (d != null) setState(() => _selectedDate = d);
+        },
+        child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: AppColors.background,
+            color: AppColors.card,
             borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
             border: Border.all(color: AppColors.inputBorder),
           ),
-          child: Row(
-            children: [
-              Icon(icon, color: AppColors.textHint, size: 20),
-              const SizedBox(width: 12),
-              Text(
-                value,
-                style: AppTypography.bodyMedium.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
+          child: Row(children: [
+            const Icon(Icons.calendar_today_rounded, color: AppColors.primary, size: 20),
+            const SizedBox(width: 12),
+            Text(DateFormat('dd/MM/yyyy').format(_selectedDate), style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary)),
+            const Spacer(),
+            const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textHint, size: 20),
+          ]),
         ),
-      ],
-    );
+      ),
+    ]);
   }
 
-  Widget _buildDropdownField({
-    required String label,
-    required String? value,
-    required List<String> items,
-    required IconData icon,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: AppTypography.label.copyWith(color: AppColors.textPrimary),
-        ),
-        const SizedBox(height: 8),
+  Widget _buildAccountDropdown() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Account', style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
+      const SizedBox(height: 8),
+      if (_isLoadingAccounts)
+        const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator()))
+      else
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -330,166 +272,28 @@ class _AddCashDialogState extends ConsumerState<AddCashDialog> {
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
-              value: value,
+              value: _selectedAccountId,
               isExpanded: true,
-              hint: Row(
-                children: [
-                  Icon(icon, color: AppColors.textHint, size: 20),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Select',
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.textHint,
-                    ),
-                  ),
-                ],
-              ),
-              icon: const Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: AppColors.textHint,
-              ),
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textPrimary,
-              ),
-              items: items.map((item) {
-                return DropdownMenuItem(
-                  value: item,
-                  child: Text(item),
-                );
-              }).toList(),
-              onChanged: onChanged,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDateField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Date',
-          style: AppTypography.label.copyWith(color: AppColors.textPrimary),
-        ),
-        const SizedBox(height: 8),
-        GestureDetector(
-          onTap: _pickDate,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius:
-                  BorderRadius.circular(AppConstants.textFieldRadius),
-              border: Border.all(color: AppColors.inputBorder),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.calendar_today_rounded,
-                  color: AppColors.primary,
-                  size: 20,
-                ),
+              hint: Row(children: [
+                const Icon(Icons.account_balance_rounded, color: AppColors.textHint, size: 20),
                 const SizedBox(width: 12),
-                Text(
-                  _formatDate(_selectedDate),
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const Spacer(),
-                const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.textHint,
-                  size: 20,
-                ),
-              ],
+                Text('Select account', style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint)),
+              ]),
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textHint),
+              items: _accounts.map((a) {
+                final id = (a['account_id'] ?? a['id'] ?? '').toString();
+                final name = (a['account_name'] ?? a['name'] ?? 'Account $id').toString();
+                return DropdownMenuItem(value: id, child: Text(name, style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary)));
+              }).toList(),
+              onChanged: (v) => setState(() => _selectedAccountId = v),
             ),
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    required IconData icon,
-    TextInputType? keyboardType,
-    List<TextInputFormatter>? inputFormatters,
-    String? Function(String?)? validator,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: AppTypography.label.copyWith(color: AppColors.textPrimary),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          keyboardType: keyboardType,
-          inputFormatters: inputFormatters,
-          validator: validator,
-          style: AppTypography.bodyMedium.copyWith(
-            color: AppColors.textPrimary,
-          ),
-          cursorColor: AppColors.primary,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: AppTypography.bodyMedium.copyWith(
-              color: AppColors.textHint,
-            ),
-            prefixIcon: Icon(icon, color: AppColors.textHint, size: 20),
-            filled: true,
-            fillColor: AppColors.card,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-            border: OutlineInputBorder(
-              borderRadius:
-                  BorderRadius.circular(AppConstants.textFieldRadius),
-              borderSide: const BorderSide(color: AppColors.inputBorder),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius:
-                  BorderRadius.circular(AppConstants.textFieldRadius),
-              borderSide: const BorderSide(color: AppColors.inputBorder),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius:
-                  BorderRadius.circular(AppConstants.textFieldRadius),
-              borderSide: const BorderSide(
-                color: AppColors.inputFocusBorder,
-                width: 1.5,
-              ),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius:
-                  BorderRadius.circular(AppConstants.textFieldRadius),
-              borderSide: const BorderSide(color: AppColors.danger),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius:
-                  BorderRadius.circular(AppConstants.textFieldRadius),
-              borderSide: const BorderSide(
-                color: AppColors.danger,
-                width: 1.5,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
+    ]);
   }
 
   Widget _buildBottomBar() {
-    return Container(
+    return Padding(
       padding: const EdgeInsets.all(AppConstants.paddingLG),
       child: SizedBox(
         width: double.infinity,
@@ -500,18 +304,11 @@ class _AddCashDialogState extends ConsumerState<AddCashDialog> {
             backgroundColor: AppColors.primary,
             foregroundColor: AppColors.textWhite,
             elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppConstants.radiusMD),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD)),
           ),
           child: _isSaving
-              ? const SizedBox(
-                  width: 20, height: 20,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : Text(
-                  'Add Cash',
-                  style: AppTypography.buttonLarge.copyWith(color: AppColors.textWhite),
-                ),
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : Text('Add Cash', style: AppTypography.buttonLarge.copyWith(color: AppColors.textWhite)),
         ),
       ),
     );

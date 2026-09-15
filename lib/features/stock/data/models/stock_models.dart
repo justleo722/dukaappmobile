@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// Product row returned by GET getdata/stock
 class StockProduct {
   final dynamic productId;
@@ -83,7 +85,7 @@ class StockProduct {
       expiryDate: j['expiry_date']?.toString(),
       status: j['record_status']?.toString(),
       imageUrl: _resolveImageUrl(
-          j['photo']?.toString() ??
+          _firstPhoto(j['photo']?.toString()) ??
           j['image']?.toString() ??
           j['image_url']?.toString()),
       sold: _d(j['sold']),
@@ -121,6 +123,19 @@ class StockProduct {
   static double _d(dynamic v) {
     if (v == null) return 0;
     return double.tryParse(v.toString()) ?? 0;
+  }
+
+  /// Photo column is stored as a JSON array of filenames — extract the first one.
+  static String? _firstPhoto(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    final trimmed = raw.trim();
+    if (trimmed.startsWith('[')) {
+      try {
+        final list = jsonDecode(trimmed) as List;
+        return list.isNotEmpty ? list.first?.toString() : null;
+      } catch (_) {}
+    }
+    return trimmed;
   }
 
   /// Convert a relative image path from the API to a full URL.

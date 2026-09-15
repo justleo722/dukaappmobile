@@ -114,7 +114,9 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
         'sellingPrice': (p['price'] ?? 0).toDouble(),
         'quantity': p['quantity'] ?? 1,
         'stock': (p['quantity'] ?? 1) + 10,
-        'discount': 0.0,
+        'discount': (p['discount'] ?? 0.0) is double ? p['discount'] : double.tryParse(p['discount']?.toString() ?? '') ?? 0.0,
+        'product_id': p['product_id'] ?? 0,
+        'stock_id': p['stock_id'] ?? '',
       };
     }).toList();
   }
@@ -446,14 +448,17 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
 
     try {
       // Build items in pipe format: product_id|stock_id|qty|price|discount|subtotal|vat|total
+      // subtotal = gross (price * qty), NOT net. PHP's configuredVatTotals subtracts
+      // discount from subtotal itself — sending net here would cause double deduction.
       final itemStrings = _items.map((item) {
         final productId = item['product_id'] ?? 0;
         final stockId = item['stock_id'] ?? '';
         final qty = item['quantity'] ?? 1;
         final price = item['sellingPrice'] ?? 0.0;
         final discount = item['discount'] ?? 0.0;
-        final subtotal = (price * qty) - discount;
-        return '$productId|$stockId|$qty|$price|$discount|$subtotal|0|$subtotal';
+        final subtotal = price * qty;           // gross, before discount
+        final net = subtotal - discount;        // net, after discount
+        return '$productId|$stockId|$qty|$price|$discount|$subtotal|0|$net';
       }).toList();
 
       // Use explicit bracket notation so PHP reads items[] as an array.
@@ -463,18 +468,9 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
         for (int i = 0; i < itemStrings.length; i++) 'items[$i]': itemStrings[i],
         'payment_mode': _selectedPaymentType,
         'customer_id': _selectedCustomerId ?? '',
-        'total_amount': _items.fold<double>(0, (s, i) {
-          final price = (i['sellingPrice'] ?? 0.0) as double;
-          final qty = (i['quantity'] ?? 1) as int;
-          return s + price * qty - ((i['discount'] ?? 0.0) as double);
-        }),
-        'paid_amount': _selectedPaymentType.toLowerCase() == 'credit'
-            ? 0
-            : _items.fold<double>(0, (s, i) {
-                final price = (i['sellingPrice'] ?? 0.0) as double;
-                final qty = (i['quantity'] ?? 1) as int;
-                return s + price * qty - ((i['discount'] ?? 0.0) as double);
-              }),
+        // total_amount = final amount shown to user (items net - global discount)
+        'total_amount': _finalAmount,
+        'paid_amount': _selectedPaymentType.toLowerCase() == 'credit' ? 0 : _finalAmount,
         'discount': double.tryParse(_discountController.text) ?? 0.0,
         'date': _selectedDate.toIso8601String().split('T')[0],
         'sale_type': _selectedPaymentType.toLowerCase() == 'credit' ? 'sale' : 'cashsale',
@@ -531,7 +527,9 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
                     'name': p.name,
                     'sellingPrice': p.sellingPrice,
                     'wholesalePrice': p.wholesalePrice,
-                    'stock': p.available.toInt(),
+                    // Services have available=0 in DB but are always sellable.
+                    'stock': p.type == 'service' ? 9999 : p.available.toInt(),
+                    'type': p.type ?? 'product',
                   })
               .toList(),
           orElse: () => _cachedAllProducts, // keep previous list while reloading

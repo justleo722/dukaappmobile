@@ -177,7 +177,9 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
         horizontal: AppConstants.paddingLG,
         vertical: AppConstants.paddingSM,
       ),
-      child: Row(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
         children: [
           _buildActionChip(
             icon: Icons.card_membership_rounded,
@@ -216,17 +218,23 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
             color: AppColors.secondary,
             onTap: () => AppFilterDialog.show(context),
           ),
-          const Spacer(),
+          const SizedBox(width: 8),
           _buildActionChip(
             icon: Icons.person_add_rounded,
             label: 'New Customer',
             color: AppColors.primary,
             onTap: () async {
-              await context.push('/customers/add');
+              final saved = await context.push('/customers/add');
+              if (saved == true && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Customer added successfully')),
+                );
+              }
               _loadCustomers();
             },
           ),
         ],
+        ),
       ),
     );
   }

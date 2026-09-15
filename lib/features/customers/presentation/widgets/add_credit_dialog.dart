@@ -1,24 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/customers/data/models/customer_model.dart';
 
-class AddCreditDialog extends StatefulWidget {
+class AddCreditDialog extends ConsumerStatefulWidget {
   final Customer customer;
+  final VoidCallback? onSuccess;
 
-  const AddCreditDialog({super.key, required this.customer});
+  const AddCreditDialog({super.key, required this.customer, this.onSuccess});
 
   @override
-  State<AddCreditDialog> createState() => _AddCreditDialogState();
+  ConsumerState<AddCreditDialog> createState() => _AddCreditDialogState();
 }
 
-class _AddCreditDialogState extends State<AddCreditDialog> {
+class _AddCreditDialogState extends ConsumerState<AddCreditDialog> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -32,46 +37,50 @@ class _AddCreditDialogState extends State<AddCreditDialog> {
       initialDate: _selectedDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: AppColors.primary,
-              onPrimary: AppColors.textWhite,
-              surface: AppColors.card,
-              onSurface: AppColors.textPrimary,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
-    }
+    if (picked != null) setState(() => _selectedDate = picked);
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  void _snack(String msg, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg, style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+    ));
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'TZS ${_amountController.text} credit added to ${widget.customer.name}',
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-        ),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-        ),
-      ),
-    );
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final body = {
+        'customer_id': widget.customer.id,
+        'amount': _amountController.text.trim(),
+        'date': DateFormat('yyyy-MM-dd').format(_selectedDate),
+        'action': 'add_credit',
+      };
+      final res = await api.postWalletCustomerCreate(body);
+      final ok = res['status']?.toString() == '1' ||
+          res['status'] == true ||
+          res['status']?.toString() == 'success';
+      if (!mounted) return;
+      if (ok) {
+        Navigator.pop(context);
+        _snack('TZS ${_amountController.text} credit added to ${widget.customer.name}', AppColors.success);
+        widget.onSuccess?.call();
+      } else {
+        _snack(res['message']?.toString() ?? 'Failed to add credit', AppColors.danger);
+        setState(() => _isSaving = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        _snack('Error: $e', AppColors.danger);
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
   @override
@@ -263,7 +272,7 @@ class _AddCreditDialogState extends State<AddCreditDialog> {
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  _formatDate(_selectedDate),
+                  DateFormat('dd/MM/yyyy').format(_selectedDate),
                   style: AppTypography.bodyMedium.copyWith(
                     color: AppColors.textPrimary,
                   ),
@@ -364,7 +373,7 @@ class _AddCreditDialogState extends State<AddCreditDialog> {
         width: double.infinity,
         height: AppConstants.buttonHeight,
         child: ElevatedButton(
-          onPressed: _submit,
+          onPressed: _isSaving ? null : _submit,
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,
             foregroundColor: AppColors.textWhite,

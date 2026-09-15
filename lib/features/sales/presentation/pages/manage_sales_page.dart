@@ -99,6 +99,8 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                 'quantity': p.quantity,
                 'price': p.price,
                 'total': p.total,
+                'product_id': p.productId,
+                'stock_id': p.stockId,
               })
           .toList(),
       'paymentMethod': r.paymentMethod,
@@ -494,7 +496,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
             },
             onDelete: () => _deleteSale(index),
             // Show Pay button only for unpaid/credit sales
-            onPay: (sale['balance'] as double? ?? 0) > 0.01
+            onPay: _toD(sale['balance']) > 0.01
                 ? () => _showPayDialog(index)
                 : null,
           );
@@ -506,7 +508,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
   /// Payment dialog for credit / unpaid sales.
   void _showPayDialog(int index) {
     final sale = _sales[index];
-    final balance = (sale['balance'] as double? ?? 0.0);
+    final balance = _toD(sale['balance']);
     final saleId = sale['sale_id']?.toString() ?? '';
     final amountController = TextEditingController(text: balance.toStringAsFixed(0));
     final formKey = GlobalKey<FormState>();
@@ -862,6 +864,9 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
     }
   }
 
+  /// Safely parse any value (double, int, String) to double.
+  double _toD(dynamic v) => v is double ? v : double.tryParse(v?.toString() ?? '') ?? 0.0;
+
   String _fmt(double v) => v == v.roundToDouble()
       ? v.toInt().toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},')
       : v.toStringAsFixed(2).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+\.)'), (m) => '${m[1]},');
@@ -893,15 +898,15 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
             pw.Divider(),
             pw.Row(children: [
               pw.Expanded(child: pw.Text('Total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-              pw.Text('Tsh ${(sale['total'] as double? ?? 0).toStringAsFixed(0)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+              pw.Text('Tsh ${_toD(sale['totalRaw'] ?? sale['total']).toStringAsFixed(0)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
             ]),
             pw.Row(children: [
               pw.Expanded(child: pw.Text('Paid')),
-              pw.Text('Tsh ${(sale['paid'] as double? ?? 0).toStringAsFixed(0)}'),
+              pw.Text('Tsh ${_toD(sale['paid']).toStringAsFixed(0)}'),
             ]),
-            if ((sale['balance'] as double? ?? 0) > 0) pw.Row(children: [
+            if (_toD(sale['balance']) > 0) pw.Row(children: [
               pw.Expanded(child: pw.Text('Balance')),
-              pw.Text('Tsh ${(sale['balance'] as double).toStringAsFixed(0)}'),
+              pw.Text('Tsh ${_toD(sale['balance']).toStringAsFixed(0)}'),
             ]),
             pw.SizedBox(height: 16),
             pw.Center(child: pw.Text('Thank you!', style: const pw.TextStyle(fontSize: 12))),
@@ -924,10 +929,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
 
   void _showReceiptPreview(Map<String, dynamic> sale) {
     final products = List<Map<String, dynamic>>.from(sale['products']);
-    final totalAmount = products.fold<double>(
-      0,
-      (sum, p) => sum + (p['price'] as double) * (p['quantity'] as int),
-    );
+    final totalAmount = _toD(sale['totalRaw'] ?? sale['total']);
 
     ReceiptWidget.show(
       context,
@@ -939,8 +941,8 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
       paymentMode: sale['paymentMethod'],
       items: products,
       subtotal: totalAmount,
-      totalPaid: sale['paid'],
-      amountReceived: sale['paid'],
+      totalPaid: _toD(sale['paid']),
+      amountReceived: _toD(sale['paid']),
     );
   }
 }

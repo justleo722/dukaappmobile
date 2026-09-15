@@ -21,21 +21,42 @@ class ClearCreditDialog extends ConsumerStatefulWidget {
 class _ClearCreditDialogState extends ConsumerState<ClearCreditDialog> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
-  String? _selectedAccount;
+  String? _selectedAccountId;
+  List<Map<String, dynamic>> _accounts = [];
+  bool _isLoadingAccounts = false;
+  bool _isSaving = false;
 
-  final List<String> _accounts = [
-    'Main Cash Account',
-    'Bank Account',
-    'Mobile Money Account',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadAccounts());
+  }
+
+  Future<void> _loadAccounts() async {
+    if (!mounted) return;
+    setState(() => _isLoadingAccounts = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getCashbookAccounts();
+      final raw = res.data;
+      final list = raw is List
+          ? raw
+          : (raw is Map ? (raw['data'] ?? raw['result'] ?? raw['items'] ?? []) : []);
+      if (!mounted) return;
+      setState(() {
+        _accounts = (list as List).whereType<Map<String, dynamic>>().toList();
+        _isLoadingAccounts = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingAccounts = false);
+    }
+  }
 
   @override
   void dispose() {
     _amountController.dispose();
     super.dispose();
   }
-
-  bool _isSaving = false;
 
   void _snack(String msg, Color color) {
     if (!mounted) return;
@@ -49,7 +70,7 @@ class _ClearCreditDialogState extends ConsumerState<ClearCreditDialog> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedAccount == null) {
+    if (_selectedAccountId == null) {
       _snack('Please select account', AppColors.danger);
       return;
     }
@@ -66,9 +87,8 @@ class _ClearCreditDialogState extends ConsumerState<ClearCreditDialog> {
       final body = {
         'customer_id': widget.customer.id,
         'amount': _amountController.text.trim(),
-        'account': _selectedAccount,
-        'type': 'credit_payment',
-        'title': 'Credit Payment',
+        'account_id': _selectedAccountId,
+        'action': 'clear_credit',
       };
       final res = await api.postWalletCustomerCreate(body);
       final ok = res['status']?.toString() == '1' ||
@@ -116,15 +136,7 @@ class _ClearCreditDialogState extends ConsumerState<ClearCreditDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildDropdownField(
-                        label: 'From Account',
-                        value: _selectedAccount,
-                        items: _accounts,
-                        icon: Icons.account_balance_rounded,
-                        onChanged: (value) {
-                          setState(() => _selectedAccount = value);
-                        },
-                      ),
+                      _buildAccountDropdown(),
                       const SizedBox(height: 16),
                       _buildTextField(
                         controller: _amountController,
@@ -242,21 +254,13 @@ class _ClearCreditDialogState extends ConsumerState<ClearCreditDialog> {
     );
   }
 
-  Widget _buildDropdownField({
-    required String label,
-    required String? value,
-    required List<String> items,
-    required IconData icon,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: AppTypography.label.copyWith(color: AppColors.textPrimary),
-        ),
-        const SizedBox(height: 8),
+  Widget _buildAccountDropdown() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('From Account', style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
+      const SizedBox(height: 8),
+      if (_isLoadingAccounts)
+        const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator()))
+      else
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -267,39 +271,24 @@ class _ClearCreditDialogState extends ConsumerState<ClearCreditDialog> {
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
-              value: value,
+              value: _selectedAccountId,
               isExpanded: true,
-              hint: Row(
-                children: [
-                  Icon(icon, color: AppColors.textHint, size: 20),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Select Account',
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.textHint,
-                    ),
-                  ),
-                ],
-              ),
-              icon: const Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: AppColors.textHint,
-              ),
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textPrimary,
-              ),
-              items: items.map((item) {
-                return DropdownMenuItem(
-                  value: item,
-                  child: Text(item),
-                );
+              hint: Row(children: [
+                const Icon(Icons.account_balance_rounded, color: AppColors.textHint, size: 20),
+                const SizedBox(width: 12),
+                Text('Select account', style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint)),
+              ]),
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textHint),
+              items: _accounts.map((a) {
+                final id = (a['account_id'] ?? a['id'] ?? '').toString();
+                final name = (a['account_name'] ?? a['name'] ?? 'Account $id').toString();
+                return DropdownMenuItem(value: id, child: Text(name, style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary)));
               }).toList(),
-              onChanged: onChanged,
+              onChanged: (v) => setState(() => _selectedAccountId = v),
             ),
           ),
         ),
-      ],
-    );
+    ]);
   }
 
   Widget _buildTextField({

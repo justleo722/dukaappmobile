@@ -564,6 +564,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
           sellingPrice: product.sellingPrice,
           currentStock: product.available.toInt(),
           type: product.type,
+          imageUrl: product.imageUrl,
           isSelected: _selectedIds.contains(id),
           onSelectionChanged: (_) => _toggleSelection(id),
           isExpanded: _expandedProductId == id,

@@ -978,7 +978,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
   void _showAddCreditDialog() {
     showDialog(
       context: context,
-      builder: (context) => AddCreditDialog(customer: _customer),
+      builder: (context) => AddCreditDialog(customer: _customer, onSuccess: _loadCustomerData),
     );
   }
 

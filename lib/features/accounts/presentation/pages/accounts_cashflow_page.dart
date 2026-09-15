@@ -195,12 +195,12 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
               _buildDialogActions(ctx, () async {
                 final amount = double.tryParse(amountController.text) ?? 0;
                 final title = titleController.text.trim();
-                // Accounts are optional if no accounts configured in this shop
-                final requireAccounts = _accounts.isNotEmpty;
-                if (amount <= 0 || title.isEmpty ||
-                    (requireAccounts && selectedFromAccountId == null) ||
-                    (requireAccounts && selectedToAccountId == null)) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(requireAccounts ? 'Fill all fields and select both accounts' : 'Fill title and amount')));
+                if (_accounts.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No accounts found. Configure payment accounts first.')));
+                  return;
+                }
+                if (amount <= 0 || title.isEmpty || selectedFromAccountId == null || selectedToAccountId == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fill all fields and select both accounts')));
                   return;
                 }
                 Navigator.pop(ctx);
@@ -301,11 +301,12 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
               _buildDialogActions(ctx, () async {
                 final amount = double.tryParse(amountController.text) ?? 0;
                 final title = titleController.text.trim();
-                final requireAccounts2 = _accounts.isNotEmpty;
-                if (amount <= 0 || title.isEmpty ||
-                    (requireAccounts2 && selectedFromAccountId == null) ||
-                    (requireAccounts2 && selectedToAccountId == null)) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(requireAccounts2 ? 'Fill all fields and select both accounts' : 'Fill title and amount')));
+                if (_accounts.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No accounts found. Configure payment accounts first.')));
+                  return;
+                }
+                if (amount <= 0 || title.isEmpty || selectedFromAccountId == null || selectedToAccountId == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fill all fields and select both accounts')));
                   return;
                 }
                 Navigator.pop(ctx);

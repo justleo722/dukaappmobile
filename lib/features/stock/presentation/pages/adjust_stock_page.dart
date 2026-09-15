@@ -40,7 +40,7 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
   bool _isSaving = false;
 
   List<Map<String, dynamic>> _getFilteredProducts() {
-    final stockState = ref.read(stockProvider);
+    final stockState = ref.watch(stockProvider);
     final allProducts = stockState.whenOrNull(
           data: (s) => s.products
               .map((p) => {'name': p.name, 'stock': p.available.toInt(), 'product_id': p.productId})
@@ -475,6 +475,13 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
   }
 
   Widget _buildProductList() {
+    final stockState = ref.watch(stockProvider);
+    if (stockState.isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 40),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
     final products = _getFilteredProducts();
 
     if (_searchController.text.isNotEmpty && products.isEmpty) {

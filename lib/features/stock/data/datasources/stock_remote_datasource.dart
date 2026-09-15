@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:dukaapp/core/network/api_client.dart';
 import 'package:dukaapp/core/services/api_endpoints.dart';
@@ -111,19 +112,12 @@ class StockRemoteDatasource {
     final toShop = body['to_shop_id']?.toString() ?? '';
     final products = (body['products'] as List?) ?? [];
 
-    // Build flat form-encoded maps that PHP reads as indexed arrays.
-    final Map<String, dynamic> form = {'toShop': toShop};
-    for (final item in products) {
-      final pid = item['product_id']?.toString() ?? '';
-      if (pid.isEmpty) continue;
-      // PHP: $this->input->post('product_id') → array of ids
-      // We append each id into the list key.
-      (form['product_id'] ??= <String>[]).add(pid);
-      // PHP: $this->input->post('quantity')[pid]
-      form['quantity[$pid]'] = (item['quantity'] ?? 0).toString();
-      // PHP: $this->input->post('name')[pid] — optional, backend falls back to DB name
-      if (item['name'] != null) form['name[$pid]'] = item['name'].toString();
-    }
+    // Send products as a JSON string so the backend mobile-app path can read it.
+    final form = <String, dynamic>{
+      'to_shop_id': toShop,
+      'toShop': toShop,
+      'products': jsonEncode(products),
+    };
 
     final res = await _client.post(ApiEndpoints.postStockTransfer, data: form, options: _formOptions);
     return _json(res.data);
@@ -166,11 +160,26 @@ class StockRemoteDatasource {
     return _json(res.data);
   }
 
-  /// Bulk import products from parsed spreadsheet rows (stock/register/import)
+  /// Bulk import products from parsed spreadsheet rows (stock/register/import).
+  /// Backend reads 'products' as a JSON string from form post.
   Future<Map<String, dynamic>> importProducts(List<Map<String, dynamic>> products) async {
+    // Map Flutter field names → backend field names
+    final mapped = products.map((p) => {
+      'name': p['name'],
+      'bp': p['buyingPrice'] ?? 0,
+      'sp': p['sellingPrice'] ?? 0,
+      'wp': p['wholesalePrice'] ?? p['sellingPrice'] ?? 0,
+      'quantity': p['quantity'] ?? 0,
+      'reorder_level': p['reorderLevel'] ?? 0,
+      if (p['barcode'] != null && (p['barcode'] as String).isNotEmpty) 'barcode': p['barcode'],
+      if (p['expiryDate'] != null && (p['expiryDate'] as String).isNotEmpty) 'expiry_date': p['expiryDate'],
+      if (p['unit'] != null) 'unit': p['unit'],
+    }).toList();
+
     final res = await _client.post(
       ApiEndpoints.postStockRegisterImport,
-      data: {'products': products},
+      // Send products as a JSON-encoded string so backend json_decode() can read it
+      data: {'products': jsonEncode(mapped)},
       options: _formOptions,
     );
     return _json(res.data);
