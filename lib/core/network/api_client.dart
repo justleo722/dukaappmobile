@@ -154,9 +154,11 @@ class ApiClient {
         return const ApiException(message: 'Certificate verification failed.');
       case DioExceptionType.unknown:
         if (e.error is ApiException) return e.error as ApiException;
-        return const NetworkException();
+        print('[DIO UNKNOWN] error=${e.error} type=${e.error?.runtimeType} response=${e.response?.statusCode} body=${e.response?.data}');
+        return NetworkException(message: 'Unable to connect. (${e.error?.runtimeType}: ${e.error})');
       default:
         if (e.error is ApiException) return e.error as ApiException;
+        print('[DIO DEFAULT] error=${e.error} type=${e.error?.runtimeType}');
         return const NetworkException();
     }
   }

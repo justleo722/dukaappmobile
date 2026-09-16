@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dukaapp/core/models/shop_config.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/dashboard/data/models/dashboard_model.dart';
 import 'package:dukaapp/features/dashboard/data/models/session_user_model.dart';
 import 'package:dukaapp/features/dashboard/presentation/constants/dashboard_constants.dart';
 import 'package:dukaapp/features/dashboard/presentation/widgets/summary_card.dart';
 
-class SummaryCarousel extends StatefulWidget {
+class SummaryCarousel extends ConsumerStatefulWidget {
   const SummaryCarousel({
     super.key,
     required this.dashboard,
@@ -17,10 +20,10 @@ class SummaryCarousel extends StatefulWidget {
   final SessionUserModel sessionUser;
 
   @override
-  State<SummaryCarousel> createState() => _SummaryCarouselState();
+  ConsumerState<SummaryCarousel> createState() => _SummaryCarouselState();
 }
 
-class _SummaryCarouselState extends State<SummaryCarousel> {
+class _SummaryCarouselState extends ConsumerState<SummaryCarousel> {
   late final PageController _pageController;
   late List<Map<String, dynamic>> _cards;
   Timer? _autoScrollTimer;
@@ -30,7 +33,7 @@ class _SummaryCarouselState extends State<SummaryCarousel> {
   @override
   void initState() {
     super.initState();
-    _cards = _buildCards();
+    _cards = _buildCards(ShopConfig.defaults);
     final initialPage = (_cards.length * (_infiniteMultiplier ~/ 2));
     _pageController = PageController(viewportFraction: 0.48, initialPage: initialPage);
     _startAutoScroll();
@@ -40,13 +43,14 @@ class _SummaryCarouselState extends State<SummaryCarousel> {
   void didUpdateWidget(SummaryCarousel old) {
     super.didUpdateWidget(old);
     if (old.dashboard != widget.dashboard || old.sessionUser != widget.sessionUser) {
-      setState(() => _cards = _buildCards());
+      final cfg = ref.read(shopConfigProvider).valueOrNull ?? ShopConfig.defaults;
+      setState(() => _cards = _buildCards(cfg));
     }
   }
 
   /// Build summary card list from real API data.
-  /// Only include cards relevant to the user's permissions.
-  List<Map<String, dynamic>> _buildCards() {
+  /// Only include cards relevant to the user's permissions and shop settings.
+  List<Map<String, dynamic>> _buildCards(ShopConfig cfg) {
     final d = widget.dashboard;
     final u = widget.sessionUser;
     final cur = d.currency;
@@ -58,7 +62,7 @@ class _SummaryCarouselState extends State<SummaryCarousel> {
 
     final cards = <Map<String, dynamic>>[];
 
-    if (u.canSeeSales) {
+    if (u.canSeeSales && cfg.showTodaySales) {
       cards.add({
         'title': 'Today Sales',
         'value': money(d.todaySales),
@@ -71,7 +75,7 @@ class _SummaryCarouselState extends State<SummaryCarousel> {
     }
 
     if (u.canSeeProfitExpenses) {
-      if (u.can('can_view_profit')) {
+      if (u.can('can_view_profit') && cfg.showTodayProfit) {
         cards.add({
           'title': 'Today Profit',
           'value': money(d.todayProfit),
@@ -82,7 +86,7 @@ class _SummaryCarouselState extends State<SummaryCarousel> {
           'route': '/profit-expenses',
         });
       }
-      if (u.can('can_add_expense') || u.isOwner) {
+      if ((u.can('can_add_expense') || u.isOwner) && cfg.showTodayExpenses) {
         cards.add({
           'title': 'Today Expense',
           'value': money(d.todayExpense),
@@ -95,7 +99,7 @@ class _SummaryCarouselState extends State<SummaryCarousel> {
       }
     }
 
-    if (u.canSeeStock) {
+    if (u.canSeeStock && cfg.showTodayStockIn) {
       cards.add({
         'title': 'Today Stock In',
         'value': qty(d.todayStockin),
@@ -108,27 +112,31 @@ class _SummaryCarouselState extends State<SummaryCarousel> {
     }
 
     if (u.canSeePurchases) {
-      cards.add({
-        'title': 'To Receive',
-        'value': money(d.todayCredit),
-        'description': d.todayCredit > 0 ? 'Pending deliveries' : 'No pending receives',
-        'icon': Icons.download_rounded,
-        'color': const Color(0xFF9333EA),
-        'bgColor': const Color(0xFFF3E8FF),
-        'route': '/purchases/orders',
-      });
-      cards.add({
-        'title': 'To Pay',
-        'value': money(d.todayTopay),
-        'description': d.todayTopay > 0 ? 'Pending payments' : 'No pending payments',
-        'icon': Icons.upload_rounded,
-        'color': const Color(0xFFF59E0B),
-        'bgColor': const Color(0xFFFFF8E1),
-        'route': '/purchases/orders',
-      });
+      if (cfg.showToReceive) {
+        cards.add({
+          'title': 'To Receive',
+          'value': money(d.todayCredit),
+          'description': d.todayCredit > 0 ? 'Pending deliveries' : 'No pending receives',
+          'icon': Icons.download_rounded,
+          'color': const Color(0xFF9333EA),
+          'bgColor': const Color(0xFFF3E8FF),
+          'route': '/purchases/orders',
+        });
+      }
+      if (cfg.showToPay) {
+        cards.add({
+          'title': 'To Pay',
+          'value': money(d.todayTopay),
+          'description': d.todayTopay > 0 ? 'Pending payments' : 'No pending payments',
+          'icon': Icons.upload_rounded,
+          'color': const Color(0xFFF59E0B),
+          'bgColor': const Color(0xFFFFF8E1),
+          'route': '/purchases/orders',
+        });
+      }
     }
 
-    if (u.canSeeSales) {
+    if (u.canSeeSales && cfg.showOrders) {
       cards.add({
         'title': 'Today Orders',
         'value': orders(d.todayOrders),
@@ -170,6 +178,16 @@ class _SummaryCarouselState extends State<SummaryCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    // Rebuild cards when shopConfig loads/changes.
+    ref.listen(shopConfigProvider, (_, next) {
+      final cfg = next.valueOrNull ?? ShopConfig.defaults;
+      setState(() => _cards = _buildCards(cfg));
+      if (_pageController.hasClients && _cards.isNotEmpty) {
+        final initialPage = (_cards.length * (_infiniteMultiplier ~/ 2));
+        _pageController.jumpToPage(initialPage);
+      }
+    });
+
     if (_cards.isEmpty) return const SizedBox.shrink();
 
     return SizedBox(

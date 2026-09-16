@@ -285,6 +285,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           ? result.shops
           : state.shops,
     );
+
   }
 
   /// Create a new shop for the current user.

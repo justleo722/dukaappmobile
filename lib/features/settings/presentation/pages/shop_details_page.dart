@@ -6,6 +6,7 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/core/network/api_exception.dart';
+import 'package:dukaapp/core/models/shop_config.dart';
 
 class ShopDetailsPage extends ConsumerStatefulWidget {
   const ShopDetailsPage({super.key});
@@ -102,6 +103,8 @@ class _ShopDetailsPageState extends ConsumerState<ShopDetailsPage> {
       if (!mounted) return;
       final status = res['status']?.toString() ?? '';
       if (status == 'success') {
+        // Refresh cached shop config so dashboard and other pages update.
+        ref.read(shopConfigProvider.notifier).refresh().ignore();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Shop details saved successfully'),
           backgroundColor: AppColors.success,

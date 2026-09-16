@@ -7,6 +7,7 @@ import 'package:dukaapp/core/utils/connectivity_service.dart';
 import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/core/database/local_database.dart';
 import 'package:dukaapp/core/database/database_service.dart';
+import 'package:dukaapp/core/models/shop_config.dart';
 import 'package:dukaapp/features/auth/data/datasources/auth_remote_datasource.dart';
 import 'package:dukaapp/features/auth/data/repositories/auth_repository.dart';
 
@@ -70,3 +71,64 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
     localStorage: ref.watch(localStorageProvider),
   );
 });
+
+/// Shop configuration fetched from API and cached in SharedPreferences.
+/// Use [shopConfigProvider] to read. Call [refreshShopConfig] after saving settings.
+final shopConfigProvider = AsyncNotifierProvider<ShopConfigNotifier, ShopConfig>(
+  ShopConfigNotifier.new,
+);
+
+class ShopConfigNotifier extends AsyncNotifier<ShopConfig> {
+  static const _cacheKey = 'shop_config_v1';
+  static const _cacheTtl = Duration(hours: 6);
+
+  @override
+  Future<ShopConfig> build() async {
+    // Return cached value immediately, then refresh in background.
+    final localStorage = ref.read(localStorageProvider);
+    final cached = await localStorage.getCachedValue(_cacheKey, ttl: _cacheTtl);
+    if (cached != null) {
+      try {
+        final config = ShopConfig.fromJson(cached);
+        // Refresh in background so cache stays fresh.
+        _fetchAndCache().ignore();
+        return config;
+      } catch (_) {}
+    }
+    return _fetchAndCache();
+  }
+
+  Future<ShopConfig> _fetchAndCache() async {
+    final api = ref.read(apiServiceProvider);
+    final localStorage = ref.read(localStorageProvider);
+    try {
+      final res = await api.getSessionShop();
+      final raw = res.data;
+      Map<String, dynamic>? map;
+      if (raw is Map<String, dynamic>) {
+        map = raw['data'] is Map ? raw['data'] as Map<String, dynamic> : raw;
+      } else if (raw is List && raw.isNotEmpty) {
+        map = raw.first as Map<String, dynamic>;
+      }
+      if (map != null) {
+        final config = ShopConfig.fromMap(map);
+        await localStorage.cacheWithTTL(_cacheKey, config.toJson(), _cacheTtl);
+        return config;
+      }
+    } catch (_) {}
+    return ShopConfig.defaults;
+  }
+
+  /// Call this after saving shop settings to refresh the cached config.
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(_fetchAndCache);
+  }
+
+  /// Invalidate cache (e.g. after shop switch).
+  Future<void> invalidate() async {
+    final localStorage = ref.read(localStorageProvider);
+    await localStorage.removeCache(_cacheKey);
+    ref.invalidateSelf();
+  }
+}

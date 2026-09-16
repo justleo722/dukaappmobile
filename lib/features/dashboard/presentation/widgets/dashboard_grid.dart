@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dukaapp/core/models/shop_config.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/dashboard/data/models/session_user_model.dart';
 import 'package:dukaapp/features/dashboard/presentation/constants/dashboard_constants.dart';
 import 'package:dukaapp/features/dashboard/presentation/widgets/dashboard_module_card.dart';
 
-class DashboardGrid extends StatelessWidget {
+class DashboardGrid extends ConsumerWidget {
   const DashboardGrid({super.key, required this.sessionUser});
 
   final SessionUserModel sessionUser;
@@ -49,8 +52,9 @@ class DashboardGrid extends StatelessWidget {
     }
   }
 
-  /// Returns only the modules the current user is allowed to see.
-  List<Map<String, dynamic>> _visibleModules() {
+  /// Returns only the modules the current user is allowed to see,
+  /// also respecting shop feature flags from [ShopConfig].
+  List<Map<String, dynamic>> _visibleModules(ShopConfig cfg) {
     final u = sessionUser;
     final all = DashboardConstants.moduleCards;
     return all.where((module) {
@@ -68,18 +72,16 @@ class DashboardGrid extends StatelessWidget {
         case 'Staff':
           return u.canSeeStaff;
         case 'Manufacturing':
-          return u.canSeeManufacturing;
+          return u.canSeeManufacturing && cfg.enableManufacturing;
         case 'Online Shop':
-          return u.canSeeOnlineShop;
+          return u.canSeeOnlineShop && cfg.enableOnlineStore;
         case 'Shop Settings':
           return u.canSeeSettings;
         case 'Renew':
-          // Always show Renew to owners; hide for attendants.
           return u.isOwner;
         case 'TMS Loans':
         case 'Microfinance':
-          // Show only to owners / managers for now.
-          return u.isOwner || u.isManager;
+          return (u.isOwner || u.isManager) && cfg.enableTms;
         default:
           return u.isOwner;
       }
@@ -87,8 +89,9 @@ class DashboardGrid extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final modules = _visibleModules();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cfg = ref.watch(shopConfigProvider).valueOrNull ?? ShopConfig.defaults;
+    final modules = _visibleModules(cfg);
     final screenWidth = MediaQuery.of(context).size.width;
     final isTablet = screenWidth > 600;
 

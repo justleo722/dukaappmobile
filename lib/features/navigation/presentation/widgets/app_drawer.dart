@@ -15,6 +15,7 @@ import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dar
 import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:dukaapp/features/customers/presentation/providers/customer_provider.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class AppDrawer extends ConsumerStatefulWidget {
   final VoidCallback? onRefresh;
@@ -40,6 +41,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
       // Invalidate all data providers so they reload with new shop's data
       ref.invalidate(dashboardProvider);
+      ref.read(shopConfigProvider.notifier).invalidate().ignore();
       ref.invalidate(stockProvider);
       ref.invalidate(salesProvider);
       ref.invalidate(ordersProvider);
