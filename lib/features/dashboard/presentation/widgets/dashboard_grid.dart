@@ -66,7 +66,7 @@ class DashboardGrid extends ConsumerWidget {
         case 'Purchase':
           return u.canSeePurchases;
         case 'Profit & Expenses':
-          return u.canSeeProfitExpenses;
+          return u.canSeeProfitExpenses && cfg.enableFinancialReports;
         case 'Accounts & Cashflow':
           return u.canSeeCashflow;
         case 'Staff':

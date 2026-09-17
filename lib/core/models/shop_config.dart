@@ -30,6 +30,8 @@ class ShopConfig {
   final bool enableBarcodeScanner;
   final bool enableFifoMode;
   final bool useWholesalePrice;
+  final bool enableQuickActions;
+  final bool enableFinancialReports;
 
   const ShopConfig({
     this.shopName = '',
@@ -56,6 +58,8 @@ class ShopConfig {
     this.enableBarcodeScanner = false,
     this.enableFifoMode = false,
     this.useWholesalePrice = false,
+    this.enableQuickActions = true,
+    this.enableFinancialReports = true,
   });
 
   static bool _b(dynamic v, {bool fallback = true}) {
@@ -91,6 +95,8 @@ class ShopConfig {
       enableBarcodeScanner: _b(m['enable_barcode_scanner'], fallback: false),
       enableFifoMode: _b(m['enable_fifo_mode'], fallback: false),
       useWholesalePrice: _b(m['use_wholesale_price'], fallback: false),
+      enableQuickActions: _b(m['enable_quick_actions']),
+      enableFinancialReports: _b(m['enable_financial_reports']),
     );
   }
 
@@ -119,6 +125,8 @@ class ShopConfig {
     'enable_barcode_scanner': enableBarcodeScanner ? '1' : '0',
     'enable_fifo_mode': enableFifoMode ? '1' : '0',
     'use_wholesale_price': useWholesalePrice ? '1' : '0',
+    'enable_quick_actions': enableQuickActions ? '1' : '0',
+    'enable_financial_reports': enableFinancialReports ? '1' : '0',
   };
 
   String toJson() => jsonEncode(toMap());

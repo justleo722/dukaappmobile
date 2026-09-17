@@ -9,6 +9,7 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/core/models/shop_config.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/add_sale_item_tile.dart';
 import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 import 'package:dukaapp/features/customers/presentation/pages/add_customer_page.dart';
@@ -27,7 +28,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   final TextEditingController _discountController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   String _selectedPaymentType = 'Cash';
-  bool _isWholesale = false;
+  bool _isWholesale = false; // initialized in initState from shopConfig
   bool get _isEditing => widget.existingSale != null;
 
   static const String _addNewCustomerValue = '__add_new_customer__';
@@ -53,6 +54,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   void initState() {
     super.initState();
     _items = [];
+    _isWholesale = ref.read(shopConfigProvider).valueOrNull?.useWholesalePrice ?? false;
     if (_isEditing) {
       _loadExistingSale();
     }
@@ -128,10 +130,15 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
     super.dispose();
   }
 
+  ShopConfig get _cfg => ref.read(shopConfigProvider).valueOrNull ?? ShopConfig.defaults;
+
   double get _totalAmount {
+    final useWholesale = _cfg.useWholesalePrice;
     double total = 0;
     for (final item in _items) {
-      final price = item['sellingPrice'] as double;
+      final price = useWholesale
+          ? (item['wholesalePrice'] as double? ?? item['sellingPrice'] as double)
+          : item['sellingPrice'] as double;
       final qty = item['quantity'] as int;
       final disc = item['discount'] as double;
       total += (price * qty) - disc;
@@ -450,11 +457,14 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
       // Build items in pipe format: product_id|stock_id|qty|price|discount|subtotal|vat|total
       // subtotal = gross (price * qty), NOT net. PHP's configuredVatTotals subtracts
       // discount from subtotal itself — sending net here would cause double deduction.
+      final useWholesale = _cfg.useWholesalePrice;
       final itemStrings = _items.map((item) {
         final productId = item['product_id'] ?? 0;
         final stockId = item['stock_id'] ?? '';
         final qty = item['quantity'] ?? 1;
-        final price = item['sellingPrice'] ?? 0.0;
+        final price = useWholesale
+            ? (item['wholesalePrice'] as double? ?? item['sellingPrice'] as double? ?? 0.0)
+            : (item['sellingPrice'] as double? ?? 0.0);
         final discount = item['discount'] ?? 0.0;
         final subtotal = price * qty;           // gross, before discount
         final net = subtotal - discount;        // net, after discount
@@ -799,21 +809,22 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
               ),
             ),
           ),
-          GestureDetector(
-            onTap: _openBarcodeScanner,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.qr_code_scanner_rounded,
-                color: AppColors.primary,
-                size: 20,
+          if (_cfg.enableBarcodeScanner)
+            GestureDetector(
+              onTap: _openBarcodeScanner,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.qr_code_scanner_rounded,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -1289,6 +1300,7 @@ class _ItemPickerContentState extends State<_ItemPickerContent> {
                     ),
                   ),
                 ),
+                if (_cfg.enableBarcodeScanner)
                 GestureDetector(
                   onTap: () {
                     Navigator.pop(context);

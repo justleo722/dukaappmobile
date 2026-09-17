@@ -27,6 +27,7 @@
 ///   final body = await svc.postSalesAdd({'items': [...], 'payment_mode': 'cash'});
 ///   if (body['status'] == true) { ... }
 
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:dukaapp/core/network/api_client.dart';
 import 'package:dukaapp/core/config/api_config.dart';
@@ -885,13 +886,12 @@ class ApiService {
   ///
   /// Sends as `application/x-www-form-urlencoded` so that PHP's `$_POST`
   /// and `$this->input->post()` receive the fields correctly.
-  /// The body is manually URI-encoded as a String to bypass Dio's base
-  /// `Content-Type: application/json` default header.
+  /// Uses ResponseType.plain so Dio never attempts to JSON-decode the body
+  /// itself — we decode manually in [_body], which tolerates mixed output.
   Future<Map<String, dynamic>> _post(
     String path,
     Map<String, dynamic> body,
   ) async {
-    // Manually build a URL-encoded string (supports bracket keys like shops[0]).
     final encoded = body.entries
         .where((e) => e.value != null)
         .map((e) =>
@@ -904,21 +904,29 @@ class ApiService {
       data: encoded,
       options: Options(
         contentType: 'application/x-www-form-urlencoded',
+        responseType: ResponseType.plain,
       ),
     );
     return _body(response);
   }
 
   /// Extract the JSON body from a [Response] as [Map<String,dynamic>].
+  /// Handles plain text, pre-decoded maps, and strips any PHP noise before JSON.
   Map<String, dynamic> _body(Response response) {
     final data = response.data;
     if (data is Map<String, dynamic>) return data;
-    if (data is String && data.isNotEmpty) {
-      try {
-        final decoded = (response.data as dynamic);
+    final raw = data?.toString() ?? '';
+    if (raw.isEmpty) return {};
+    try {
+      // Find the first '{' in case PHP emits warnings before the JSON.
+      final start = raw.indexOf('{');
+      final end = raw.lastIndexOf('}');
+      if (start != -1 && end != -1 && end > start) {
+        final jsonStr = raw.substring(start, end + 1);
+        final decoded = jsonDecode(jsonStr);
         if (decoded is Map<String, dynamic>) return decoded;
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
     return {};
   }
 

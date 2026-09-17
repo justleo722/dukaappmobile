@@ -88,18 +88,14 @@ class _CustomFeaturesPageState extends ConsumerState<CustomFeaturesPage> {
   Future<void> _loadSettings() async {
     try {
       final api = ref.read(apiServiceProvider);
-      final res = await api.getShopSettings();
+      // getSessionShop returns actual shop row with all setting values
+      final res = await api.getSessionShop();
       final raw = res.data;
-      // shop_settings returns a list of {key, value} or a plain map
       Map<String, dynamic> s = {};
-      if (raw is List) {
-        for (final row in raw) {
-          if (row is Map && row['key'] != null) {
-            s[row['key'].toString()] = row['value'];
-          }
-        }
-      } else if (raw is Map<String, dynamic>) {
+      if (raw is Map<String, dynamic>) {
         s = raw['data'] is Map ? raw['data'] as Map<String, dynamic> : raw;
+      } else if (raw is List && raw.isNotEmpty) {
+        s = raw.first as Map<String, dynamic>;
       }
       if (!mounted) return;
       setState(() {
@@ -135,8 +131,8 @@ class _CustomFeaturesPageState extends ConsumerState<CustomFeaturesPage> {
         _showServiceProvider   = _b(s['served_by']          ?? _showServiceProvider);
         final vr = s['vat_rate']?.toString();
         if (vr != null && vr.isNotEmpty) _vatRateController.text = vr;
-        final vp = s['vat_policy']?.toString() ?? '';
-        if (['Inclusive','Exclusive'].contains(vp)) _vatPolicy = vp;
+        final vp = s['vat_policy']?.toString().toLowerCase() ?? '';
+        if (['inclusive','exclusive'].contains(vp)) _vatPolicy = vp;
         _traClientIdController.text       = s['vfd_client_id']?.toString()       ?? '';
         _traClientPasswordController.text = s['vfd_client_password']?.toString() ?? '';
         _customerMessageController.text   = s['message_template']?.toString()    ?? '';
@@ -225,6 +221,7 @@ class _CustomFeaturesPageState extends ConsumerState<CustomFeaturesPage> {
       if (!mounted) return;
       final status = res['status']?.toString() ?? '';
       if (status == 'success') {
+        ref.read(shopConfigProvider.notifier).refresh().ignore();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Custom features saved successfully'),
           backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
