@@ -1222,6 +1222,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
       formatCurrency: _formatCurrency,
       onAddItem: _addSelectedItem,
       onScanBarcode: _openBarcodeScanner,
+      enableBarcodeScanner: _cfg.enableBarcodeScanner,
     );
   }
 }
@@ -1231,12 +1232,14 @@ class _ItemPickerContent extends StatefulWidget {
   final String Function(double) formatCurrency;
   final void Function(Map<String, dynamic>) onAddItem;
   final VoidCallback onScanBarcode;
+  final bool enableBarcodeScanner;
 
   const _ItemPickerContent({
     required this.allProducts,
     required this.formatCurrency,
     required this.onAddItem,
     required this.onScanBarcode,
+    required this.enableBarcodeScanner,
   });
 
   @override
@@ -1300,7 +1303,7 @@ class _ItemPickerContentState extends State<_ItemPickerContent> {
                     ),
                   ),
                 ),
-                if (_cfg.enableBarcodeScanner)
+                if (widget.enableBarcodeScanner)
                 GestureDetector(
                   onTap: () {
                     Navigator.pop(context);

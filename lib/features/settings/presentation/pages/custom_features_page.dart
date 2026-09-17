@@ -38,7 +38,7 @@ class _CustomFeaturesPageState extends ConsumerState<CustomFeaturesPage> {
   final _vatRateController = TextEditingController(text: '18');
   final _traClientIdController = TextEditingController();
   final _traClientPasswordController = TextEditingController();
-  String _vatPolicy = 'Inclusive';
+  String _vatPolicy = 'inclusive';
   bool _isVerified = false;
 
   // Product features
@@ -470,7 +470,7 @@ class _CustomFeaturesPageState extends ConsumerState<CustomFeaturesPage> {
             title: 'VAT Policy',
             child: _buildCompactDropdown<String>(
               value: _vatPolicy,
-              items: ['Inclusive', 'Exclusive'],
+              items: ['inclusive', 'exclusive'],
               onChanged: (val) => setState(() => _vatPolicy = val!),
             ),
           ),
@@ -1022,9 +1022,11 @@ class _CustomFeaturesPageState extends ConsumerState<CustomFeaturesPage> {
         icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: AppColors.textHint),
         style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary),
         items: items.map((item) {
+          final label = item.toString();
+          final display = label.isEmpty ? label : label[0].toUpperCase() + label.substring(1);
           return DropdownMenuItem<T>(
             value: item,
-            child: Text(item.toString(), style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary)),
+            child: Text(display, style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary)),
           );
         }).toList(),
         onChanged: onChanged,

@@ -5,7 +5,7 @@ class ApiConfig {
   // Production → https://dukaapp.com (root, no subfolder)
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2',
+    defaultValue: 'http://localhost',
   );
   static const String _subFolder = '/dukaapp';
 
