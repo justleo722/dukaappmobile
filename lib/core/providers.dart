@@ -7,6 +7,7 @@ import 'package:dukaapp/core/utils/connectivity_service.dart';
 import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/core/database/local_database.dart';
 import 'package:dukaapp/core/database/database_service.dart';
+import 'package:dukaapp/core/services/local_cache_service.dart';
 import 'package:dukaapp/core/models/shop_config.dart';
 import 'package:dukaapp/features/auth/data/datasources/auth_remote_datasource.dart';
 import 'package:dukaapp/features/auth/data/repositories/auth_repository.dart';
@@ -57,6 +58,10 @@ final localDatabaseProvider = Provider<LocalDatabase>((ref) {
 /// This is what feature datasources inject.
 final databaseServiceProvider = Provider<DatabaseService>((ref) {
   return DatabaseService(ref.watch(localDatabaseProvider));
+});
+
+final localCacheProvider = Provider<LocalCacheService>((ref) {
+  return LocalCacheService(ref.watch(databaseServiceProvider));
 });
 
 final authRemoteDatasourceProvider = Provider<AuthRemoteDatasource>((ref) {

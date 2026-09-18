@@ -1,13 +1,16 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/expenses/data/models/expense_models.dart';
 import 'package:dukaapp/features/expenses/presentation/providers/expense_provider.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class ProfitExpensesPage extends ConsumerStatefulWidget {
   const ProfitExpensesPage({super.key});
@@ -21,30 +24,90 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
 
   List<ExpenseItem> _expenses = [];
   List<ExpenseAccount> _expenseAccounts = [];
+  List<ExpenseAccount> _cashbookAccounts = [];
   bool _isLoading = false;
   ExpenseSummary _summary = ExpenseSummary.empty;
+
+  static const _kCategoryCache = 'expense_accounts_cache';
+  static const _kCashbookCache = 'cashbook_accounts_cache';
+
+  Future<void> _saveAccountsCache(String key, List<ExpenseAccount> list) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final json = list.map((a) => {'account_id': a.accountId, 'account_name': a.name}).toList();
+      await prefs.setString(key, jsonEncode(json));
+    } catch (_) {}
+  }
+
+  Future<List<ExpenseAccount>> _loadAccountsCache(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(key);
+      if (raw == null) return [];
+      final list = jsonDecode(raw) as List;
+      return list.map((j) => ExpenseAccount(
+        accountId: j['account_id']?.toString() ?? '',
+        name: j['account_name']?.toString() ?? '',
+      )).where((a) => a.accountId.isNotEmpty).toList();
+    } catch (_) {
+      return [];
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadExpenses());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Load from cache first so dropdowns are ready immediately
+      final cachedCategories = await _loadAccountsCache(_kCategoryCache);
+      final cachedCashbook = await _loadAccountsCache(_kCashbookCache);
+      if (mounted && (cachedCategories.isNotEmpty || cachedCashbook.isNotEmpty)) {
+        setState(() {
+          if (cachedCategories.isNotEmpty) _expenseAccounts = cachedCategories;
+          if (cachedCashbook.isNotEmpty) _cashbookAccounts = cachedCashbook;
+        });
+      }
+      _loadExpenses();
+    });
   }
 
   Future<void> _loadExpenses({String? from, String? to}) async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
+    // Serve cached expenses immediately
+    final cache = ref.read(localCacheProvider);
+    final cachedExpenses = await cache.loadList('expenses', 'list');
+    if (mounted && cachedExpenses.isNotEmpty) {
+      setState(() { _expenses = cachedExpenses.map(ExpenseItem.fromJson).toList(); });
+    } else {
+      setState(() => _isLoading = true);
+    }
     try {
       final repo = ref.read(expenseRepositoryProvider);
       final results = await Future.wait([
         repo.fetchExpenses(from: from, to: to),
         repo.fetchExpenseSummary(from: from, to: to),
         repo.fetchExpenseAccounts(),
+        repo.fetchCashbookAccounts(),
       ]);
       if (!mounted) return;
+      final fetchedCategories = results[2] as List<ExpenseAccount>;
+      final fetchedCashbook = results[3] as List<ExpenseAccount>;
+      // Persist to local cache
+      if (fetchedCategories.isNotEmpty) _saveAccountsCache(_kCategoryCache, fetchedCategories);
+      if (fetchedCashbook.isNotEmpty) _saveAccountsCache(_kCashbookCache, fetchedCashbook);
+      final freshExpenses = results[0] as List<ExpenseItem>;
+      if (freshExpenses.isNotEmpty) {
+        cache.save('expenses', 'list', freshExpenses.map((e) => {
+          'flow_id': e.flowId, 'record_date': e.date, 'title': e.title,
+          'account_name': e.category, 'amount': e.amount,
+          'currency': e.currency, 'note': e.note,
+        }).toList());
+      }
       setState(() {
-        _expenses = results[0] as List<ExpenseItem>;
+        _expenses = freshExpenses;
         _summary = results[1] as ExpenseSummary;
-        _expenseAccounts = results[2] as List<ExpenseAccount>;
+        if (fetchedCategories.isNotEmpty) _expenseAccounts = fetchedCategories;
+        if (fetchedCashbook.isNotEmpty) _cashbookAccounts = fetchedCashbook;
         _isLoading = false;
       });
     } catch (_) {
@@ -83,24 +146,51 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
     super.dispose();
   }
 
-  void _showAddExpenseDialog() {
-    String? selectedCategoryId;   // to_account_id (expense category account)
-    String? selectedAccountId;    // from_account_id (cashbook/cash account)
+  Future<void> _showAddExpenseDialog() async {
+    // Ensure categories are loaded before opening dialog
+    List<ExpenseAccount> expenseAccounts = List.of(_expenseAccounts);
+    List<ExpenseAccount> cashbookAccounts = List.of(_cashbookAccounts);
+
+    if (expenseAccounts.isEmpty || cashbookAccounts.isEmpty) {
+      try {
+        final repo = ref.read(expenseRepositoryProvider);
+        final results = await Future.wait([
+          if (expenseAccounts.isEmpty) repo.fetchExpenseAccounts()
+              else Future.value(<ExpenseAccount>[]),
+          if (cashbookAccounts.isEmpty) repo.fetchCashbookAccounts()
+              else Future.value(<ExpenseAccount>[]),
+        ]);
+        final fetched = results[0] as List<ExpenseAccount>;
+        final fetchedCb = results[1] as List<ExpenseAccount>;
+        if (fetched.isNotEmpty) {
+          expenseAccounts = fetched;
+          if (mounted) setState(() => _expenseAccounts = fetched);
+          _saveAccountsCache(_kCategoryCache, fetched);
+        }
+        if (fetchedCb.isNotEmpty) {
+          cashbookAccounts = fetchedCb;
+          if (mounted) setState(() => _cashbookAccounts = fetchedCb);
+          _saveAccountsCache(_kCashbookCache, fetchedCb);
+        }
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+
+    String? selectedCategoryId;
+    String? selectedAccountId;
     final nameController = TextEditingController();
     final amountController = TextEditingController();
     final notesController = TextEditingController();
     DateTime selectedDate = DateTime.now();
-
-    // Use API accounts; fallback labels only
-    final expenseAccounts = _expenseAccounts;
-    final accounts = ['Bank', 'Cash', 'Mobile Money'];
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => Container(
+        builder: (ctx, setDialogState) {
+          return Container(
           height: MediaQuery.of(ctx).size.height * 0.85,
           decoration: const BoxDecoration(
             color: AppColors.card,
@@ -163,14 +253,10 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
                                     style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
                                   ),
                                   isExpanded: true,
-                                  items: expenseAccounts.isNotEmpty
-                                      ? expenseAccounts.map((a) => DropdownMenuItem(
-                                            value: a.accountId,
-                                            child: Text(a.name, style: AppTypography.bodyMedium),
-                                          )).toList()
-                                      : ['Rent', 'Salaries', 'Utilities', 'Food', 'Transport', 'Maintenance', 'Operations', 'Miscellaneous']
-                                          .map((c) => DropdownMenuItem(value: c, child: Text(c, style: AppTypography.bodyMedium)))
-                                          .toList(),
+                                  items: expenseAccounts.map((a) => DropdownMenuItem(
+                                        value: a.accountId,
+                                        child: Text(a.name, style: AppTypography.bodyMedium),
+                                      )).toList(),
                                   onChanged: (v) => setDialogState(() => selectedCategoryId = v),
                                 ),
                               ),
@@ -335,12 +421,14 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
                               style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
                             ),
                             isExpanded: true,
-                            items: accounts.map((a) {
-                              return DropdownMenuItem(
-                                value: a,
-                                child: Text(a, style: AppTypography.bodyMedium),
-                              );
-                            }).toList(),
+                            items: cashbookAccounts.isNotEmpty
+                                ? cashbookAccounts.map((a) => DropdownMenuItem(
+                                      value: a.accountId,
+                                      child: Text(a.name, style: AppTypography.bodyMedium),
+                                    )).toList()
+                                : ['Cash', 'Bank', 'Mobile Money']
+                                    .map((a) => DropdownMenuItem(value: a, child: Text(a, style: AppTypography.bodyMedium)))
+                                    .toList(),
                             onChanged: (v) => setDialogState(() => selectedAccountId = v),
                           ),
                         ),
@@ -417,19 +505,37 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
                         child: ElevatedButton.icon(
                           onPressed: () async {
                             if (nameController.text.isNotEmpty && amountController.text.isNotEmpty) {
-                              Navigator.pop(ctx);
+                              if (selectedCategoryId == null || selectedAccountId == null) {
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  const SnackBar(content: Text('Select expense category and cash account')),
+                                );
+                                return;
+                              }
                               try {
                                 final repo = ref.read(expenseRepositoryProvider);
-                                await repo.addExpense({
+                                final result = await repo.addExpense({
                                   'title': nameController.text.trim(),
                                   'amount': double.tryParse(amountController.text) ?? 0,
                                   'record_date': DateFormat('yyyy-MM-dd').format(selectedDate),
                                   'note': notesController.text.trim(),
-                                  if (selectedCategoryId != null) 'to_account_id': selectedCategoryId,
-                                  if (selectedAccountId != null) 'from_account_id': selectedAccountId,
+                                  'to_account_id': selectedCategoryId,
+                                  'from_account_id': selectedAccountId,
                                 });
+                                final status = result['status']?.toString() ?? '';
+                                if (status != 'success') {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(result['message']?.toString() ?? 'Failed to save expense'),
+                                      backgroundColor: Colors.orange,
+                                    ),
+                                  );
+                                  return;
+                                }
                                 if (!mounted) return;
+                                Navigator.pop(ctx);
                                 await _loadExpenses();
+                                if (!mounted) return;
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
@@ -471,7 +577,8 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
               ),
             ],
           ),
-        ),
+        );
+        },
       ),
     );
   }

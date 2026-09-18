@@ -41,8 +41,9 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
   final Set<int> _selectedProducts = {};
   bool _isSaving = false;
 
-  List<Map<String, dynamic>> _getFilteredProducts() {
-    final stockState = ref.watch(stockProvider);
+  List<Map<String, dynamic>> _getFilteredProducts({bool watch = false}) {
+    // Use ref.read when called from event handlers (outside build), ref.watch in build.
+    final stockState = watch ? ref.watch(stockProvider) : ref.read(stockProvider);
     final allProducts = stockState.whenOrNull(
           data: (s) => s.products
               .map((p) => {'name': p.name, 'stock': p.available.toInt(), 'product_id': p.productId, 'stock_id': p.stockId})
@@ -72,12 +73,13 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
   void _addSelectedProducts() {
     final products = _getFilteredProducts();
     int addedCount = 0;
+    final toAdd = <_AdjustItem>[];
     for (final index in _selectedProducts) {
       if (index >= products.length) continue;
       final product = products[index];
       final name = product['name'] as String;
       if (_items.any((item) => item.name == name)) continue;
-      _items.add(_AdjustItem(
+      toAdd.add(_AdjustItem(
         name: name,
         currentStock: (product['stock'] as num?)?.toInt() ?? 0,
         productId: product['product_id'],
@@ -85,7 +87,10 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
       ));
       addedCount++;
     }
-    setState(() => _selectedProducts.clear());
+    setState(() {
+      _items.addAll(toAdd);
+      _selectedProducts.clear();
+    });
     if (addedCount > 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -227,8 +232,9 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
                         adjustedQuantity: _totalAdjustedQuantity,
                         adjustmentTypeCount: _adjustmentTypeCount,
                       ),
+                      const SizedBox(height: 16),
                     ],
-                    if (_items.isEmpty) _buildProductList(),
+                    _buildProductList(),
                     SizedBox(height: 24 + bottomPadding),
                   ],
                 ),
@@ -402,7 +408,7 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
   }
 
   Widget _buildProductsHeader() {
-    final products = _getFilteredProducts();
+    final products = _getFilteredProducts(watch: true);
     final selectableIndices = products
         .asMap()
         .keys
@@ -437,7 +443,7 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
             style: AppTypography.label.copyWith(color: AppColors.textPrimary),
           ),
           const Spacer(),
-          if (_items.isEmpty && products.isNotEmpty) ...[
+          if (products.isNotEmpty) ...[
             SizedBox(
               width: 24,
               height: 24,

@@ -15,6 +15,9 @@ class ExpenseRepository {
   Future<List<ExpenseAccount>> fetchExpenseAccounts() =>
       _remote.fetchExpenseAccounts();
 
+  Future<List<ExpenseAccount>> fetchCashbookAccounts() =>
+      _remote.fetchCashbookAccounts();
+
   Future<Map<String, dynamic>> addExpense(Map<String, dynamic> body) =>
       _remote.addExpense(body);
 

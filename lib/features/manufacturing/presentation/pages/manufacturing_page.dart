@@ -6,6 +6,7 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/core/services/local_cache_service.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 
 class ManufacturingPage extends ConsumerStatefulWidget {
@@ -27,33 +28,44 @@ class _ManufacturingPageState extends ConsumerState<ManufacturingPage> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+    // Serve cache immediately
+    final cache = ref.read(localCacheProvider);
+    final cached = await cache.loadList('manufacturing', 'products');
+    if (mounted && cached.isNotEmpty) {
+      setState(() { _products = cached; _isLoading = false; });
+    } else {
+      setState(() => _isLoading = true);
+    }
     try {
       final api = ref.read(apiServiceProvider);
       final res = await api.getMfManufacturedProducts();
       final body = res.data;
       List<Map<String, dynamic>> products = [];
-      if (body is Map) {
+      List<dynamic> rawList = [];
+      if (body is List) {
+        rawList = body;
+      } else if (body is Map) {
         final data = body['data'] ?? body['products'] ?? body;
-        if (data is List) {
-          products = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        }
+        if (data is List) rawList = data;
       }
+      products = rawList.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+
       // Also fetch recipe count
       try {
         final recipeRes = await api.getMfRecipes();
         final rb = recipeRes.data;
-        if (rb is Map) {
-          final rd = rb['data'] ?? rb['recipes'] ?? rb;
-          if (rd is List) _recipeCount = rd.length;
-        }
+        List<dynamic> rl = [];
+        if (rb is List) rl = rb;
+        else if (rb is Map) { final d = rb['data'] ?? rb['recipes'] ?? rb; if (d is List) rl = d; }
+        _recipeCount = rl.length;
       } catch (_) {}
+      if (products.isNotEmpty) cache.save('manufacturing', 'products', products);
       setState(() {
         _products = products;
         _isLoading = false;
       });
     } catch (_) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

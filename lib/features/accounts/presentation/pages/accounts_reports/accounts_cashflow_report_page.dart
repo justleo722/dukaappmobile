@@ -207,7 +207,7 @@ class _AccountsCashflowReportPageState extends ConsumerState<AccountsCashflowRep
       header: (_) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
         pw.Text(widget.title, style: pw.TextStyle(font: pw.Font.helveticaBold(), fontSize: 16)),
         pw.SizedBox(height: 2),
-        pw.Text('DukaApp  •  $now', style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
+        pw.Text('${ref.read(shopNameProvider).valueOrNull ?? 'My Shop'}  •  $now', style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
         pw.SizedBox(height: 4), pw.Divider(), pw.SizedBox(height: 4),
       ]),
       build: (_) => [pw.TableHelper.fromTextArray(

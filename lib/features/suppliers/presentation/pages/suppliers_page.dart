@@ -7,6 +7,7 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/suppliers/data/models/supplier_model.dart';
 import 'package:dukaapp/features/suppliers/presentation/providers/supplier_provider.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/features/suppliers/presentation/pages/credit_purchases_page.dart';
 import 'package:dukaapp/features/suppliers/presentation/pages/cash_purchases_page.dart';
@@ -37,11 +38,21 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
 
   Future<void> _loadSuppliers() async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
+    // Serve cache immediately
+    final cache = ref.read(localCacheProvider);
+    final cached = await cache.loadList('suppliers', 'list');
+    if (mounted && cached.isNotEmpty) {
+      final list = cached.map(Supplier.fromJson).toList();
+      setState(() { _suppliers = list; _filteredSuppliers = List.from(list); });
+    } else {
+      setState(() => _isLoading = true);
+    }
+    // Fetch fresh from API
     try {
       final repo = ref.read(supplierRepositoryProvider);
       final list = await repo.fetchSuppliers();
       if (!mounted) return;
+      cache.save('suppliers', 'list', list.map((s) => s.toJson()).toList());
       setState(() {
         _suppliers = list;
         _filteredSuppliers = List.from(list);

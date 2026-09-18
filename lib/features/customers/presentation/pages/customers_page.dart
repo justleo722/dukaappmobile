@@ -8,6 +8,7 @@ import 'package:dukaapp/features/customers/data/models/customer_model.dart';
 import 'package:dukaapp/features/customers/presentation/providers/customer_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class CustomersPage extends ConsumerStatefulWidget {
   const CustomersPage({super.key});
@@ -30,12 +31,22 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
 
   Future<void> _loadCustomers() async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
+    // Serve cache immediately
+    final cache = ref.read(localCacheProvider);
+    final cached = await cache.loadList('customers', 'list');
+    if (mounted && cached.isNotEmpty) {
+      final list = cached.map(Customer.fromJson).toList();
+      setState(() { _customers = list; _filteredCustomers = List.from(list); });
+    } else {
+      setState(() => _isLoading = true);
+    }
+    // Fetch fresh from API
     try {
       final filter = ref.read(filterProvider);
       final repo = ref.read(customerRepositoryProvider);
       final customers = await repo.fetchCustomers(from: filter.from, to: filter.to);
       if (!mounted) return;
+      cache.save('customers', 'list', customers.map((c) => c.toJson()).toList());
       setState(() {
         _customers = customers;
         _filteredCustomers = List.from(customers);
