@@ -44,9 +44,6 @@ class DashboardGrid extends ConsumerWidget {
       case 'Renew':
         context.push('/renew');
         break;
-      case 'TMS Loans':
-        context.push('/tms');
-        break;
       default:
         break;
     }
@@ -79,9 +76,6 @@ class DashboardGrid extends ConsumerWidget {
           return u.canSeeSettings;
         case 'Renew':
           return u.isOwner;
-        case 'TMS Loans':
-        case 'Microfinance':
-          return (u.isOwner || u.isManager) && cfg.enableTms;
         default:
           return u.isOwner;
       }

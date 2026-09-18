@@ -23,7 +23,6 @@ class ShopConfig {
   final String vatPolicy;
   final bool enableManufacturing;
   final bool enableOnlineStore;
-  final bool enableTms;
   final bool enableReceiptMode;
   final bool enablePrinter;
   final bool enableEfd;
@@ -51,7 +50,6 @@ class ShopConfig {
     this.vatPolicy = 'exclusive',
     this.enableManufacturing = false,
     this.enableOnlineStore = false,
-    this.enableTms = false,
     this.enableReceiptMode = false,
     this.enablePrinter = false,
     this.enableEfd = false,
@@ -88,7 +86,6 @@ class ShopConfig {
       vatPolicy: m['vat_policy']?.toString() ?? 'exclusive',
       enableManufacturing: _b(m['enable_manufacturing'], fallback: false),
       enableOnlineStore: _b(m['enable_online_store'], fallback: false),
-      enableTms: _b(m['enable_tms'], fallback: false),
       enableReceiptMode: _b(m['enable_receipt_mode'], fallback: false),
       enablePrinter: _b(m['enable_printer'], fallback: false),
       enableEfd: _b(m['enable_efd'], fallback: false),
@@ -118,7 +115,6 @@ class ShopConfig {
     'vat_policy': vatPolicy,
     'enable_manufacturing': enableManufacturing ? '1' : '0',
     'enable_online_store': enableOnlineStore ? '1' : '0',
-    'enable_tms': enableTms ? '1' : '0',
     'enable_receipt_mode': enableReceiptMode ? '1' : '0',
     'enable_printer': enablePrinter ? '1' : '0',
     'enable_efd': enableEfd ? '1' : '0',

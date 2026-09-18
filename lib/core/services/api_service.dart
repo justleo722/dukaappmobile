@@ -817,17 +817,6 @@ class ApiService {
   Future<Map<String, dynamic>> postMicrofinanceLoanRecordUpdate(Map<String, dynamic> body) =>
       _post(ApiEndpoints.postMicrofinanceLoanRecordUpdate, body);
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // TMS / PACKAGES / LOBS
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  Future<Response> getTms() =>
-      _client.get(ApiEndpoints.getDataTms);
-
-  /// Submit a TMS loan eligibility application (hits Tms::eligibility directly).
-  Future<Map<String, dynamic>> postTmsApply() =>
-      _post(ApiEndpoints.postTmsApply, {});
-
   Future<Response> getPackages() =>
       _client.get(ApiEndpoints.getDataPackages);
 

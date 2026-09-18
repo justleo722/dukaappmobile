@@ -54,7 +54,6 @@ class _CustomFeaturesPageState extends ConsumerState<CustomFeaturesPage> {
 
   // Module features
   bool _enableManufacturing = true;
-  bool _enableTms = false;
   bool _enableMicrofinance = false;
   bool _enableOnlineShop = true;
 
@@ -118,7 +117,6 @@ class _CustomFeaturesPageState extends ConsumerState<CustomFeaturesPage> {
         _addProductByImage     = _b(s['upload_by_image']    ?? _addProductByImage);
         _enableBarcodeScanner  = _b(s['enable_barcode_scanner'] ?? _enableBarcodeScanner);
         _enableManufacturing   = _b(s['enable_manufacturing']?? _enableManufacturing);
-        _enableTms             = _b(s['enable_tms']          ?? _enableTms);
         _enableMicrofinance    = _b(s['enable_microfinance'] ?? _enableMicrofinance);
         _enableOnlineShop      = _b(s['enable_online_store'] ?? _enableOnlineShop);
         _defaultTodayFilter    = _b(s['make_default_filter_today'] ?? _defaultTodayFilter);
@@ -210,7 +208,6 @@ class _CustomFeaturesPageState extends ConsumerState<CustomFeaturesPage> {
         'upload_by_image':    s(_addProductByImage),
         'enable_barcode_scanner': s(_enableBarcodeScanner),
         'enable_manufacturing':   s(_enableManufacturing),
-        'enable_tms':         s(_enableTms),
         'enable_microfinance':s(_enableMicrofinance),
         'enable_online_store':s(_enableOnlineShop),
         'make_default_filter_today': s(_defaultTodayFilter),
@@ -772,12 +769,6 @@ class _CustomFeaturesPageState extends ConsumerState<CustomFeaturesPage> {
           title: 'Enable Manufacturing Module',
           value: _enableManufacturing,
           onChanged: (val) => setState(() => _enableManufacturing = val),
-        ),
-        const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.divider),
-        _FeatureToggle(
-          title: 'Enable TMS Module',
-          value: _enableTms,
-          onChanged: (val) => setState(() => _enableTms = val),
         ),
         const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.divider),
         _FeatureToggle(

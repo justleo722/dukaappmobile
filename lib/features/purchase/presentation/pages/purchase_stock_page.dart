@@ -212,6 +212,13 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
         _suppliers = suppliers;
         _accountIdMap  = accountIdMap;
         _supplierIdMap = supplierIdMap;
+        // Default to Cash account; fall back to first account if Cash not found
+        if (_selectedAccount == null && accounts.isNotEmpty) {
+          _selectedAccount = accounts.firstWhere(
+            (a) => a.toLowerCase() == 'cash',
+            orElse: () => accounts.first,
+          );
+        }
       });
     } catch (e) {
       if (mounted) {
@@ -800,6 +807,8 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                         purchaseBody['type']         = widget.createMode ? 'order' : 'restock';
                         await repo.createPurchase(purchaseBody);
                         if (!mounted) return;
+                        // Invalidate stock cache so balance reflects the restock
+                        ref.read(stockProvider.notifier).refresh();
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                           content: Text(
                             widget.editMode ? 'Purchase order updated successfully' : 'Purchase saved successfully',

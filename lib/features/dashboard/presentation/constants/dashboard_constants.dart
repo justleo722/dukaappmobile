@@ -163,13 +163,6 @@ class DashboardConstants {
       'bgColor': Color(0xFFE0FFF9),
     },
     {
-      'title': 'TMS Loans',
-      'description': 'Loan eligibility services.',
-      'icon': Icons.request_quote_rounded,
-      'color': Color(0xFFF97316),
-      'bgColor': Color(0xFFFFF4E6),
-    },
-    {
       'title': 'Microfinance',
       'description': 'Loan and repayment management.',
       'icon': Icons.payments_rounded,

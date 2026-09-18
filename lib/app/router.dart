@@ -119,7 +119,6 @@ import 'package:dukaapp/features/online_shop/presentation/pages/storefront_page.
 import 'package:dukaapp/features/online_shop/presentation/pages/shopping_cart_page.dart';
 import 'package:dukaapp/features/online_shop/presentation/pages/online_shop_checkout_page.dart';
 import 'package:dukaapp/features/online_shop/presentation/pages/product_details_page.dart';
-import 'package:dukaapp/features/tms/presentation/pages/tms_page.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -483,11 +482,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             },
           ),
         ],
-      ),
-      GoRoute(
-        path: '/tms',
-        name: 'tms',
-        builder: (context, state) => const TmsPage(),
       ),
       GoRoute(
         path: '/manufacturing',

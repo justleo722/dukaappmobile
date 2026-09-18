@@ -309,11 +309,6 @@ abstract final class ApiEndpoints {
   /// Activity / audit log entries.
   static final getDataLogs           = _g('logs');
 
-  // ── TMS ───────────────────────────────────────────────────────────────
-
-  /// TMS loan-eligibility data.
-  static final getDataTms = _g('tms');
-
   // ── Super admin ───────────────────────────────────────────────────────
 
   static final getDataSuperadminDashboard = _g('superadmin_dashboard');
@@ -588,12 +583,6 @@ abstract final class ApiEndpoints {
   /// Create a supplier wallet transaction.
   static final postWalletSupplierCreate = _p('wallet/supplier/create');
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // TMS (direct controller endpoints — not postdata/getdata)
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  /// Submit a TMS loan eligibility application.
-  static const String postTmsApply = '${ApiConfig.appApiBase}/Tms/eligibility';
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Private helpers
