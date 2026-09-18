@@ -165,43 +165,55 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
   Future<void> _loadAccountsAndSuppliers() async {
     try {
       final api = ref.read(apiServiceProvider);
-      // Load accounts
+      // Load accounts — API may return a raw List or a Map wrapping a List
       final acctRes = await api.getCashbookAccounts();
       final acctBody = acctRes.data;
       List<String> accounts = [];
       Map<String, String> accountIdMap = {};
-      if (acctBody is Map) {
+      List<dynamic> acctList = [];
+      if (acctBody is List) {
+        acctList = acctBody;
+      } else if (acctBody is Map) {
         final data = acctBody['data'] ?? acctBody['accounts'] ?? acctBody;
-        if (data is List) {
-          for (final e in data) {
-            final name = (e['account_name'] ?? e['name'] ?? '').toString();
-            final id   = (e['account_id'] ?? e['id'] ?? '').toString();
-            if (name.isNotEmpty) { accounts.add(name); accountIdMap[name] = id; }
-          }
-        }
+        if (data is List) acctList = data;
       }
-      // Load suppliers
+      for (final e in acctList) {
+        final name = (e['account_name'] ?? e['name'] ?? '').toString();
+        final id   = (e['account_id'] ?? e['id'] ?? '').toString();
+        if (name.isNotEmpty) { accounts.add(name); accountIdMap[name] = id; }
+      }
+
+      // Load suppliers — same shape flexibility
       final suppRes = await api.getSuppliers();
       final suppBody = suppRes.data;
       List<String> suppliers = [];
       Map<String, String> supplierIdMap = {};
-      if (suppBody is Map) {
+      List<dynamic> suppList = [];
+      if (suppBody is List) {
+        suppList = suppBody;
+      } else if (suppBody is Map) {
         final data = suppBody['data'] ?? suppBody['suppliers'] ?? suppBody;
-        if (data is List) {
-          for (final e in data) {
-            final name = (e['supplier_name'] ?? e['name'] ?? '').toString();
-            final id   = (e['supplier_id'] ?? e['id'] ?? '').toString();
-            if (name.isNotEmpty) { suppliers.add(name); supplierIdMap[name] = id; }
-          }
-        }
+        if (data is List) suppList = data;
       }
+      for (final e in suppList) {
+        final name = (e['supplier_name'] ?? e['name'] ?? '').toString();
+        final id   = (e['supplier_id'] ?? e['id'] ?? '').toString();
+        if (name.isNotEmpty) { suppliers.add(name); supplierIdMap[name] = id; }
+      }
+
       if (mounted) setState(() {
         _accounts = accounts;
         _suppliers = suppliers;
         _accountIdMap  = accountIdMap;
         _supplierIdMap = supplierIdMap;
       });
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load accounts: $e')),
+        );
+      }
+    }
   }
 
   void _addInitialProduct(Map<String, dynamic> product) {

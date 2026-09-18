@@ -9,6 +9,81 @@ class StockRemoteDatasource {
 
   StockRemoteDatasource(this._client);
 
+  /// Encode [map] as a URL-encoded string and POST it, with plain response
+  /// type so PHP warnings before JSON don't crash the parser.
+  Future<Map<String, dynamic>> _formPost(
+    String path,
+    Map<String, dynamic> map,
+  ) async {
+    final encoded = map.entries
+        .where((e) => e.value != null)
+        .map((e) =>
+            '${Uri.encodeQueryComponent(e.key)}='
+            '${Uri.encodeQueryComponent(e.value.toString())}')
+        .join('&');
+    final res = await _client.post(
+      path,
+      data: encoded,
+      options: Options(
+        contentType: 'application/x-www-form-urlencoded',
+        responseType: ResponseType.plain,
+      ),
+    );
+    return _jsonFromPlain(res.data);
+  }
+
+  /// Encode Lists with PHP bracket notation: key[0]=v0&key[1]=v1
+  String _encodeBracketForm(Map<String, dynamic> map) {
+    final parts = <String>[];
+    for (final entry in map.entries) {
+      final v = entry.value;
+      if (v is List) {
+        for (int i = 0; i < v.length; i++) {
+          parts.add(
+            '${Uri.encodeQueryComponent('${entry.key}[$i]')}='
+            '${Uri.encodeQueryComponent(v[i]?.toString() ?? '')}',
+          );
+        }
+      } else {
+        parts.add(
+          '${Uri.encodeQueryComponent(entry.key)}='
+          '${Uri.encodeQueryComponent(v?.toString() ?? '')}',
+        );
+      }
+    }
+    return parts.join('&');
+  }
+
+  Future<Map<String, dynamic>> _bracketFormPost(
+    String path,
+    Map<String, dynamic> map,
+  ) async {
+    final res = await _client.post(
+      path,
+      data: _encodeBracketForm(map),
+      options: Options(
+        contentType: 'application/x-www-form-urlencoded',
+        responseType: ResponseType.plain,
+      ),
+    );
+    return _jsonFromPlain(res.data);
+  }
+
+  Map<String, dynamic> _jsonFromPlain(dynamic data) {
+    if (data is Map<String, dynamic>) return data;
+    final raw = data?.toString() ?? '';
+    if (raw.isEmpty) return {};
+    try {
+      final start = raw.indexOf('{');
+      final end = raw.lastIndexOf('}');
+      if (start != -1 && end != -1 && end > start) {
+        final decoded = jsonDecode(raw.substring(start, end + 1));
+        if (decoded is Map<String, dynamic>) return decoded;
+      }
+    } catch (_) {}
+    return {};
+  }
+
   // ── GET ──────────────────────────────────────────────────────────────────
 
   /// Full stock ledger (product + qty + costs)
@@ -89,38 +164,52 @@ class StockRemoteDatasource {
     return _json(res.data);
   }
 
-  /// Adjust stock balance (stock/restock/balance)
+  /// Adjust stock balance (stock/restock/balance).
+  ///
+  /// PHP reads flat fields: product_id, quantity, movement_type.
+  /// Send one POST per adjustment item; return the last response (or first error).
   Future<Map<String, dynamic>> adjustStockBalance(Map<String, dynamic> body) async {
-    final res = await _client.post(ApiEndpoints.postStockRestockBalance, data: body, options: _formOptions);
-    return _json(res.data);
+    final adjustments = (body['adjustments'] as List?) ?? [];
+    if (adjustments.isEmpty) {
+      return {'status': 'error', 'message': 'No adjustments provided'};
+    }
+    Map<String, dynamic> lastResult = {};
+    for (final item in adjustments) {
+      final m = item as Map<String, dynamic>;
+      final type = m['type']?.toString() ?? '';
+      if (type == 'none') continue;
+      final flat = {
+        'product_id': m['product_id']?.toString() ?? '',
+        'quantity': m['quantity']?.toString() ?? '0',
+        'movement_type': type,
+      };
+      lastResult = await _formPost(ApiEndpoints.postStockRestockBalance, flat);
+      if ((lastResult['status'] ?? '') == 'error') return lastResult;
+    }
+    return lastResult.isNotEmpty
+        ? lastResult
+        : {'status': 'success', 'message': 'No items to adjust'};
   }
 
-  /// Create a purchase/restock record (stock/restock/create)
+  /// Create a purchase/restock record (stock/restock/create).
+  ///
+  /// PHP reads parallel arrays with bracket notation: product_id[0], quantity[0], etc.
   Future<Map<String, dynamic>> createRestock(Map<String, dynamic> body) async {
-    final res = await _client.post(ApiEndpoints.postStockRestockCreate, data: body, options: _formOptions);
-    return _json(res.data);
+    return _bracketFormPost(ApiEndpoints.postStockRestockCreate, body);
   }
 
   /// Transfer stock to another shop (stock/transfer).
   ///
-  /// Accepts the Flutter-friendly payload:
-  ///   { 'to_shop_id': '...', 'products': [{'product_id': id, 'quantity': qty}] }
-  ///
-  /// Remaps to the PHP form-post format expected by Stock::transferStock():
-  ///   toShop, product_id[], quantity[pid], name[pid]
+  /// PHP mobile path reads `products` as a JSON string then json_decodes it.
+  /// Must be manually URL-encoded so Dio doesn't corrupt the JSON value.
   Future<Map<String, dynamic>> transferStock(Map<String, dynamic> body) async {
     final toShop = body['to_shop_id']?.toString() ?? '';
     final products = (body['products'] as List?) ?? [];
-
-    // Send products as a JSON string so the backend mobile-app path can read it.
-    final form = <String, dynamic>{
+    return _formPost(ApiEndpoints.postStockTransfer, {
       'to_shop_id': toShop,
       'toShop': toShop,
       'products': jsonEncode(products),
-    };
-
-    final res = await _client.post(ApiEndpoints.postStockTransfer, data: form, options: _formOptions);
-    return _json(res.data);
+    });
   }
 
   /// Copy products from another shop (stock/copy-in-products).
