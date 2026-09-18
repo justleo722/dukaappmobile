@@ -15,6 +15,7 @@ class _AdjustItem {
   final String name;
   final int currentStock;
   final dynamic productId;
+  final dynamic stockId;
   int adjustQuantity;
   AdjustmentStatus status;
 
@@ -22,6 +23,7 @@ class _AdjustItem {
     required this.name,
     required this.currentStock,
     this.productId,
+    this.stockId,
   })  : adjustQuantity = 0,
         status = AdjustmentStatus.none;
 }
@@ -43,7 +45,7 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
     final stockState = ref.watch(stockProvider);
     final allProducts = stockState.whenOrNull(
           data: (s) => s.products
-              .map((p) => {'name': p.name, 'stock': p.available.toInt(), 'product_id': p.productId})
+              .map((p) => {'name': p.name, 'stock': p.available.toInt(), 'product_id': p.productId, 'stock_id': p.stockId})
               .toList(),
         ) ??
         [];
@@ -79,6 +81,7 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
         name: name,
         currentStock: (product['stock'] as num?)?.toInt() ?? 0,
         productId: product['product_id'],
+        stockId: product['stock_id'],
       ));
       addedCount++;
     }
@@ -130,11 +133,18 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
   Future<void> _saveAdjustments() async {
     final repo = ref.read(stockRepositoryProvider);
     final adjustedItems = _items
-        .where((item) => item.adjustQuantity != 0 && item.productId != null)
+        .where((item) =>
+            item.productId != null &&
+            item.stockId != null &&
+            item.status != AdjustmentStatus.none)
         .map((item) => {
               'product_id': item.productId,
-              'quantity': item.adjustQuantity,
-              'type': item.status.name, // 'add', 'remove', 'none'
+              'stock_id': item.stockId,
+              'quantity': item.adjustQuantity.abs(),
+              // Map Flutter status → PHP movement_type
+              'movement_type': item.status == AdjustmentStatus.balancing
+                  ? 'balanced'
+                  : item.status.name, // bad, expired, lost
             })
         .toList();
 
