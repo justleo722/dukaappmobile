@@ -193,9 +193,10 @@ class StockRemoteDatasource {
 
   /// Create a purchase/restock record (stock/restock/create).
   ///
-  /// PHP reads parallel arrays with bracket notation: product_id[0], quantity[0], etc.
+  /// Caller pre-encodes bracket keys (product_id[0], quantity[pid], bp[pid] …)
+  /// so we just URL-encode each flat key/value pair here.
   Future<Map<String, dynamic>> createRestock(Map<String, dynamic> body) async {
-    return _bracketFormPost(ApiEndpoints.postStockRestockCreate, body);
+    return _formPost(ApiEndpoints.postStockRestockCreate, body);
   }
 
   /// Transfer stock to another shop (stock/transfer).

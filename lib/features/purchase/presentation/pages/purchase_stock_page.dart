@@ -180,7 +180,10 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
       for (final e in acctList) {
         final name = (e['account_name'] ?? e['name'] ?? '').toString();
         final id   = (e['account_id'] ?? e['id'] ?? '').toString();
-        if (name.isNotEmpty) { accounts.add(name); accountIdMap[name] = id; }
+        if (name.isNotEmpty && !accountIdMap.containsKey(name)) {
+          accounts.add(name);
+          accountIdMap[name] = id;
+        }
       }
 
       // Load suppliers — same shape flexibility
@@ -198,7 +201,10 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
       for (final e in suppList) {
         final name = (e['supplier_name'] ?? e['name'] ?? '').toString();
         final id   = (e['supplier_id'] ?? e['id'] ?? '').toString();
-        if (name.isNotEmpty) { suppliers.add(name); supplierIdMap[name] = id; }
+        if (name.isNotEmpty && !supplierIdMap.containsKey(name)) {
+          suppliers.add(name);
+          supplierIdMap[name] = id;
+        }
       }
 
       if (mounted) setState(() {
@@ -773,26 +779,26 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                       try {
                         final repo = ref.read(purchaseRepositoryProvider);
                         // Backend expects parallel arrays: product_id[], quantity[], bp[], sp[], wp[], expiry_date[]
-                        final productIds   = _items.map((i) => i.productId?.toString() ?? '').toList();
-                        final quantities   = _items.map((i) => i.quantity).toList();
-                        final bps          = _items.map((i) => double.tryParse(i.buyingPrice.text) ?? 0).toList();
-                        final sps          = _items.map((i) => double.tryParse(i.sellingPrice.text) ?? 0).toList();
-                        final wps          = _items.map((i) => double.tryParse(i.wholesalePrice.text) ?? 0).toList();
-                        final expiries     = _items.map((i) => i.expiryDate != null ? DateFormat('yyyy-MM-dd').format(i.expiryDate!) : '').toList();
-                        final supplierId   = _supplierIdMap[_selectedSupplier ?? ''] ?? '';
-                        final accountId    = _accountIdMap[_selectedAccount ?? ''] ?? (_selectedAccount ?? '');
-                        await repo.createPurchase({
-                          'product_id'  : productIds,
-                          'quantity'    : quantities,
-                          'bp'          : bps,
-                          'sp'          : sps,
-                          'wp'          : wps,
-                          'expiry_date' : expiries,
-                          'supplier_id' : supplierId,
-                          'payment_mode': accountId,
-                          'record_date' : DateFormat('yyyy-MM-dd').format(_purchaseDate),
-                          'type'        : widget.createMode ? 'order' : 'restock',
-                        });
+                        // PHP reads: product_id[i]=pid, quantity[pid]=qty, bp[pid]=val ...
+                        // so quantity/bp/sp/wp/expiry must be keyed by product_id, not by index.
+                        final Map<String, dynamic> purchaseBody = {};
+                        for (int i = 0; i < _items.length; i++) {
+                          final item = _items[i];
+                          final pid = item.productId?.toString() ?? i.toString();
+                          purchaseBody['product_id[$i]'] = pid;
+                          purchaseBody['quantity[$pid]'] = item.quantity.toString();
+                          purchaseBody['bp[$pid]'] = (double.tryParse(item.buyingPrice.text) ?? 0).toString();
+                          purchaseBody['sp[$pid]'] = (double.tryParse(item.sellingPrice.text) ?? 0).toString();
+                          purchaseBody['wp[$pid]'] = (double.tryParse(item.wholesalePrice.text) ?? 0).toString();
+                          purchaseBody['expiry_date[$pid]'] = item.expiryDate != null
+                              ? DateFormat('yyyy-MM-dd').format(item.expiryDate!)
+                              : '';
+                        }
+                        purchaseBody['supplier_id']  = _supplierIdMap[_selectedSupplier ?? ''] ?? '';
+                        purchaseBody['payment_mode'] = _accountIdMap[_selectedAccount ?? ''] ?? (_selectedAccount ?? '');
+                        purchaseBody['record_date']  = DateFormat('yyyy-MM-dd').format(_purchaseDate);
+                        purchaseBody['type']         = widget.createMode ? 'order' : 'restock';
+                        await repo.createPurchase(purchaseBody);
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                           content: Text(
