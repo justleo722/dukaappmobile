@@ -176,10 +176,11 @@ class StockRemoteDatasource {
     Map<String, dynamic> lastResult = {};
     for (final item in adjustments) {
       final m = item as Map<String, dynamic>;
-      final type = m['type']?.toString() ?? '';
-      if (type == 'none') continue;
+      final type = (m['movement_type'] ?? m['type'])?.toString() ?? '';
+      if (type == 'none' || type.isEmpty) continue;
       final flat = {
         'product_id': m['product_id']?.toString() ?? '',
+        'stock_id': m['stock_id']?.toString() ?? '',
         'quantity': m['quantity']?.toString() ?? '0',
         'movement_type': type,
       };

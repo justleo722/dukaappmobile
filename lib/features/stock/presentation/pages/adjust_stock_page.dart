@@ -41,21 +41,27 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
   final Set<int> _selectedProducts = {};
   bool _isSaving = false;
 
-  // Cached snapshot from the last build — safe to read in event handlers.
+  // Full unfiltered product list, updated every build.
   List<Map<String, dynamic>> _allProductsCache = [];
 
-  List<Map<String, dynamic>> _getFilteredProducts({bool watch = false}) {
-    final stockState = watch ? ref.watch(stockProvider) : ref.read(stockProvider);
-    final allProducts = stockState.whenOrNull(
-          data: (s) => s.products
-              .map((p) => {'name': p.name, 'stock': p.available.toInt(), 'product_id': p.productId, 'stock_id': p.stockId})
-              .toList(),
-        ) ??
-        _allProductsCache; // fall back to cache when called outside build
-    if (watch) _allProductsCache = allProducts; // update cache during build
+  List<Map<String, dynamic>> _getFilteredProducts({bool updateCache = false}) {
+    if (updateCache) {
+      final stockState = ref.watch(stockProvider);
+      final list = stockState.whenOrNull(
+        data: (s) => s.products
+            .map((p) => {
+                  'name': p.name,
+                  'stock': p.available.toInt(),
+                  'product_id': p.productId,
+                  'stock_id': p.stockId,
+                })
+            .toList(),
+      );
+      if (list != null) _allProductsCache = list;
+    }
     final query = _searchController.text.toLowerCase().trim();
-    if (query.isEmpty) return allProducts;
-    return allProducts.where((p) {
+    if (query.isEmpty) return _allProductsCache;
+    return _allProductsCache.where((p) {
       final name = (p['name'] as String).toLowerCase();
       return name.contains(query);
     }).toList();
@@ -140,6 +146,22 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
 
   Future<void> _saveAdjustments() async {
     final repo = ref.read(stockRepositoryProvider);
+    // Items without stock_id cannot be saved — warn user and abort
+    final missingStock = _items.where((item) =>
+        item.status != AdjustmentStatus.none && (item.stockId == null || item.stockId.toString().isEmpty)).toList();
+    if (missingStock.isNotEmpty) {
+      final names = missingStock.map((e) => e.name).join(', ');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Bidhaa hizi hazina batch ya stock: $names', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+        ));
+      }
+      return;
+    }
+
     final adjustedItems = _items
         .where((item) =>
             item.productId != null &&
@@ -243,6 +265,31 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
                 ),
               ),
             ),
+            if (_selectedProducts.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppConstants.paddingLG, 8, AppConstants.paddingLG, 0),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: AppConstants.buttonHeight,
+                  child: ElevatedButton.icon(
+                    onPressed: _addSelectedProducts,
+                    icon: const Icon(Icons.add_rounded, size: 20),
+                    label: Text(
+                      'Add Selected (${_selectedProducts.length})',
+                      style: AppTypography.buttonLarge,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.textWhite,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppConstants.radiusMD),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             AdjustBottomBar(
               onClose: () => context.pop(),
               onSave: (_items.isNotEmpty && !_isSaving) ? _saveAdjustments : null,
@@ -411,7 +458,7 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
   }
 
   Widget _buildProductsHeader() {
-    final products = _getFilteredProducts(watch: true);
+    final products = _getFilteredProducts(updateCache: true);
     final selectableIndices = products
         .asMap()
         .keys
@@ -494,12 +541,16 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
   }
 
   Widget _buildProductList() {
-    final stockState = ref.watch(stockProvider);
-    if (stockState.isLoading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 40),
-        child: Center(child: CircularProgressIndicator()),
-      );
+    // Cache is updated by _buildProductsHeader (called first in build).
+    // Show loading only when cache is still empty (initial load).
+    if (_allProductsCache.isEmpty) {
+      final stockState = ref.watch(stockProvider);
+      if (stockState.isLoading) {
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 40),
+          child: Center(child: CircularProgressIndicator()),
+        );
+      }
     }
     final products = _getFilteredProducts();
 
@@ -675,32 +726,6 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
             ),
           );
         }),
-        if (_selectedProducts.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-            child: SizedBox(
-              width: double.infinity,
-              height: AppConstants.buttonHeight,
-              child: ElevatedButton.icon(
-                onPressed: _addSelectedProducts,
-                icon: const Icon(Icons.add_rounded, size: 20),
-                label: Text(
-                  'Add Selected (${_selectedProducts.length})',
-                  style: AppTypography.buttonLarge,
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.textWhite,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radiusMD),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }

@@ -149,34 +149,40 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                     _passwordRow('New Password', _newPasswordController, _obscureNewPassword,
                       () => setState(() => _obscureNewPassword = !_obscureNewPassword)),
                   ]),
-                  if (_biometricAvailable) ...[
-                    const SizedBox(height: 16),
-                    _sectionCard('Security', [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        child: Row(children: [
-                          const Icon(Icons.fingerprint_rounded, size: 24, color: AppColors.primary),
-                          const SizedBox(width: 12),
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text('Biometric Login', style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
-                            Text('Ingia kwa kidole au uso wako', style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary)),
-                          ])),
-                          Switch(
-                            value: _biometricEnabled,
-                            activeColor: AppColors.primary,
-                            onChanged: (v) async {
-                              if (v) {
-                                final ok = await BiometricService.authenticate();
-                                if (!ok) return;
-                              }
-                              await BiometricService.setEnabled(v);
-                              if (mounted) setState(() => _biometricEnabled = v);
-                            },
+                  const SizedBox(height: 16),
+                  _sectionCard('Security', [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: Row(children: [
+                        Icon(Icons.fingerprint_rounded, size: 24,
+                            color: _biometricAvailable ? AppColors.primary : AppColors.textHint),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('Biometric Login', style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
+                          Text(
+                            _biometricAvailable
+                                ? 'Ingia kwa kidole au uso wako'
+                                : 'Simu hii haina biometrics zilizosanidiwa',
+                            style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
                           ),
-                        ]),
-                      ),
-                    ]),
-                  ],
+                        ])),
+                        Switch(
+                          value: _biometricEnabled,
+                          activeColor: AppColors.primary,
+                          onChanged: _biometricAvailable
+                              ? (v) async {
+                                  if (v) {
+                                    final ok = await BiometricService.authenticate();
+                                    if (!ok) return;
+                                  }
+                                  await BiometricService.setEnabled(v);
+                                  if (mounted) setState(() => _biometricEnabled = v);
+                                }
+                              : null,
+                        ),
+                      ]),
+                    ),
+                  ]),
                 ]),
               )),
               _buildBottomBar(),
