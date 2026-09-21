@@ -102,7 +102,7 @@ class _ShopDetailsPageState extends ConsumerState<ShopDetailsPage> {
       });
       if (!mounted) return;
       final status = res['status']?.toString() ?? '';
-      if (status == 'success') {
+      if (status == 'success' || status == 'info') {
         // Refresh cached shop config so dashboard and other pages update.
         ref.read(shopConfigProvider.notifier).refresh().ignore();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(

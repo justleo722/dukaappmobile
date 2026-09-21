@@ -49,6 +49,8 @@ class ExpenseSummary {
   final double totalSales;
   final double grossProfit;
   final double netProfit;
+  final double badStock;
+  final double cashInHand;
 
   const ExpenseSummary({
     this.totalExpenses = 0,
@@ -56,6 +58,8 @@ class ExpenseSummary {
     this.totalSales = 0,
     this.grossProfit = 0,
     this.netProfit = 0,
+    this.badStock = 0,
+    this.cashInHand = 0,
   });
 
   static const empty = ExpenseSummary();
@@ -67,6 +71,8 @@ class ExpenseSummary {
       totalSales: _toDouble(j['total_sales'] ?? j['sales']),
       grossProfit: _toDouble(j['gross_profit'] ?? j['profit']),
       netProfit: _toDouble(j['net_profit'] ?? j['netprofit']),
+      badStock: _toDouble(j['bad_stock'] ?? j['bad_stock_value']),
+      cashInHand: _toDouble(j['cash_in_hand'] ?? j['cash_inhand']),
     );
   }
 

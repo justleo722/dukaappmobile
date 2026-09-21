@@ -131,9 +131,9 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
 
   double get _totalSales => _summary.totalSales;
   double get _grossProfit => _summary.grossProfit;
-  double get _badStock => 0.0;
+  double get _badStock => _summary.badStock;
   double get _netProfit => _summary.netProfit > 0 ? _summary.netProfit : (_totalSales - _totalExpenses);
-  double get _cashInHand => 0.0;
+  double get _cashInHand => _summary.cashInHand;
 
   String _fmt(double v) {
     final fmt = NumberFormat('#,###');

@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/shared/widgets/auth_logo.dart';
 import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
+import 'package:dukaapp/core/services/biometric_service.dart';
 import 'widgets/login_card.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -20,6 +22,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _userIdController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
+  bool _biometricAvailable = false;
+  bool _biometricEnabled = false;
+
+  static const _kSavedId = 'biometric_saved_id';
+  static const _kSavedPw = 'biometric_saved_pw';
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometric();
+  }
+
+  Future<void> _checkBiometric() async {
+    final available = await BiometricService.isAvailable();
+    final enabled = await BiometricService.isEnabled();
+    if (mounted) setState(() { _biometricAvailable = available; _biometricEnabled = enabled; });
+    if (available && enabled) _triggerBiometric();
+  }
+
+  Future<void> _triggerBiometric() async {
+    final ok = await BiometricService.authenticate();
+    if (!ok || !mounted) return;
+    final prefs = await SharedPreferences.getInstance();
+    final id = prefs.getString(_kSavedId) ?? '';
+    final pw = prefs.getString(_kSavedPw) ?? '';
+    if (id.isEmpty || pw.isEmpty) return;
+    _userIdController.text = id;
+    _passwordController.text = pw;
+    _handleLogin();
+  }
 
   @override
   void dispose() {
@@ -82,6 +114,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _showSuccessSnackBar(next.successMessage!);
           ref.read(authProvider.notifier).clearSuccess();
         }
+        // Save credentials for biometric re-login
+        if (_biometricAvailable) {
+          SharedPreferences.getInstance().then((p) {
+            p.setString(_kSavedId, _userIdController.text.trim());
+            p.setString(_kSavedPw, _passwordController.text);
+          });
+        }
         Future.delayed(const Duration(milliseconds: 1200), () {
           if (context.mounted) context.go('/dashboard');
         });
@@ -115,6 +154,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         _buildLogoSection(),
                         SizedBox(height: 32.h),
                         _buildLoginCard(authState.isLoading),
+                        if (_biometricAvailable) ...[
+                          SizedBox(height: 16.h),
+                          _buildBiometricButton(),
+                        ],
                         SizedBox(height: 24.h),
                       ],
                     ),
@@ -196,6 +239,61 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildBiometricButton() {
+    return Column(
+      children: [
+        Row(children: [
+          const Expanded(child: Divider()),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12.w),
+            child: Text('au', style: AppTypography.bodySmall.copyWith(color: AppColors.textHint)),
+          ),
+          const Expanded(child: Divider()),
+        ]),
+        SizedBox(height: 16.h),
+        GestureDetector(
+          onTap: _triggerBiometric,
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 14.h),
+            decoration: BoxDecoration(
+              border: Border.all(color: _biometricEnabled ? AppColors.primary : AppColors.border),
+              borderRadius: BorderRadius.circular(AppConstants.radiusMD),
+              color: _biometricEnabled ? AppColors.primary.withValues(alpha: 0.06) : AppColors.card,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.fingerprint_rounded,
+                  size: 28, color: _biometricEnabled ? AppColors.primary : AppColors.textSecondary),
+                SizedBox(width: 10.w),
+                Text(
+                  _biometricEnabled ? 'Ingia kwa Biometrics' : 'Wezesha Biometrics',
+                  style: AppTypography.buttonLarge.copyWith(
+                    color: _biometricEnabled ? AppColors.primary : AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (!_biometricEnabled) ...[
+          SizedBox(height: 8.h),
+          TextButton(
+            onPressed: () async {
+              final ok = await BiometricService.authenticate();
+              if (ok) {
+                await BiometricService.setEnabled(true);
+                if (mounted) setState(() => _biometricEnabled = true);
+              }
+            },
+            child: Text('Wezesha kuingia kwa kidole/uso',
+              style: AppTypography.bodySmall.copyWith(color: AppColors.primary)),
+          ),
+        ],
+      ],
     );
   }
 

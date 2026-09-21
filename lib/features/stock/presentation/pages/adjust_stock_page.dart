@@ -41,15 +41,18 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
   final Set<int> _selectedProducts = {};
   bool _isSaving = false;
 
+  // Cached snapshot from the last build — safe to read in event handlers.
+  List<Map<String, dynamic>> _allProductsCache = [];
+
   List<Map<String, dynamic>> _getFilteredProducts({bool watch = false}) {
-    // Use ref.read when called from event handlers (outside build), ref.watch in build.
     final stockState = watch ? ref.watch(stockProvider) : ref.read(stockProvider);
     final allProducts = stockState.whenOrNull(
           data: (s) => s.products
               .map((p) => {'name': p.name, 'stock': p.available.toInt(), 'product_id': p.productId, 'stock_id': p.stockId})
               .toList(),
         ) ??
-        [];
+        _allProductsCache; // fall back to cache when called outside build
+    if (watch) _allProductsCache = allProducts; // update cache during build
     final query = _searchController.text.toLowerCase().trim();
     if (query.isEmpty) return allProducts;
     return allProducts.where((p) {

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -8,6 +9,7 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class ProductReportsHelper {
   static String _fmt(double v) => v >= 1000000
@@ -16,27 +18,48 @@ class ProductReportsHelper {
 
   static String get _exportDateTime => DateFormat('dd-MM-yyyy_HH-mm').format(DateTime.now());
 
+  static List<Map<String, dynamic>> _parseRows(dynamic raw) {
+    if (raw is List) return raw.cast<Map<String, dynamic>>();
+    if (raw is Map<String, dynamic>) {
+      final d = raw['data'] ?? raw['rows'] ?? raw;
+      if (d is List) return d.cast<Map<String, dynamic>>();
+    }
+    return [];
+  }
+
+  static Future<List<Map<String, dynamic>>> _fetchHistory(
+      WidgetRef ref, String productId) async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getProductHistory(productId: productId);
+      return _parseRows(res.data);
+    } catch (_) {
+      return [];
+    }
+  }
+
   // ─── HISTORY PDF ──────────────────────────────────────────────────────
-  // Columns: S/N, Date, Type (IN/OUT), Qty, Balance
+  // Columns: S/N, Date, Type, Qty, Balance
   static Future<void> exportHistoryPdf({
     required BuildContext context,
+    required WidgetRef ref,
     required String productName,
+    required String productId,
     String shopName = '',
   }) async {
+    final rows = await _fetchHistory(ref, productId);
     final doc = pw.Document();
     final now = DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
 
-    // Sample data - in real app this would come from a database
-    final List<Map<String, dynamic>> historyData = [
-      {'sn': 1, 'date': '2026-07-03', 'type': 'IN', 'qty': 20, 'balance': 20},
-      {'sn': 2, 'date': '2026-07-05', 'type': 'OUT', 'qty': 5, 'balance': 15},
-      {'sn': 3, 'date': '2026-07-10', 'type': 'IN', 'qty': 10, 'balance': 25},
-      {'sn': 4, 'date': '2026-07-12', 'type': 'OUT', 'qty': 3, 'balance': 22},
-      {'sn': 5, 'date': '2026-07-15', 'type': 'OUT', 'qty': 7, 'balance': 15},
-      {'sn': 6, 'date': '2026-07-20', 'type': 'IN', 'qty': 15, 'balance': 30},
-      {'sn': 7, 'date': '2026-07-25', 'type': 'OUT', 'qty': 10, 'balance': 20},
-      {'sn': 8, 'date': '2026-07-28', 'type': 'IN', 'qty': 5, 'balance': 25},
-    ];
+    final List<Map<String, dynamic>> historyData = rows.isEmpty
+        ? []
+        : rows.asMap().entries.map((e) => {
+              'sn': e.key + 1,
+              'date': e.value['datetime']?.toString() ?? e.value['record_date']?.toString() ?? '',
+              'type': e.value['action_label']?.toString() ?? '',
+              'qty': e.value['quantity']?.toString() ?? '0',
+              'balance': e.value['available']?.toString() ?? '0',
+            }).toList();
 
     doc.addPage(
       pw.MultiPage(
@@ -95,29 +118,34 @@ class ProductReportsHelper {
   // Columns: DATE, ACTION, IN, OUT, BAL, VALUE
   static Future<void> exportStockPdf({
     required BuildContext context,
+    required WidgetRef ref,
     required String productName,
+    required String productId,
     required double buyingPrice,
     String shopName = '',
   }) async {
+    final rows = await _fetchHistory(ref, productId);
     final doc = pw.Document();
     final now = DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
 
-    // Sample data - in real app this would come from a database
-    final List<Map<String, dynamic>> stockData = [
-      {'date': '2026-07-03', 'action': 'Purchase', 'in': 20, 'out': 0, 'bal': 20, 'value': 20 * buyingPrice},
-      {'date': '2026-07-05', 'action': 'Sale', 'in': 0, 'out': 5, 'bal': 15, 'value': 15 * buyingPrice},
-      {'date': '2026-07-10', 'action': 'Purchase', 'in': 10, 'out': 0, 'bal': 25, 'value': 25 * buyingPrice},
-      {'date': '2026-07-12', 'action': 'Sale', 'in': 0, 'out': 3, 'bal': 22, 'value': 22 * buyingPrice},
-      {'date': '2026-07-15', 'action': 'Sale', 'in': 0, 'out': 7, 'bal': 15, 'value': 15 * buyingPrice},
-      {'date': '2026-07-20', 'action': 'Purchase', 'in': 15, 'out': 0, 'bal': 30, 'value': 30 * buyingPrice},
-      {'date': '2026-07-25', 'action': 'Sale', 'in': 0, 'out': 10, 'bal': 20, 'value': 20 * buyingPrice},
-      {'date': '2026-07-28', 'action': 'Purchase', 'in': 5, 'out': 0, 'bal': 25, 'value': 25 * buyingPrice},
-    ];
+    final List<Map<String, dynamic>> stockData = rows.map((r) {
+      final bal = double.tryParse(r['available']?.toString() ?? '0') ?? 0;
+      final bp = double.tryParse(r['bp']?.toString() ?? '0') ?? buyingPrice;
+      return {
+        'date': r['datetime']?.toString() ?? r['record_date']?.toString() ?? '',
+        'action': r['action_label']?.toString() ?? '',
+        'in': r['quantity_in']?.toString() ?? '0',
+        'out': r['quantity_out']?.toString() ?? '0',
+        'bal': bal.toStringAsFixed(0),
+        'value': _fmt(bal * bp),
+      };
+    }).toList();
 
-    final totalIn = stockData.fold<int>(0, (sum, row) => sum + (row['in'] as int));
-    final totalOut = stockData.fold<int>(0, (sum, row) => sum + (row['out'] as int));
-    final finalBal = stockData.last['bal'] as int;
-    final finalValue = stockData.last['value'] as double;
+    final totalIn = rows.fold<double>(0, (s, r) => s + (double.tryParse(r['quantity_in']?.toString() ?? '0') ?? 0));
+    final totalOut = rows.fold<double>(0, (s, r) => s + (double.tryParse(r['quantity_out']?.toString() ?? '0') ?? 0));
+    final finalBal = stockData.isNotEmpty ? stockData.last['bal'] : '0';
+    final lastBp = rows.isNotEmpty ? (double.tryParse(rows.last['bp']?.toString() ?? '0') ?? buyingPrice) : buyingPrice;
+    final finalValue = _fmt((double.tryParse(finalBal.toString()) ?? 0) * lastBp);
 
     doc.addPage(
       pw.MultiPage(
@@ -154,9 +182,9 @@ class ProductReportsHelper {
                 '${row['in']}',
                 '${row['out']}',
                 '${row['bal']}',
-                _fmt(row['value'] as double),
+                '${row['value']}',
               ]),
-              ['TOTAL', '', '$totalIn', '$totalOut', '$finalBal', _fmt(finalValue)],
+              ['TOTAL', '', totalIn.toStringAsFixed(0), totalOut.toStringAsFixed(0), '$finalBal', finalValue],
             ],
           ),
         ],
@@ -177,30 +205,45 @@ class ProductReportsHelper {
   }
 
   // ─── SALES PDF ────────────────────────────────────────────────────────
-  // Columns: DATE, ACTION, IN, OUT, BAL, VALUE (showing how product is sold)
+  // Columns: DATE, ACTION, IN, OUT, BAL, VALUE (sale movements only)
   static Future<void> exportSalesPdf({
     required BuildContext context,
+    required WidgetRef ref,
     required String productName,
+    required String productId,
     required double sellingPrice,
     String shopName = '',
   }) async {
+    final rows = await _fetchHistory(ref, productId);
+    // Filter to sale/return movements only
+    final saleRows = rows.where((r) {
+      final t = r['movement_type']?.toString() ?? '';
+      return ['sale', 'outbound', 'return', 'inbound'].contains(t.toLowerCase());
+    }).toList();
     final doc = pw.Document();
     final now = DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
 
-    // Sample data - in real app this would come from a database
-    final List<Map<String, dynamic>> salesData = [
-      {'date': '2026-07-05', 'action': 'Sale', 'in': 0, 'out': 5, 'bal': 15, 'value': 5 * sellingPrice},
-      {'date': '2026-07-12', 'action': 'Sale', 'in': 0, 'out': 3, 'bal': 12, 'value': 3 * sellingPrice},
-      {'date': '2026-07-15', 'action': 'Sale', 'in': 0, 'out': 7, 'bal': 5, 'value': 7 * sellingPrice},
-      {'date': '2026-07-18', 'action': 'Return', 'in': 2, 'out': 0, 'bal': 7, 'value': -2 * sellingPrice},
-      {'date': '2026-07-22', 'action': 'Sale', 'in': 0, 'out': 4, 'bal': 3, 'value': 4 * sellingPrice},
-      {'date': '2026-07-25', 'action': 'Sale', 'in': 0, 'out': 10, 'bal': -7, 'value': 10 * sellingPrice},
-      {'date': '2026-07-28', 'action': 'Sale', 'in': 0, 'out': 2, 'bal': -9, 'value': 2 * sellingPrice},
-    ];
+    final List<Map<String, dynamic>> salesData = saleRows.map((r) {
+      final sp = double.tryParse(r['sp']?.toString() ?? '0') ?? sellingPrice;
+      final qOut = double.tryParse(r['quantity_out']?.toString() ?? '0') ?? 0;
+      final qIn = double.tryParse(r['quantity_in']?.toString() ?? '0') ?? 0;
+      final val = qOut > 0 ? qOut * sp : -(qIn * sp);
+      return {
+        'date': r['datetime']?.toString() ?? r['record_date']?.toString() ?? '',
+        'action': r['action_label']?.toString() ?? '',
+        'in': qIn.toStringAsFixed(0),
+        'out': qOut.toStringAsFixed(0),
+        'bal': (double.tryParse(r['available']?.toString() ?? '0') ?? 0).toStringAsFixed(0),
+        'value': _fmt(val),
+        '_val': val,
+        '_out': qOut,
+        '_in': qIn,
+      };
+    }).toList();
 
-    final totalOut = salesData.where((row) => (row['out'] as int) > 0).fold<int>(0, (sum, row) => sum + (row['out'] as int));
-    final totalReturns = salesData.where((row) => (row['in'] as int) > 0).fold<int>(0, (sum, row) => sum + (row['in'] as int));
-    final totalSalesValue = salesData.fold<double>(0, (sum, row) => sum + (row['value'] as double));
+    final totalOut = salesData.fold<double>(0, (s, r) => s + (r['_out'] as double));
+    final totalReturns = salesData.fold<double>(0, (s, r) => s + (r['_in'] as double));
+    final totalSalesValue = salesData.fold<double>(0, (s, r) => s + (r['_val'] as double));
 
     doc.addPage(
       pw.MultiPage(
@@ -237,9 +280,9 @@ class ProductReportsHelper {
                 '${row['in']}',
                 '${row['out']}',
                 '${row['bal']}',
-                _fmt(row['value'] as double),
+                '${row['value']}',
               ]),
-              ['TOTAL', '$totalReturns returns', '', '$totalOut sold', '', _fmt(totalSalesValue)],
+              ['TOTAL', '${totalReturns.toStringAsFixed(0)} returns', '', '${totalOut.toStringAsFixed(0)} sold', '', _fmt(totalSalesValue)],
             ],
           ),
         ],

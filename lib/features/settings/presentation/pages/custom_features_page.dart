@@ -217,10 +217,10 @@ class _CustomFeaturesPageState extends ConsumerState<CustomFeaturesPage> {
       });
       if (!mounted) return;
       final status = res['status']?.toString() ?? '';
-      if (status == 'success') {
+      if (status == 'success' || status == 'info') {
         ref.read(shopConfigProvider.notifier).refresh().ignore();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Custom features saved successfully'),
+          content: Text('Settings saved successfully'),
           backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
         ));
         context.go('/shop-settings');

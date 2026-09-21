@@ -147,9 +147,10 @@ class ApiService {
   Future<Response> getSellableStock() =>
       _client.get(ApiEndpoints.getDataSellableStock);
 
-  /// Product price / cost history log.
-  Future<Response> getProductHistory() =>
-      _client.get(ApiEndpoints.getDataProductHistory);
+  /// Product movement history. Pass [productId] to filter by product.
+  Future<Response> getProductHistory({String? productId}) =>
+      _client.get(ApiEndpoints.getDataProductHistory,
+          queryParameters: productId != null ? {'product_id': productId} : null);
 
   /// Stock value summary (total cost, total retail value).
   Future<Response> getStockValueSummary() =>

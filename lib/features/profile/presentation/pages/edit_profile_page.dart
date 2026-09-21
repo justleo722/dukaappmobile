@@ -5,6 +5,7 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/core/services/biometric_service.dart';
 
 class EditProfilePage extends ConsumerStatefulWidget {
   const EditProfilePage({super.key});
@@ -26,11 +27,18 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   bool _obscureNewPassword     = true;
   bool _isLoading = true;
   bool _isSaving  = false;
+  bool _biometricAvailable = false;
+  bool _biometricEnabled = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadProfile());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      _loadProfile();
+      final avail = await BiometricService.isAvailable();
+      final enabled = await BiometricService.isEnabled();
+      if (mounted) setState(() { _biometricAvailable = avail; _biometricEnabled = enabled; });
+    });
   }
 
   Future<void> _loadProfile() async {
@@ -141,6 +149,34 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                     _passwordRow('New Password', _newPasswordController, _obscureNewPassword,
                       () => setState(() => _obscureNewPassword = !_obscureNewPassword)),
                   ]),
+                  if (_biometricAvailable) ...[
+                    const SizedBox(height: 16),
+                    _sectionCard('Security', [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: Row(children: [
+                          const Icon(Icons.fingerprint_rounded, size: 24, color: AppColors.primary),
+                          const SizedBox(width: 12),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text('Biometric Login', style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
+                            Text('Ingia kwa kidole au uso wako', style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary)),
+                          ])),
+                          Switch(
+                            value: _biometricEnabled,
+                            activeColor: AppColors.primary,
+                            onChanged: (v) async {
+                              if (v) {
+                                final ok = await BiometricService.authenticate();
+                                if (!ok) return;
+                              }
+                              await BiometricService.setEnabled(v);
+                              if (mounted) setState(() => _biometricEnabled = v);
+                            },
+                          ),
+                        ]),
+                      ),
+                    ]),
+                  ],
                 ]),
               )),
               _buildBottomBar(),

@@ -581,16 +581,22 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
           }),
           onHistory: () => ProductReportsHelper.exportHistoryPdf(
             context: context,
+            ref: ref,
             productName: product.name,
+            productId: product.productId?.toString() ?? '',
           ),
           onStockPdf: () => ProductReportsHelper.exportStockPdf(
             context: context,
+            ref: ref,
             productName: product.name,
+            productId: product.productId?.toString() ?? '',
             buyingPrice: product.buyingPrice,
           ),
           onSalesPdf: () => ProductReportsHelper.exportSalesPdf(
             context: context,
+            ref: ref,
             productName: product.name,
+            productId: product.productId?.toString() ?? '',
             sellingPrice: product.sellingPrice,
           ),
           onPhotos: () => ProductReportsHelper.showPhotosDialog(
