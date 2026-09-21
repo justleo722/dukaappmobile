@@ -906,7 +906,13 @@ class ApiService {
     final data = response.data;
     if (data is Map<String, dynamic>) return data;
     final raw = data?.toString() ?? '';
-    if (raw.isEmpty) return {};
+    if (raw.trim().isEmpty) {
+      // Server returned 200 with no body — treat as success so the UI
+      // doesn't falsely report failure when the operation actually worked.
+      final code = response.statusCode ?? 0;
+      if (code >= 200 && code < 300) return {'status': 'success', 'message': 'Done'};
+      return {};
+    }
     try {
       // Find the first '{' in case PHP emits warnings before the JSON.
       final start = raw.indexOf('{');
