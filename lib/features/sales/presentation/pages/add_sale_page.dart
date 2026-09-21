@@ -304,6 +304,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   }
 
   void _showAddNewPaymentSheet() {
+    final s = ref.read(stringsProvider);
     final controller = TextEditingController();
     showModalBottomSheet(
       context: context,
@@ -334,7 +335,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
                   ),
                 ),
                 Text(
-                  'Add New Payment Mode',
+                  s.addNewPaymentMode,
                   style: AppTypography.h6.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w700,
@@ -348,7 +349,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
                   cursorColor: AppColors.primary,
                   textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(
-                    hintText: 'Enter payment mode name',
+                    hintText: s.enterPaymentModeName,
                     hintStyle: AppTypography.bodyMedium.copyWith(
                       color: AppColors.textHint,
                     ),
@@ -423,7 +424,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                         child: Text(
-                          'Add Payment Mode',
+                          s.addPaymentMode,
                           style: AppTypography.buttonMedium.copyWith(
                             color: AppColors.textWhite,
                           ),
@@ -444,6 +445,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   bool _isSaving = false;
 
   Future<void> _saveSale() async {
+    final s = ref.read(stringsProvider);
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please add at least one item')),
@@ -499,8 +501,8 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(ok
-            ? (_isEditing ? 'Sale updated successfully' : 'Sale saved successfully')
-            : (res['message']?.toString() ?? 'Failed to save sale')),
+            ? (_isEditing ? s.saleUpdatedSuccessfully : s.saleSavedSuccessfully)
+            : (res['message']?.toString() ?? s.failedToSaveSale)),
         backgroundColor: ok ? AppColors.success : AppColors.danger,
       ));
       if (ok) {
@@ -525,6 +527,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     // Watch stockProvider in the proper build context so Riverpod can rebuild
@@ -588,6 +591,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final s = ref.read(stringsProvider);
     return AppBar(
       backgroundColor: AppColors.card,
       elevation: 0,
@@ -612,7 +616,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
       title: Column(
         children: [
           Text(
-            _isEditing ? 'Edit Sale' : 'Add Sale',
+            _isEditing ? s.editSale : s.addSale,
             style: AppTypography.h6.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -636,7 +640,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Wholesale',
+                s.wholesale,
                 style: AppTypography.caption.copyWith(
                   color: _isWholesale
                       ? AppColors.primary
@@ -713,6 +717,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   }
 
   Widget _buildCustomerDropdown() {
+    final s = ref.read(stringsProvider);
     // Value is customer_id string (null = Walk-in, sentinel = add new)
     final dropdownValue = _selectedCustomerId; // null = Walk-in selected
     return Column(
@@ -720,7 +725,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Select Customer',
+          s.selectCustomer,
           style: AppTypography.label.copyWith(color: AppColors.textPrimary),
         ),
         const SizedBox(height: 8),
@@ -751,7 +756,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 const Icon(Icons.add_rounded, size: 18, color: AppColors.primary),
                 const SizedBox(width: 8),
-                Flexible(child: Text('Add New Customer',
+                Flexible(child: Text(s.addNewCustomer,
                   style: AppTypography.bodyMedium.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
                   overflow: TextOverflow.ellipsis)),
               ]),
@@ -770,6 +775,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   }
 
   Widget _buildSearchBar() {
+    final s = ref.read(stringsProvider);
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppConstants.paddingMD,
@@ -800,7 +806,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
               controller: _searchController,
               style: AppTypography.bodyMedium,
               decoration: InputDecoration(
-                hintText: 'Search Items / Scan Barcode',
+                hintText: s.searchItemsScanBarcode,
                 hintStyle: AppTypography.bodyMedium.copyWith(
                   color: AppColors.textHint,
                 ),
@@ -831,6 +837,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   }
 
   Widget _buildItemsHeader() {
+    final s = ref.read(stringsProvider);
     return Row(
       children: [
         Text(
@@ -870,7 +877,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
                 const Icon(Icons.add_rounded, color: Colors.white, size: 16),
                 const SizedBox(width: 4),
                 Text(
-                  'Add Item',
+                  s.addItem,
                   style: AppTypography.buttonSmall.copyWith(fontSize: 11),
                 ),
               ],
@@ -882,6 +889,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   }
 
   Widget _buildItemsList() {
+    final s = ref.read(stringsProvider);
     if (_items.isEmpty) {
       return Container(
         width: double.infinity,
@@ -904,7 +912,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
             ),
             const SizedBox(height: 12),
             Text(
-              'No items added yet',
+              s.noItemsAddedYet,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textHint,
               ),
@@ -943,13 +951,14 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   }
 
   Widget _buildPaymentTypeDropdown() {
+    final s = ref.read(stringsProvider);
     final allOptions = [..._paymentTypes, _addNewPaymentValue];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Payment Type',
+          s.paymentType,
           style: AppTypography.label.copyWith(color: AppColors.textPrimary),
         ),
         const SizedBox(height: 8),
@@ -1005,7 +1014,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        'Add New Payment Mode',
+                        s.addNewPaymentMode,
                         style: AppTypography.bodyMedium.copyWith(
                           color: AppColors.primary,
                           fontWeight: FontWeight.w600,
@@ -1035,6 +1044,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   }
 
   Widget _buildSummarySection() {
+    final s = ref.read(stringsProvider);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppConstants.paddingMD),
@@ -1053,19 +1063,19 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Summary',
+            s.summary,
             style: AppTypography.label.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 12),
-          _buildSummaryRow('Entries', '${_items.length}'),
-          _buildSummaryRow('Total Quantity', '$_totalQuantity'),
-          _buildSummaryRow('Total Amount', _formatCurrency(_totalAmount)),
+          _buildSummaryRow(s.entries, '${_items.length}'),
+          _buildSummaryRow(s.totalQuantity, '$_totalQuantity'),
+          _buildSummaryRow(s.totalAmount, _formatCurrency(_totalAmount)),
           if (_totalItemDiscount > 0) ...[
             _buildSummaryRow(
-              'Item Discounts',
+              s.itemDiscounts,
               '- ${_formatCurrency(_totalItemDiscount)}',
               valueColor: AppColors.danger,
             ),
@@ -1074,7 +1084,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
           _buildDiscountField(),
           const Divider(height: 20, color: AppColors.border),
           _buildSummaryRow(
-            'Final Amount',
+            s.finalAmount,
             _formatCurrency(_finalAmount),
             isBold: true,
             valueColor: AppColors.primary,
@@ -1111,11 +1121,12 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   }
 
   Widget _buildDiscountField() {
+    final s = ref.read(stringsProvider);
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          'Discount',
+          s.discount,
           style: AppTypography.bodyMedium.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -1227,7 +1238,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   }
 }
 
-class _ItemPickerContent extends StatefulWidget {
+class _ItemPickerContent extends ConsumerStatefulWidget {
   final List<Map<String, dynamic>> allProducts;
   final String Function(double) formatCurrency;
   final void Function(Map<String, dynamic>) onAddItem;
@@ -1243,10 +1254,10 @@ class _ItemPickerContent extends StatefulWidget {
   });
 
   @override
-  State<_ItemPickerContent> createState() => _ItemPickerContentState();
+  ConsumerState<_ItemPickerContent> createState() => _ItemPickerContentState();
 }
 
-class _ItemPickerContentState extends State<_ItemPickerContent> {
+class _ItemPickerContentState extends ConsumerState<_ItemPickerContent> {
   final TextEditingController _sheetSearchController = TextEditingController();
   String _searchQuery = '';
 
@@ -1269,6 +1280,7 @@ class _ItemPickerContentState extends State<_ItemPickerContent> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.card,
@@ -1296,7 +1308,7 @@ class _ItemPickerContentState extends State<_ItemPickerContent> {
               children: [
                 Expanded(
                   child: Text(
-                    'Select Product',
+                    s.selectProduct,
                     style: AppTypography.h6.copyWith(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w700,
@@ -1328,7 +1340,7 @@ class _ItemPickerContentState extends State<_ItemPickerContent> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'Scan',
+                          s.scan,
                           style: AppTypography.captionBold.copyWith(
                             color: AppColors.primary,
                             fontSize: 11,

@@ -19,6 +19,7 @@ import 'package:dukaapp/features/sales/presentation/widgets/receipt_widget.dart'
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
 import 'package:dukaapp/features/purchase/presentation/providers/purchase_provider.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class PurchasesPage extends ConsumerStatefulWidget {
   const PurchasesPage({super.key});
@@ -156,6 +157,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   }
 
   void _deletePurchase(int index) {
+    final s = ref.read(stringsProvider);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -163,7 +165,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
           borderRadius: BorderRadius.circular(AppConstants.radiusMD),
         ),
         title: Text(
-          'Delete Purchase',
+          s.deletePurchase,
           style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
         ),
         content: Text(
@@ -176,7 +178,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              'Cancel',
+              s.cancel,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -205,7 +207,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
               }
             },
             child: Text(
-              'Delete',
+              s.delete,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.danger,
                 fontWeight: FontWeight.w600,
@@ -218,6 +220,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   }
 
   void _deleteSelected() {
+    final s = ref.read(stringsProvider);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -225,7 +228,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
           borderRadius: BorderRadius.circular(16),
         ),
         title: Text(
-          'Delete Purchases',
+          s.deletePurchases,
           style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
         ),
         content: Text(
@@ -238,7 +241,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              'Cancel',
+              s.cancel,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -267,7 +270,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
               }
             },
             child: Text(
-              'Delete',
+              s.delete,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.danger,
                 fontWeight: FontWeight.w600,
@@ -280,6 +283,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   }
 
   void _showPayDialog(int index) {
+    final s = ref.read(stringsProvider);
     final purchase = _purchases[index];
     final balance = _toD(purchase['balance']);
     final supplier = purchase['supplier'] as String;
@@ -431,7 +435,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                   ),
                   const SizedBox(height: 14),
                   _buildDialogField(
-                    label: 'Amount to Pay',
+                    label: s.amountToPay,
                     child: TextField(
                       controller: amountController,
                       keyboardType: TextInputType.number,
@@ -466,7 +470,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                   ),
                   const SizedBox(height: 14),
                   _buildDialogField(
-                    label: 'Pay From Account',
+                    label: s.payFromAccount,
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -608,6 +612,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   }
 
   void _showReturnDialog(int index) {
+    final s = ref.read(stringsProvider);
     final purchase = _purchases[index];
     final products = List<Map<String, dynamic>>.from(purchase['products']);
     final totalAmount = products.fold<double>(
@@ -648,7 +653,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Return Purchase',
+                          s.returnPurchase,
                           style: AppTypography.h6.copyWith(
                             color: AppColors.textPrimary,
                             fontWeight: FontWeight.w700,
@@ -690,7 +695,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                   ),
                   const SizedBox(height: 16),
                   _buildDialogField(
-                    label: 'Return Date',
+                    label: s.returnDate,
                     child: GestureDetector(
                       onTap: () async {
                         final date = await showDatePicker(
@@ -795,7 +800,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                             elevation: 0,
                           ),
                           child: Text(
-                            'Confirm Return',
+                            s.confirmReturn,
                             style: AppTypography.bodyMedium.copyWith(
                               color: Colors.white,
                               fontWeight: FontWeight.w700,
@@ -815,6 +820,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   }
 
   void _showBackdateDialog(int index) async {
+    final s = ref.read(stringsProvider);
     final purchase = _purchases[index];
     final dateStr = purchase['date'] as String;
     final parts = dateStr.split(' ');
@@ -835,14 +841,14 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
             borderRadius: BorderRadius.circular(AppConstants.radiusMD),
           ),
           title: Text(
-            'Backdate Purchase',
+            s.backdatePurchase,
             style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Select a new date for this purchase',
+                s.selectNewDateForPurchase,
                 style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -923,7 +929,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
             TextButton(
               onPressed: () => Navigator.pop(context, selectedDate),
               child: Text(
-                'Backdate',
+                s.backdate,
                 style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w600,
@@ -951,6 +957,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   }
 
   void _showReceiptPreview(Map<String, dynamic> purchase) {
+    final s = ref.read(stringsProvider);
     final products = List<Map<String, dynamic>>.from(purchase['products']);
     final totalAmount = products.fold<double>(
       0,
@@ -959,7 +966,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
 
     ReceiptWidget.show(
       context,
-      title: 'Purchase Receipt',
+      title: s.purchaseReceipt,
       receiptNumber: 'PUR-${purchase['purchase_id'] ?? DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
       date: purchase['date'].split(' ').take(2).join(' '),
       time: purchase['date'].split(' ').last,
@@ -1161,6 +1168,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -1198,6 +1206,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final s = ref.read(stringsProvider);
     return AppBar(
       backgroundColor: AppColors.card,
       elevation: 0,
@@ -1222,7 +1231,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
       title: Column(
         children: [
           Text(
-            'Manage Purchases',
+            s.managePurchases,
             style: AppTypography.h6.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -1567,6 +1576,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   }
 
   Widget _buildPurchasesList() {
+    final s = ref.read(stringsProvider);
     if (_filteredPurchases.isEmpty) {
       return Container(
         width: double.infinity,
@@ -1590,7 +1600,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
             ),
             const SizedBox(height: 12),
             Text(
-              'No purchases found',
+              s.noPurchasesFound,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textHint,
               ),
@@ -1855,6 +1865,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   }
 
   Widget _buildPurchaseActions(int purchaseIndex, Map<String, dynamic> purchase) {
+    final s = ref.read(stringsProvider);
     final isPending = purchase['status'] == 'PENDING';
     return SizedBox(
       height: 80,
@@ -1883,13 +1894,13 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
           const SizedBox(width: 8),
           _buildOutlinedAction(
             icon: Icons.print_rounded,
-            label: 'Print',
+            label: s.print,
             onTap: () => _showReceiptPreview(_purchases[purchaseIndex]),
           ),
           const SizedBox(width: 8),
           _buildOutlinedAction(
             icon: Icons.visibility_rounded,
-            label: 'Preview',
+            label: s.preview,
             onTap: () => _showReceiptPreview(_purchases[purchaseIndex]),
           ),
           const SizedBox(width: 8),
@@ -1901,7 +1912,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
           const SizedBox(width: 8),
           _buildOutlinedAction(
             icon: Icons.reply_rounded,
-            label: 'Return All',
+            label: s.returnAll,
             onTap: () => _showReturnDialog(purchaseIndex),
           ),
           const SizedBox(width: 8),

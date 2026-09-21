@@ -125,6 +125,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: _buildAppBar(context),
@@ -140,17 +141,17 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                     _fieldRow('Full Name / Username', _usernameController, 'Enter username', TextInputType.text),
                     _fieldRow('Email', _emailController, 'Enter email', TextInputType.emailAddress),
                     _fieldRow('Phone', _phoneController, 'Enter phone number', TextInputType.phone),
-                    _fieldRow('Region', _regionController, 'Enter region', TextInputType.text),
+                    _fieldRow(s.region, _regionController, 'Enter region', TextInputType.text),
                   ]),
                   const SizedBox(height: 16),
-                  _sectionCard('Change Password', [
-                    _passwordRow('Current Password', _currentPasswordController, _obscureCurrentPassword,
+                  _sectionCard(s.changePassword, [
+                    _passwordRow(s.currentPassword, _currentPasswordController, _obscureCurrentPassword,
                       () => setState(() => _obscureCurrentPassword = !_obscureCurrentPassword)),
-                    _passwordRow('New Password', _newPasswordController, _obscureNewPassword,
+                    _passwordRow(s.newPassword, _newPasswordController, _obscureNewPassword,
                       () => setState(() => _obscureNewPassword = !_obscureNewPassword)),
                   ]),
                   const SizedBox(height: 16),
-                  _sectionCard('Security', [
+                  _sectionCard(s.security, [
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       child: Row(children: [
@@ -192,6 +193,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
+    final s = ref.read(stringsProvider);
     return AppBar(
       backgroundColor: AppColors.card, elevation: 0,
       leading: Padding(padding: const EdgeInsets.all(8.0), child: Container(
@@ -199,7 +201,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         child: IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary, size: 20)),
       )),
       leadingWidth: 56,
-      title: Text('Edit Profile', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+      title: Text(s.editProfile, style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
       centerTitle: true,
       bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(height: 1, color: AppColors.divider)),
     );

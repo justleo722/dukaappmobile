@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -8,16 +10,16 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/suppliers/data/models/supplier_model.dart';
 
-class SupplierDashboardPage extends StatefulWidget {
+class SupplierDashboardPage extends ConsumerStatefulWidget {
   final Supplier supplier;
 
   const SupplierDashboardPage({super.key, required this.supplier});
 
   @override
-  State<SupplierDashboardPage> createState() => _SupplierDashboardPageState();
+  ConsumerState<SupplierDashboardPage> createState() => _SupplierDashboardPageState();
 }
 
-class _SupplierDashboardPageState extends State<SupplierDashboardPage>
+class _SupplierDashboardPageState extends ConsumerState<SupplierDashboardPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late Supplier _supplier;
@@ -39,6 +41,7 @@ class _SupplierDashboardPageState extends State<SupplierDashboardPage>
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -62,7 +65,7 @@ class _SupplierDashboardPageState extends State<SupplierDashboardPage>
             const SizedBox(height: 20),
             _buildSectionHeader(
               icon: Icons.receipt_long_rounded,
-              title: 'Transactions',
+              title: s.transactions,
             ),
             const SizedBox(height: 12),
             _buildTransactionTabs(),
@@ -73,6 +76,7 @@ class _SupplierDashboardPageState extends State<SupplierDashboardPage>
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
+    final s = ref.read(stringsProvider);
     return AppBar(
       backgroundColor: AppColors.card,
       elevation: 0,
@@ -95,7 +99,7 @@ class _SupplierDashboardPageState extends State<SupplierDashboardPage>
       ),
       leadingWidth: 56,
       title: Text(
-        'Supplier Dashboard',
+        s.supplierDashboard,
         style: AppTypography.h6.copyWith(
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w700,
@@ -113,6 +117,7 @@ class _SupplierDashboardPageState extends State<SupplierDashboardPage>
   }
 
   Widget _buildContactDetailsCard() {
+    final s = ref.read(stringsProvider);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -185,7 +190,7 @@ class _SupplierDashboardPageState extends State<SupplierDashboardPage>
             const SizedBox(height: 12),
             _buildDetailRow(
               Icons.business_center_outlined,
-              'Company',
+              s.company,
               _supplier.companyName ?? 'Not set',
             ),
             const SizedBox(height: 12),
@@ -233,6 +238,7 @@ class _SupplierDashboardPageState extends State<SupplierDashboardPage>
   }
 
   Widget _buildPurchaseSummaryCard() {
+    final s = ref.read(stringsProvider);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -251,7 +257,7 @@ class _SupplierDashboardPageState extends State<SupplierDashboardPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Purchase Summary',
+              s.purchaseSummary,
               style: AppTypography.label.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
@@ -338,6 +344,7 @@ class _SupplierDashboardPageState extends State<SupplierDashboardPage>
   }
 
   Widget _buildActionButtons() {
+    final s = ref.read(stringsProvider);
     return SizedBox(
       height: 42,
       child: ListView(
@@ -352,7 +359,7 @@ class _SupplierDashboardPageState extends State<SupplierDashboardPage>
           const SizedBox(width: 8),
           _buildActionChip(
             icon: Icons.edit_rounded,
-            label: 'Edit Supplier',
+            label: s.editSupplier,
             color: AppColors.primary,
             onTap: () => context.push('/suppliers/add', extra: _supplier),
           ),
@@ -482,12 +489,13 @@ class _SupplierDashboardPageState extends State<SupplierDashboardPage>
   }
 
   Widget _buildCashPurchasesTab() {
+    final s = ref.read(stringsProvider);
     final purchases = _generateSampleCashPurchases();
 
     if (purchases.isEmpty) {
       return _buildEmptyPlaceholder(
         icon: Icons.money_off_rounded,
-        message: 'No cash purchases found',
+        message: s.noCashPurchasesFound,
       );
     }
 
@@ -513,12 +521,13 @@ class _SupplierDashboardPageState extends State<SupplierDashboardPage>
   }
 
   Widget _buildCreditPurchasesTab() {
+    final s = ref.read(stringsProvider);
     final purchases = _generateSampleCreditPurchases();
 
     if (purchases.isEmpty) {
       return _buildEmptyPlaceholder(
         icon: Icons.credit_card_off_rounded,
-        message: 'No credit purchases found',
+        message: s.noCreditPurchasesFound,
       );
     }
 
@@ -545,12 +554,13 @@ class _SupplierDashboardPageState extends State<SupplierDashboardPage>
   }
 
   Widget _buildPurchaseOrdersTab() {
+    final s = ref.read(stringsProvider);
     final orders = _generateSampleOrders();
 
     if (orders.isEmpty) {
       return _buildEmptyPlaceholder(
         icon: Icons.shopping_cart_outlined,
-        message: 'No purchase orders found',
+        message: s.noPurchaseOrdersFound,
       );
     }
 
@@ -1099,6 +1109,7 @@ class _SupplierDashboardPageState extends State<SupplierDashboardPage>
   }
 
   Future<void> _generateStatementPDF() async {
+    final s = ref.read(stringsProvider);
     try {
       final pdf = pw.Document();
 
@@ -1133,7 +1144,7 @@ class _SupplierDashboardPageState extends State<SupplierDashboardPage>
             pw.Header(
               level: 1,
               child: pw.Text(
-                'Purchase Summary',
+                s.purchaseSummary,
                 style: pw.TextStyle(
                   fontSize: 16,
                   fontWeight: pw.FontWeight.bold,

@@ -6,6 +6,7 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/staff/data/models/staff_models.dart';
 import 'package:dukaapp/features/staff/presentation/providers/staff_provider.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class StaffManagementPage extends ConsumerStatefulWidget {
   const StaffManagementPage({super.key});
@@ -90,6 +91,7 @@ class _StaffManagementPageState extends ConsumerState<StaffManagementPage> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     final attendants = _filteredAttendants;
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
@@ -105,6 +107,7 @@ class _StaffManagementPageState extends ConsumerState<StaffManagementPage> {
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
+    final s = ref.read(stringsProvider);
     return AppBar(
       backgroundColor: AppColors.card, elevation: 0,
       leading: Padding(padding: const EdgeInsets.all(8.0), child: Container(
@@ -112,7 +115,7 @@ class _StaffManagementPageState extends ConsumerState<StaffManagementPage> {
         child: IconButton(onPressed: () => context.pop(), icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary, size: 20)),
       )),
       leadingWidth: 56,
-      title: Text('Attendants & Staff Management', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+      title: Text(s.attendantsAndStaff, style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
       centerTitle: true,
       bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(height: 1, color: AppColors.divider)),
     );
@@ -133,12 +136,13 @@ class _StaffManagementPageState extends ConsumerState<StaffManagementPage> {
   }
 
   Widget _buildAddButton(BuildContext context) {
+    final s = ref.read(stringsProvider);
     return Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG), child: SizedBox(
       width: double.infinity, height: AppConstants.buttonHeight,
       child: ElevatedButton.icon(
         onPressed: () => context.push('/staff/add'),
         icon: const Icon(Icons.add_rounded, size: 20, color: AppColors.textWhite),
-        label: Text('Add New Attendant', style: AppTypography.buttonLarge.copyWith(color: AppColors.textWhite)),
+        label: Text(s.addNewAttendant, style: AppTypography.buttonLarge.copyWith(color: AppColors.textWhite)),
         style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD))),
       ),
@@ -154,6 +158,7 @@ class _StaffManagementPageState extends ConsumerState<StaffManagementPage> {
   }
 
   Widget _buildAttendantCard(Attendant attendant) {
+    final s = ref.read(stringsProvider);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -196,7 +201,7 @@ class _StaffManagementPageState extends ConsumerState<StaffManagementPage> {
             'roleId': attendant.roleId?.toString(),
             'isManager': attendant.isManager,
           })),
-          _actionChip(Icons.security_rounded, 'Permissions', const Color(0xFF8B5CF6),
+          _actionChip(Icons.security_rounded, s.permissions, const Color(0xFF8B5CF6),
               () => context.push('/staff/permissions', extra: {'roleId': attendant.roleId?.toString()})),
           _actionChip(Icons.delete_rounded, 'Delete', AppColors.danger, () => _confirmDelete(attendant)),
         ]),

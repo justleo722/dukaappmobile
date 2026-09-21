@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 
-class ShopSettingsPage extends StatelessWidget {
+class ShopSettingsPage extends ConsumerWidget {
   const ShopSettingsPage({super.key});
 
-  final List<Map<String, dynamic>> _settingsOptions = const [
+  static const List<Map<String, dynamic>> _settingsOptions = [
     {
       'icon': Icons.store_rounded,
       'title': 'Shop Details',
@@ -39,6 +41,12 @@ class ShopSettingsPage extends StatelessWidget {
       'color': Color(0xFF9333EA),
     },
     {
+      'icon': Icons.language_rounded,
+      'title': 'Language',
+      'description': 'Switch app language between English and Kiswahili.',
+      'color': Color(0xFF0EA5E9),
+    },
+    {
       'icon': Icons.delete_forever_rounded,
       'title': 'Delete Shop',
       'description': 'Permanently remove this shop and all related data.',
@@ -46,7 +54,37 @@ class ShopSettingsPage extends StatelessWidget {
     },
   ];
 
-  void _onOptionTap(BuildContext context, String title) {
+  Widget _langTile(BuildContext ctx, WidgetRef ref, String locale, String label, String current) {
+    final selected = current == locale;
+    return ListTile(
+      title: Text(label, style: AppTypography.bodyMedium.copyWith(
+        fontWeight: selected ? FontWeight.w700 : FontWeight.normal)),
+      trailing: selected
+          ? const Icon(Icons.check_circle_rounded, color: AppColors.primary)
+          : const Icon(Icons.radio_button_unchecked_rounded, color: AppColors.border),
+      onTap: () {
+        ref.read(localeProvider.notifier).setLocale(locale);
+        Navigator.of(ctx).pop();
+      },
+    );
+  }
+
+  void _showLanguageDialog(BuildContext context, WidgetRef ref) {
+    final current = ref.read(localeProvider);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD)),
+        title: const Text('Language / Lugha'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          _langTile(ctx, ref, 'en', 'English', current),
+          _langTile(ctx, ref, 'sw', 'Kiswahili', current),
+        ]),
+      ),
+    );
+  }
+
+  void _onOptionTap(BuildContext context, WidgetRef ref, String title) {
     switch (title) {
       case 'Shop Details':
         context.push('/shop-settings/details');
@@ -65,6 +103,9 @@ class ShopSettingsPage extends StatelessWidget {
         break;
       case 'Delete Shop':
         _showDeleteShopDialog(context);
+        break;
+      case 'Language':
+        _showLanguageDialog(context, ref);
         break;
     }
   }
@@ -149,7 +190,8 @@ class ShopSettingsPage extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentLocale = ref.watch(localeProvider);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -205,13 +247,17 @@ class ShopSettingsPage extends StatelessWidget {
               itemCount: _settingsOptions.length,
               itemBuilder: (context, index) {
                 final option = _settingsOptions[index];
+                final optTitle = option['title'] as String;
+                String desc = option['description'] as String;
+                if (optTitle == 'Language') {
+                  desc = currentLocale == 'sw' ? 'Kiswahili' : 'English';
+                }
                 return _SettingsPanel(
                   icon: option['icon'] as IconData,
-                  title: option['title'] as String,
-                  description: option['description'] as String,
+                  title: optTitle,
+                  description: desc,
                   color: option['color'] as Color,
-                  onTap: () =>
-                      _onOptionTap(context, option['title'] as String),
+                  onTap: () => _onOptionTap(context, ref, optTitle),
                 );
               },
             ),

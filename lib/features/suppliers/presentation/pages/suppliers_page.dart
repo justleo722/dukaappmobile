@@ -140,6 +140,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -172,6 +173,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
+    final s = ref.read(stringsProvider);
     return AppBar(
       backgroundColor: AppColors.card,
       elevation: 0,
@@ -196,7 +198,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
       title: Column(
         children: [
           Text(
-            'Supplier Management',
+            s.supplierManagement,
             style: AppTypography.h6.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -226,6 +228,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
   }
 
   Widget _buildActionButtons() {
+    final s = ref.read(stringsProvider);
     return Container(
       color: AppColors.card,
       padding: const EdgeInsets.symmetric(
@@ -240,7 +243,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
           children: [
             _buildActionChip(
               icon: Icons.credit_card_rounded,
-              label: 'On Credit',
+              label: s.onCredit,
               color: AppColors.warning,
               onTap: () {
                 Navigator.push(
@@ -254,7 +257,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
             const SizedBox(width: 8),
             _buildActionChip(
               icon: Icons.payments_rounded,
-              label: 'On Cash',
+              label: s.onCash,
               color: AppColors.success,
               onTap: () {
                 Navigator.push(
@@ -275,7 +278,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
             const SizedBox(width: 8),
             _buildActionChip(
               icon: Icons.person_add_rounded,
-              label: 'New Supplier',
+              label: s.newSupplier,
               color: AppColors.primary,
               onTap: () => context.push('/suppliers/add'),
             ),
@@ -449,6 +452,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
   }
 
   Widget _buildSupplierCard(Supplier supplier) {
+    final s = ref.read(stringsProvider);
     final isSelected = _selectedSupplierIds.contains(supplier.id);
 
     return Container(
@@ -550,17 +554,17 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
             const SizedBox(height: 10),
             _buildInfoRow(
               icon: Icons.email_outlined,
-              label: supplier.email ?? 'Not set',
+              label: supplier.email ?? s.notSet,
             ),
             const SizedBox(height: 4),
             _buildInfoRow(
               icon: Icons.business_center_outlined,
-              label: supplier.companyName ?? 'Not set',
+              label: supplier.companyName ?? s.notSet,
             ),
             const SizedBox(height: 4),
             _buildInfoRow(
               icon: Icons.location_on_outlined,
-              label: supplier.address ?? 'Not set',
+              label: supplier.address ?? s.notSet,
             ),
             const SizedBox(height: 10),
             Row(
@@ -647,6 +651,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
   
 
   void _showDeleteConfirmation(Supplier supplier) {
+    final s = ref.read(stringsProvider);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -654,7 +659,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
           borderRadius: BorderRadius.circular(AppConstants.radiusLG),
         ),
         title: Text(
-          'Delete Supplier',
+          s.deleteSupplier,
           style: AppTypography.h6.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
@@ -670,7 +675,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              'Cancel',
+              s.cancel,
               style: AppTypography.buttonMedium.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -682,7 +687,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
               _deleteSupplier(supplier);
             },
             child: Text(
-              'Delete',
+              s.delete,
               style: AppTypography.buttonMedium.copyWith(
                 color: AppColors.danger,
               ),
@@ -694,6 +699,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
   }
 
   void _showDeleteSelectedConfirmation() {
+    final s = ref.read(stringsProvider);
     final count = _selectedSupplierIds.length;
     showDialog(
       context: context,
@@ -718,7 +724,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              'Cancel',
+              s.cancel,
               style: AppTypography.buttonMedium.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -730,7 +736,7 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
               _deleteSelectedSuppliers();
             },
             child: Text(
-              'Delete',
+              s.delete,
               style: AppTypography.buttonMedium.copyWith(
                 color: AppColors.danger,
               ),

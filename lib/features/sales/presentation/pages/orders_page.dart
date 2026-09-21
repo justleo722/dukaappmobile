@@ -14,6 +14,7 @@ import 'package:dukaapp/features/sales/presentation/widgets/receipt_widget.dart'
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
 import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class OrdersPage extends ConsumerStatefulWidget {
   const OrdersPage({super.key});
@@ -146,6 +147,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   }
 
   void _deleteOrder(int index) {
+    final s = ref.read(stringsProvider);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -153,7 +155,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
           borderRadius: BorderRadius.circular(AppConstants.radiusMD),
         ),
         title: Text(
-          'Delete Order',
+          s.deleteOrder,
           style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
         ),
         content: Text(
@@ -166,7 +168,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              'Cancel',
+              s.cancel,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -186,7 +188,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                 final ok = res['status']?.toString() == '1' || res['status'] == true;
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(ok ? 'Order deleted' : (res['message']?.toString() ?? 'Delete failed')),
+                  content: Text(ok ? s.orderDeleted : (res['message']?.toString() ?? s.deleteFailed)),
                   backgroundColor: ok ? AppColors.success : AppColors.danger,
                 ));
                 if (ok) {
@@ -200,7 +202,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
               }
             },
             child: Text(
-              'Delete',
+              s.delete,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.danger,
                 fontWeight: FontWeight.w600,
@@ -213,6 +215,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   }
 
   void _deleteSelected() {
+    final s = ref.read(stringsProvider);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -220,7 +223,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
           borderRadius: BorderRadius.circular(16),
         ),
         title: Text(
-          'Delete Orders',
+          s.deleteOrders,
           style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
         ),
         content: Text(
@@ -233,7 +236,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              'Cancel',
+              s.cancel,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -257,7 +260,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                 final ok = res['status']?.toString() == '1' || res['status'] == true;
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(ok ? 'Orders deleted' : (res['message']?.toString() ?? 'Delete failed')),
+                  content: Text(ok ? s.ordersDeleted : (res['message']?.toString() ?? s.deleteFailed)),
                   backgroundColor: ok ? AppColors.success : AppColors.danger,
                 ));
                 if (ok) {
@@ -271,7 +274,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
               }
             },
             child: Text(
-              'Delete',
+              s.delete,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.danger,
                 fontWeight: FontWeight.w600,
@@ -285,6 +288,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     ref.listen<FilterState>(filterProvider, (_, f) => _loadOrders(from: f.from, to: f.to));
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
@@ -321,6 +325,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final s = ref.read(stringsProvider);
     return AppBar(
       backgroundColor: AppColors.card,
       elevation: 0,
@@ -345,7 +350,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
       title: Column(
         children: [
           Text(
-            'Orders',
+            s.orders,
             style: AppTypography.h6.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -366,13 +371,14 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   }
 
   Widget _buildSummaryCards() {
+    final s = ref.read(stringsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       child: Row(
         children: [
           Expanded(
             child: _buildSummaryCard(
-              label: 'Paid Total',
+              label: s.paidTotal,
               amount: _formatCurrency(_paidTotal),
               color: AppColors.success,
               bgColor: AppColors.successLight,
@@ -382,7 +388,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
           const SizedBox(width: 12),
           Expanded(
             child: _buildSummaryCard(
-              label: 'Unpaid Total',
+              label: s.unpaidTotal,
               amount: _formatCurrency(_unpaidTotal),
               color: AppColors.danger,
               bgColor: AppColors.dangerLight,
@@ -457,6 +463,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   }
 
   Widget _buildActionButtons() {
+    final s = ref.read(stringsProvider);
     return SizedBox(
       height: 90,
       child: Center(
@@ -467,13 +474,13 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
           children: [
             SalesActionButton(
               icon: Icons.filter_list_rounded,
-              label: 'Filter',
+              label: s.filter,
               onTap: () => AppFilterDialog.show(context),
             ),
             const SizedBox(width: 10),
             SalesActionButton(
               icon: Icons.receipt_long_rounded,
-              label: 'Active Orders',
+              label: s.activeOrders,
               isHighlighted: _activeFilter == 'active',
               onTap: () {
                 setState(() {
@@ -484,7 +491,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
             const SizedBox(width: 10),
             SalesActionButton(
               icon: Icons.check_circle_rounded,
-              label: 'Cleared Orders',
+              label: s.clearedOrders,
               isHighlighted: _activeFilter == 'cleared',
               onTap: () {
                 setState(() {
@@ -495,7 +502,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
             const SizedBox(width: 10),
             SalesActionButton(
             icon: Icons.add_rounded,
-            label: 'New Order',
+            label: s.newOrder,
             isHighlighted: true,
             onTap: () => context.push('/sales/add-order'),
           ),
@@ -631,6 +638,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   }
 
   Widget _buildOrdersList() {
+    final s = ref.read(stringsProvider);
     if (_isLoading) return _buildSkeleton();
     if (_filteredOrders.isEmpty) {
       return Container(
@@ -655,7 +663,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
             ),
             const SizedBox(height: 12),
             Text(
-              'No orders found',
+              s.noOrdersFound,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textHint,
               ),
@@ -868,6 +876,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
     List<Map<String, dynamic>> products,
     double totalAmount,
   ) {
+    final s = ref.read(stringsProvider);
     final isExpanded = _expandedOrderIndex == orderIndex;
     final isPending = order['status'] == 'PENDING';
     return AnimatedSize(
@@ -890,7 +899,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                   ],
                   const SizedBox(height: 12),
                   Text(
-                    'Purchased Products',
+                    s.purchasedProducts,
                     style: AppTypography.captionBold.copyWith(
                       color: AppColors.textPrimary,
                       fontSize: 11,
@@ -932,6 +941,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   }
 
   Widget _buildPendingActions(int orderIndex) {
+    final s = ref.read(stringsProvider);
     return Row(
       children: [
         Expanded(
@@ -949,7 +959,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                   const Icon(Icons.payment_rounded, color: Colors.white, size: 16),
                   const SizedBox(width: 6),
                   Text(
-                    'Pay',
+                    s.pay,
                     style: AppTypography.buttonMedium.copyWith(
                       color: Colors.white,
                       fontSize: 12,
@@ -992,6 +1002,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   }
 
   void _showBackdateDialog(int orderIndex) async {
+    final s = ref.read(stringsProvider);
     final order = _orders[orderIndex];
     final dateStr = order['date'] as String;
     final parts = dateStr.split(' ');
@@ -1012,14 +1023,14 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
             borderRadius: BorderRadius.circular(AppConstants.radiusMD),
           ),
           title: Text(
-            'Backdate Order',
+            s.backdateOrder,
             style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Select a new date for this order',
+                s.selectNewDateForOrder,
                 style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -1100,7 +1111,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
             TextButton(
               onPressed: () => Navigator.pop(context, selectedDate),
               child: Text(
-                'Backdate',
+                s.backdate,
                 style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w600,
@@ -1121,13 +1132,14 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Order date updated')),
+          SnackBar(content: Text(s.saleDateUpdated)),
         );
       }
     }
   }
 
   void _showPayDialog(int orderIndex) {
+    final s = ref.read(stringsProvider);
     final order = _orders[orderIndex];
     final balance = order['balance'] as double;
     final amountController = TextEditingController(text: balance.toStringAsFixed(0));
@@ -1144,7 +1156,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
             borderRadius: BorderRadius.circular(AppConstants.radiusMD),
           ),
           title: Text(
-            'Add Payment',
+            s.addPayment,
             style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
           ),
           content: SingleChildScrollView(
@@ -1223,7 +1235,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                 ),
                 const SizedBox(height: 16),
                 _buildDialogField(
-                  label: 'Amount to Collect',
+                  label: s.amountToCollect,
                   child: TextField(
                     controller: amountController,
                     keyboardType: TextInputType.number,
@@ -1250,7 +1262,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                 ),
                 const SizedBox(height: 16),
                 _buildDialogField(
-                  label: 'Select Account',
+                  label: s.selectAccount,
                   child: DropdownButtonFormField<String>(
                     initialValue: selectedAccount,
                     isExpanded: true,
@@ -1290,7 +1302,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                     child: Text(
-                      'Cancel',
+                      s.cancel,
                       style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
                     ),
                   ),
@@ -1322,7 +1334,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                             }
                           });
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Payment recorded successfully')),
+                            SnackBar(content: Text(s.paymentRecordedSuccessfully)),
                           );
                         } catch (e) {
                           if (!mounted) return;
@@ -1356,6 +1368,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   }
 
   void _showUpdateStatusDialog(int orderIndex) {
+    final s = ref.read(stringsProvider);
     final order = _orders[orderIndex];
     String selectedStatus = order['status'];
     DateTime selectedDate = DateTime.now();
@@ -1375,7 +1388,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
             borderRadius: BorderRadius.circular(AppConstants.radiusMD),
           ),
           title: Text(
-            'Update Order Status',
+            s.updateOrderStatus,
             style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
           ),
           content: SingleChildScrollView(
@@ -1384,7 +1397,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildDialogField(
-                  label: 'Customer Name',
+                  label: s.customerName,
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1403,7 +1416,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                 ),
                 const SizedBox(height: 16),
                 _buildDialogField(
-                  label: 'Order Value',
+                  label: s.orderValue,
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1447,7 +1460,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                 ),
                 const SizedBox(height: 16),
                 _buildDialogField(
-                  label: 'Status Date',
+                  label: s.statusDate,
                   child: GestureDetector(
                     onTap: () async {
                       final date = await showDatePicker(
@@ -1513,7 +1526,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                     child: Text(
-                      'Cancel',
+                      s.cancel,
                       style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
                     ),
                   ),
@@ -1554,7 +1567,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                     child: Text(
-                      'Update Status',
+                      s.updateStatus,
                       style: AppTypography.bodySmall.copyWith(color: AppColors.textWhite, fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -1583,6 +1596,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   }
 
   void _showReceiptPreview(Map<String, dynamic> order) {
+    final s = ref.read(stringsProvider);
     final products = List<Map<String, dynamic>>.from(order['products']);
     final totalAmount = products.fold<double>(
       0,
@@ -1591,7 +1605,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
 
     ReceiptWidget.show(
       context,
-      title: 'Sales Order Receipt',
+      title: s.salesOrderReceipt,
       receiptNumber: 'RCP-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
       date: order['date'].split(' ').take(2).join(' '),
       time: order['date'].split(' ').last,

@@ -22,6 +22,7 @@ import 'package:dukaapp/features/sales/presentation/widgets/payment_badge.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/receipt_widget.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class ManageSalesPage extends ConsumerStatefulWidget {
   const ManageSalesPage({super.key});
@@ -135,12 +136,13 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
   }
 
   void _deleteSelected() {
+    final s = ref.read(stringsProvider);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'Delete Sales',
+          s.deleteSales,
           style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
         ),
         content: Text(
@@ -153,7 +155,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              'Cancel',
+              s.cancel,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -182,7 +184,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(ok ? 'Sales deleted' : (res['message']?.toString() ?? 'Delete failed')),
+                    content: Text(ok ? s.salesDeleted : (res['message']?.toString() ?? s.deleteFailed)),
                     backgroundColor: ok ? AppColors.success : AppColors.danger,
                   ),
                 );
@@ -201,7 +203,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
               }
             },
             child: Text(
-              'Delete',
+              s.delete,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.danger,
                 fontWeight: FontWeight.w600,
@@ -214,12 +216,13 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
   }
 
   void _deleteSale(int index) {
+    final s = ref.read(stringsProvider);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'Delete Sale',
+          s.deleteSale,
           style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
         ),
         content: Text(
@@ -232,7 +235,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              'Cancel',
+              s.cancel,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -255,7 +258,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(ok ? 'Sale deleted' : (res['message']?.toString() ?? 'Delete failed')),
+                    content: Text(ok ? s.saleDeleted : (res['message']?.toString() ?? s.deleteFailed)),
                     backgroundColor: ok ? AppColors.success : AppColors.danger,
                   ),
                 );
@@ -272,7 +275,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
               }
             },
             child: Text(
-              'Delete',
+              s.delete,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.danger,
                 fontWeight: FontWeight.w600,
@@ -286,6 +289,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     ref.listen<FilterState>(filterProvider, (_, f) => _loadSales(from: f.from, to: f.to));
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
@@ -335,6 +339,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final s = ref.read(stringsProvider);
     return AppBar(
       backgroundColor: AppColors.card,
       elevation: 0,
@@ -357,7 +362,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
       ),
       leadingWidth: 56,
       title: Text(
-        'Manage Sales',
+        s.manageSales,
         style: AppTypography.h6.copyWith(
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w700,
@@ -368,6 +373,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
   }
 
   Widget _buildActionButtons() {
+    final s = ref.read(stringsProvider);
     return SizedBox(
       height: 90,
       child: ListView(
@@ -406,13 +412,13 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
           const SizedBox(width: 10),
           SalesActionButton(
             icon: Icons.file_download_done_rounded,
-            label: 'Download',
+            label: s.download,
             onTap: () => context.push('/sales/reports'),
           ),
           const SizedBox(width: 10),
           SalesActionButton(
             icon: Icons.add_rounded,
-            label: 'Add Sale',
+            label: s.addSale,
             isHighlighted: true,
             onTap: () async {
               await context.push('/sales/add');
@@ -425,13 +431,14 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
   }
 
   Widget _buildViewToggle() {
+    final s = ref.read(stringsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           Text(
-            'View List',
+            s.viewList,
             style: AppTypography.caption.copyWith(
               color: _viewList
                   ? AppColors.primary
@@ -507,6 +514,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
 
   /// Payment dialog for credit / unpaid sales.
   void _showPayDialog(int index) {
+    final s = ref.read(stringsProvider);
     final sale = _sales[index];
     final balance = _toD(sale['balance']);
     final saleId = sale['sale_id']?.toString() ?? '';
@@ -530,15 +538,15 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
               TextFormField(
                 controller: amountController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Amount Paid',
+                decoration: InputDecoration(
+                  labelText: s.amountPaid,
                   prefixText: 'TZS ',
                   border: OutlineInputBorder(),
                 ),
                 validator: (v) {
                   final d = double.tryParse(v ?? '');
                   if (d == null || d <= 0) return 'Enter valid amount';
-                  if (d > balance) return 'Exceeds balance';
+                  if (d > balance) return s.exceedsBalance;
                   return null;
                 },
               ),
@@ -548,7 +556,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
+              child: Text(s.cancel)),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.success),
             onPressed: () async {
@@ -577,7 +585,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                 }
               }
             },
-            child: const Text('Pay', style: TextStyle(color: Colors.white)),
+            child: Text(s.pay, style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -694,6 +702,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
   }
 
   void _showBackdateDialog(int orderIndex) async {
+    final s = ref.read(stringsProvider);
     final sale = _sales[orderIndex];
     final dateStr = sale['date'] as String;
     final parts = dateStr.split(' ');
@@ -714,14 +723,14 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
             borderRadius: BorderRadius.circular(AppConstants.radiusMD),
           ),
           title: Text(
-            'Backdate Sale',
+            s.backdateSale,
             style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Select a new date for this sale',
+                s.selectNewDateForSale,
                 style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -803,7 +812,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                     child: Text(
-                      'Cancel',
+                      s.cancel,
                       style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
                     ),
                   ),
@@ -822,7 +831,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                     child: Text(
-                      'Backdate',
+                      s.backdate,
                       style: AppTypography.bodySmall.copyWith(color: AppColors.textWhite, fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -848,7 +857,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
           final ok = res['status']?.toString() == '1' || res['status'] == true;
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(ok ? 'Sale date updated' : (res['message']?.toString() ?? 'Backdate failed')),
+              content: Text(ok ? s.saleDateUpdated : (res['message']?.toString() ?? 'Backdate failed')),
               backgroundColor: ok ? AppColors.success : AppColors.danger,
             ));
             if (ok) await _loadSales();

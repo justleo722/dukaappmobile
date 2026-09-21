@@ -19,6 +19,7 @@ import 'package:dukaapp/features/stock/presentation/pages/import_stock_page.dart
 import 'package:dukaapp/features/stock/presentation/widgets/product_reports_helper.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class ManageStockPage extends ConsumerStatefulWidget {
   const ManageStockPage({super.key});
@@ -110,13 +111,14 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
   // ── Actions ──────────────────────────────────────────────────────────────
 
   void _deleteSelected(List<StockProduct> products) {
+    final s = ref.read(stringsProvider);
     final count = _selectedIds.length;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          'Delete Products',
+          s.deleteProducts,
           style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
         ),
         content: Text(
@@ -129,7 +131,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              'Cancel',
+              s.cancel,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -156,7 +158,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
               }
             },
             child: Text(
-              'Delete',
+              s.delete,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.danger,
                 fontWeight: FontWeight.w600,
@@ -169,6 +171,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
   }
 
   void _deleteProduct(StockProduct product) {
+    final s = ref.read(stringsProvider);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -189,7 +192,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              'Cancel',
+              s.cancel,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -214,7 +217,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
               }
             },
             child: Text(
-              'Delete',
+              s.delete,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.danger,
                 fontWeight: FontWeight.w600,
@@ -250,6 +253,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     // Reload stock when global date filter changes
     ref.listen<FilterState>(filterProvider, (_, __) {
       ref.read(stockProvider.notifier).refresh();
@@ -345,6 +349,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
   // ── Builders ─────────────────────────────────────────────────────────────
 
   PreferredSizeWidget _buildAppBar(bool isLoading) {
+    final s = ref.read(stringsProvider);
     return AppBar(
       backgroundColor: AppColors.card,
       elevation: 0,
@@ -367,7 +372,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
       ),
       leadingWidth: 56,
       title: Text(
-        'Manage Stock',
+        s.manageStock,
         style: AppTypography.h6.copyWith(
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w700,
@@ -391,6 +396,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
   }
 
   Widget _buildStatusChips(StockState stock) {
+    final s = ref.read(stringsProvider);
     final all = stock.products.length;
     final outOfStock =
         stock.products.where((p) => p.isOutOfStock).length;
@@ -413,7 +419,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
           StockStatusChip(
             icon: Icons.inventory_2_rounded,
             count: all,
-            label: 'All',
+            label: s.all,
             color: AppColors.textSecondary,
             backgroundColor: AppColors.background,
             isSelected: _activeFilter == 'all',
@@ -423,7 +429,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
           StockStatusChip(
             icon: Icons.remove_shopping_cart_rounded,
             count: outOfStock,
-            label: 'Out of Stock',
+            label: s.outOfStock,
             color: AppColors.danger,
             backgroundColor: AppColors.dangerLight,
             isSelected: _activeFilter == 'out_of_stock',
@@ -433,7 +439,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
           StockStatusChip(
             icon: Icons.schedule_rounded,
             count: 0,
-            label: 'To Expire',
+            label: s.toExpire,
             color: const Color(0xFFFF9800),
             backgroundColor: const Color(0xFFFFF3E0),
             isSelected: _activeFilter == 'to_expire',
@@ -453,7 +459,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
           StockStatusChip(
             icon: Icons.trending_down_rounded,
             count: lowStock,
-            label: 'Running Low',
+            label: s.runningLow,
             color: AppColors.primary,
             backgroundColor: const Color(0xFFE3F2FD),
             isSelected: _activeFilter == 'low_stock',
@@ -486,6 +492,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
   }
 
   Widget _buildActionButtons() {
+    final s = ref.read(stringsProvider);
     return SizedBox(
       height: 90,
       child: ListView(
@@ -495,7 +502,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
         children: [
           StockActionButton(
             icon: Icons.file_download_rounded,
-            label: 'Import',
+            label: s.importStock,
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
@@ -508,7 +515,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
           const SizedBox(width: 10),
           StockActionButton(
             icon: Icons.transfer_within_a_station_rounded,
-            label: 'Import From Shop',
+            label: s.importFromShop,
             onTap: () => context.push('/stock/manage/import-from-shop'),
           ),
           const SizedBox(width: 10),

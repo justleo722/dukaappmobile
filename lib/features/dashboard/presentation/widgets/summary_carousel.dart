@@ -33,7 +33,7 @@ class _SummaryCarouselState extends ConsumerState<SummaryCarousel> {
   @override
   void initState() {
     super.initState();
-    _cards = _buildCards(ShopConfig.defaults);
+    _cards = _buildCards(ShopConfig.defaults, null);
     final initialPage = (_cards.length * (_infiniteMultiplier ~/ 2));
     _pageController = PageController(viewportFraction: 0.48, initialPage: initialPage);
     _startAutoScroll();
@@ -44,13 +44,12 @@ class _SummaryCarouselState extends ConsumerState<SummaryCarousel> {
     super.didUpdateWidget(old);
     if (old.dashboard != widget.dashboard || old.sessionUser != widget.sessionUser) {
       final cfg = ref.read(shopConfigProvider).valueOrNull ?? ShopConfig.defaults;
-      setState(() => _cards = _buildCards(cfg));
+      final s = ref.read(stringsProvider);
+      setState(() => _cards = _buildCards(cfg, s));
     }
   }
 
-  /// Build summary card list from real API data.
-  /// Only include cards relevant to the user's permissions and shop settings.
-  List<Map<String, dynamic>> _buildCards(ShopConfig cfg) {
+  List<Map<String, dynamic>> _buildCards(ShopConfig cfg, AppStrings? s) {
     final d = widget.dashboard;
     final u = widget.sessionUser;
     final cur = d.currency;
@@ -64,7 +63,7 @@ class _SummaryCarouselState extends ConsumerState<SummaryCarousel> {
 
     if (u.canSeeSales && cfg.showTodaySales) {
       cards.add({
-        'title': 'Today Sales',
+        'title': s?.todaySales ?? 'Today Sales',
         'value': money(d.todaySales),
         'description': d.todaySales > 0 ? 'This month: ${money(d.thisMonthSales)}' : 'No sales today',
         'icon': Icons.point_of_sale_rounded,
@@ -77,7 +76,7 @@ class _SummaryCarouselState extends ConsumerState<SummaryCarousel> {
     if (u.canSeeProfitExpenses) {
       if (u.can('can_view_profit') && cfg.showTodayProfit) {
         cards.add({
-          'title': 'Today Profit',
+          'title': s?.todayProfit ?? 'Today Profit',
           'value': money(d.todayProfit),
           'description': d.todayProfit > 0 ? 'This month: ${money(d.thisMonthProfit)}' : 'No profit recorded',
           'icon': Icons.trending_up_rounded,
@@ -88,7 +87,7 @@ class _SummaryCarouselState extends ConsumerState<SummaryCarousel> {
       }
       if ((u.can('can_add_expense') || u.isOwner) && cfg.showTodayExpenses) {
         cards.add({
-          'title': 'Today Expense',
+          'title': s?.todayExpense ?? 'Today Expense',
           'value': money(d.todayExpense),
           'description': d.todayExpense > 0 ? 'This month: ${money(d.thisMonthExpense)}' : 'No expenses today',
           'icon': Icons.receipt_long_rounded,
@@ -101,7 +100,7 @@ class _SummaryCarouselState extends ConsumerState<SummaryCarousel> {
 
     if (u.canSeeStock && cfg.showTodayStockIn) {
       cards.add({
-        'title': 'Today Stock In',
+        'title': s?.todayStockIn ?? 'Today Stock In',
         'value': qty(d.todayStockin),
         'description': d.todayStockin > 0 ? 'This month: ${qty(d.thisMonthStockin)}' : 'No stock added',
         'icon': Icons.inventory_2_rounded,
@@ -114,7 +113,7 @@ class _SummaryCarouselState extends ConsumerState<SummaryCarousel> {
     if (u.canSeePurchases) {
       if (cfg.showToReceive) {
         cards.add({
-          'title': 'To Receive',
+          'title': s?.toReceive ?? 'To Receive',
           'value': money(d.todayCredit),
           'description': d.todayCredit > 0 ? 'Pending deliveries' : 'No pending receives',
           'icon': Icons.download_rounded,
@@ -125,7 +124,7 @@ class _SummaryCarouselState extends ConsumerState<SummaryCarousel> {
       }
       if (cfg.showToPay) {
         cards.add({
-          'title': 'To Pay',
+          'title': s?.toPay ?? 'To Pay',
           'value': money(d.todayTopay),
           'description': d.todayTopay > 0 ? 'Pending payments' : 'No pending payments',
           'icon': Icons.upload_rounded,
@@ -138,7 +137,7 @@ class _SummaryCarouselState extends ConsumerState<SummaryCarousel> {
 
     if (u.canSeeSales && cfg.showOrders) {
       cards.add({
-        'title': 'Today Orders',
+        'title': s?.todayOrders ?? 'Today Orders',
         'value': orders(d.todayOrders),
         'description': d.todayOrders > 0 ? 'Active orders today' : 'No orders today',
         'icon': Icons.shopping_bag_rounded,
@@ -148,7 +147,6 @@ class _SummaryCarouselState extends ConsumerState<SummaryCarousel> {
       });
     }
 
-    // Fallback: show at least one card if user has no matching permissions.
     if (cards.isEmpty) {
       cards.addAll(DashboardConstants.summaryCards);
     }
@@ -178,14 +176,20 @@ class _SummaryCarouselState extends ConsumerState<SummaryCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    // Rebuild cards when shopConfig loads/changes.
+    final s = ref.watch(stringsProvider);
+    // Rebuild cards when shopConfig or locale changes.
     ref.listen(shopConfigProvider, (_, next) {
       final cfg = next.valueOrNull ?? ShopConfig.defaults;
-      setState(() => _cards = _buildCards(cfg));
+      setState(() => _cards = _buildCards(cfg, s));
       if (_pageController.hasClients && _cards.isNotEmpty) {
         final initialPage = (_cards.length * (_infiniteMultiplier ~/ 2));
         _pageController.jumpToPage(initialPage);
       }
+    });
+    ref.listen(localeProvider, (_, __) {
+      final cfg = ref.read(shopConfigProvider).valueOrNull ?? ShopConfig.defaults;
+      final newS = ref.read(stringsProvider);
+      setState(() => _cards = _buildCards(cfg, newS));
     });
 
     if (_cards.isEmpty) return const SizedBox.shrink();

@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/dashboard/presentation/constants/dashboard_constants.dart';
 
-class FloatingActionBar extends StatelessWidget {
+class FloatingActionBar extends ConsumerWidget {
   const FloatingActionBar({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(stringsProvider);
     return Container(
       height: DashboardConstants.fabHeight,
       margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -22,33 +25,25 @@ class FloatingActionBar extends StatelessWidget {
           Expanded(
             child: _ActionButton(
               icon: Icons.add_shopping_cart_rounded,
-              label: 'Add Sale',
+              label: s.addSaleShortcut,
               color: AppColors.secondary,
               onTap: () => context.push('/sales/add'),
             ),
           ),
-          Container(
-            width: 1,
-            height: 28,
-            color: AppColors.border,
-          ),
+          Container(width: 1, height: 28, color: AppColors.border),
           Expanded(
             child: _ActionButton(
               icon: Icons.inventory_2_rounded,
-              label: 'Re-Stock',
+              label: s.purchase,
               color: AppColors.secondary,
               onTap: () => context.push('/purchase'),
             ),
           ),
-          Container(
-            width: 1,
-            height: 28,
-            color: AppColors.border,
-          ),
+          Container(width: 1, height: 28, color: AppColors.border),
           Expanded(
             child: _ActionButton(
               icon: Icons.receipt_long_rounded,
-              label: 'Order',
+              label: s.order,
               color: AppColors.secondary,
               onTap: () => context.push('/sales/add-order'),
             ),

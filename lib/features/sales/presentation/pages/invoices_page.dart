@@ -14,6 +14,7 @@ import 'package:dukaapp/features/sales/presentation/widgets/sales_bottom_actions
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
 import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class InvoicesPage extends ConsumerStatefulWidget {
   const InvoicesPage({super.key});
@@ -143,6 +144,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   }
 
   void _deleteInvoice(int index) {
+    final s = ref.read(stringsProvider);
     showDialog(
       context: context,
       useRootNavigator: true,
@@ -151,7 +153,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
           borderRadius: BorderRadius.circular(AppConstants.radiusMD),
         ),
         title: Text(
-          'Delete Invoice',
+          s.deleteInvoice,
           style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
         ),
         content: Text(
@@ -164,7 +166,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
           TextButton(
             onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
             child: Text(
-              'Cancel',
+              s.cancel,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -183,7 +185,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                   _expandedIndex = null;
                 });
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Invoice deleted')),
+                  SnackBar(content: Text(s.saleDeleted)),
                 );
               } catch (e) {
                 if (!mounted) return;
@@ -193,7 +195,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
               }
             },
             child: Text(
-              'Delete',
+              s.delete,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.danger,
                 fontWeight: FontWeight.w600,
@@ -206,6 +208,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   }
 
   void _deleteSelected() {
+    final s = ref.read(stringsProvider);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -213,7 +216,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
           borderRadius: BorderRadius.circular(16),
         ),
         title: Text(
-          'Delete Invoices',
+          s.deleteInvoices,
           style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
         ),
         content: Text(
@@ -226,7 +229,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              'Cancel',
+              s.cancel,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -250,7 +253,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                   _expandedIndex = null;
                 });
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Invoices deleted')),
+                  SnackBar(content: Text(s.salesDeleted)),
                 );
               } catch (e) {
                 if (!mounted) return;
@@ -260,7 +263,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
               }
             },
             child: Text(
-              'Delete',
+              s.delete,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.danger,
                 fontWeight: FontWeight.w600,
@@ -273,6 +276,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   }
 
   void _showPayDialog(int invoiceIndex) {
+    final s = ref.read(stringsProvider);
     final invoice = _invoices[invoiceIndex];
     final balance = invoice['balance'] as double;
     final amountController = TextEditingController(text: balance.toStringAsFixed(0));
@@ -289,7 +293,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
             borderRadius: BorderRadius.circular(AppConstants.radiusMD),
           ),
           title: Text(
-            'Add Payment',
+            s.addPayment,
             style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
           ),
           content: SingleChildScrollView(
@@ -368,7 +372,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                 ),
                 const SizedBox(height: 16),
                 _buildDialogField(
-                  label: 'Amount to Collect',
+                  label: s.amountToCollect,
                   child: TextField(
                     controller: amountController,
                     keyboardType: TextInputType.number,
@@ -395,7 +399,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                 ),
                 const SizedBox(height: 16),
                 _buildDialogField(
-                  label: 'Select Account',
+                  label: s.selectAccount,
                   child: DropdownButtonFormField<String>(
                     initialValue: selectedAccount,
                     isExpanded: true,
@@ -435,7 +439,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                     child: Text(
-                      'Cancel',
+                      s.cancel,
                       style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
                     ),
                   ),
@@ -467,7 +471,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                             }
                           });
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Payment recorded successfully')),
+                            SnackBar(content: Text(s.paymentRecordedSuccessfully)),
                           );
                         } catch (e) {
                           if (!mounted) return;
@@ -519,6 +523,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   }
 
   void _showBackdateDialog(int invoiceIndex) async {
+    final s = ref.read(stringsProvider);
     final invoice = _invoices[invoiceIndex];
     final dateStr = invoice['date'] as String;
     final parts = dateStr.split(' ');
@@ -539,14 +544,14 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
             borderRadius: BorderRadius.circular(AppConstants.radiusMD),
           ),
           title: Text(
-            'Backdate Invoice',
+            s.backdateInvoice,
             style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Select a new date for this invoice',
+                s.selectNewDateForInvoice,
                 style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -627,7 +632,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
             TextButton(
               onPressed: () => Navigator.pop(context, selectedDate),
               child: Text(
-                'Backdate',
+                s.backdate,
                 style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w600,
@@ -654,7 +659,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
           _invoices[invoiceIndex]['date'] = formatted;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invoice date updated')),
+          SnackBar(content: Text(s.saleDateUpdated)),
         );
       } catch (e) {
         if (!mounted) return;
@@ -986,6 +991,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
     double totalAmount,
     bool isPaid,
   ) {
+    final s = ref.read(stringsProvider);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -995,17 +1001,17 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
       ),
       child: Column(
         children: [
-          _buildTotalRow('Subtotal', _formatCurrency(totalAmount)),
+          _buildTotalRow(s.subtotal, _formatCurrency(totalAmount)),
           const SizedBox(height: 8),
           _buildTotalRow('Discount', '- ${_formatCurrency(invoice['discount'] as double)}'),
           const SizedBox(height: 8),
-          _buildTotalRow('Paid Amount', _formatCurrency(invoice['paid'] as double)),
+          _buildTotalRow(s.paidAmount, _formatCurrency(invoice['paid'] as double)),
           const Divider(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Balance Due',
+                s.balanceDue,
                 style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -1030,7 +1036,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
             ],
           ),
           const SizedBox(height: 8),
-          _buildTotalRow('Payment Mode', invoice['paymentMode'] as String),
+          _buildTotalRow(s.paymentMode, invoice['paymentMode'] as String),
         ],
       ),
     );
@@ -1078,6 +1084,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   }
 
   Widget _buildPreviewActions() {
+    final s = ref.read(stringsProvider);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1099,7 +1106,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               child: Text(
-                'Close',
+                s.close,
                 style: AppTypography.buttonMedium.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -1117,7 +1124,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
               },
               icon: const Icon(Icons.print_rounded, color: Colors.white, size: 18),
               label: Text(
-                'Print Invoice',
+                s.printInvoice,
                 style: AppTypography.buttonMedium.copyWith(color: Colors.white),
               ),
               style: ElevatedButton.styleFrom(
@@ -1138,6 +1145,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     ref.listen<FilterState>(filterProvider, (_, f) => _loadInvoices(from: f.from, to: f.to));
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
@@ -1174,6 +1182,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final s = ref.read(stringsProvider);
     return AppBar(
       backgroundColor: AppColors.card,
       elevation: 0,
@@ -1198,7 +1207,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
       title: Column(
         children: [
           Text(
-            'Invoices',
+            s.invoices,
             style: AppTypography.h6.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -1219,13 +1228,14 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   }
 
   Widget _buildSummaryCards() {
+    final s = ref.read(stringsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       child: Row(
         children: [
           Expanded(
             child: _buildSummaryCard(
-              label: 'Paid Total',
+              label: s.paidTotal,
               amount: _formatCurrency(_paidTotal),
               color: AppColors.success,
               bgColor: AppColors.successLight,
@@ -1235,7 +1245,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
           const SizedBox(width: 12),
           Expanded(
             child: _buildSummaryCard(
-              label: 'Unpaid Total',
+              label: s.unpaidTotal,
               amount: _formatCurrency(_unpaidTotal),
               color: AppColors.danger,
               bgColor: AppColors.dangerLight,
@@ -1310,6 +1320,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   }
 
   Widget _buildActionButtons() {
+    final s = ref.read(stringsProvider);
     return SizedBox(
       height: 90,
       child: Center(
@@ -1321,13 +1332,13 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
           children: [
             SalesActionButton(
               icon: Icons.filter_list_rounded,
-              label: 'Filter',
+              label: s.filter,
               onTap: () => AppFilterDialog.show(context),
             ),
             const SizedBox(width: 10),
             SalesActionButton(
               icon: Icons.receipt_long_rounded,
-              label: 'Generate Invoice',
+              label: s.generateInvoice,
               isHighlighted: true,
               onTap: () => context.push('/sales/create-invoice'),
             ),
@@ -1463,6 +1474,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   }
 
   Widget _buildInvoicesList() {
+    final s = ref.read(stringsProvider);
     if (_isLoading) return _buildSkeleton();
     if (_filteredInvoices.isEmpty) {
       return Container(
@@ -1487,7 +1499,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
             ),
             const SizedBox(height: 12),
             Text(
-              'No invoices found',
+              s.noInvoicesFound,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textHint,
               ),
@@ -1700,6 +1712,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
     List<Map<String, dynamic>> products,
     double totalAmount,
   ) {
+    final s = ref.read(stringsProvider);
     final isExpanded = _expandedIndex == invoiceIndex;
     final isUnpaid = invoice['status'] == 'UNPAID';
     return AnimatedSize(
@@ -1722,7 +1735,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                   ],
                   const SizedBox(height: 12),
                   Text(
-                    'Purchased Products',
+                    s.purchasedProducts,
                     style: AppTypography.captionBold.copyWith(
                       color: AppColors.textPrimary,
                       fontSize: 11,
@@ -1764,6 +1777,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   }
 
   Widget _buildPayButton(int invoiceIndex) {
+    final s = ref.read(stringsProvider);
     return GestureDetector(
       onTap: () => _showPayDialog(invoiceIndex),
       child: Container(
@@ -1779,7 +1793,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
             const Icon(Icons.payment_rounded, color: Colors.white, size: 18),
             const SizedBox(width: 8),
             Text(
-              'Pay',
+              s.pay,
               style: AppTypography.buttonMedium.copyWith(
                 color: Colors.white,
                 fontSize: 13,

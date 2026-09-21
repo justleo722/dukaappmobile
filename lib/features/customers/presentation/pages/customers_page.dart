@@ -109,6 +109,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     ref.listen<FilterState>(filterProvider, (_, __) => _loadCustomers());
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
@@ -182,6 +183,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
   }
 
   Widget _buildActionButtons() {
+    final s = ref.read(stringsProvider);
     return Container(
       color: AppColors.card,
       padding: const EdgeInsets.symmetric(
@@ -194,7 +196,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
         children: [
           _buildActionChip(
             icon: Icons.card_membership_rounded,
-            label: 'Loyalty',
+            label: s.loyalty,
             color: AppColors.primary,
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -218,7 +220,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
           const SizedBox(width: 8),
           _buildActionChip(
             icon: Icons.account_balance_wallet_rounded,
-            label: 'Wallet',
+            label: s.wallet,
             color: AppColors.success,
             onTap: () => context.push('/customers/wallet'),
           ),
@@ -232,7 +234,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
           const SizedBox(width: 8),
           _buildActionChip(
             icon: Icons.person_add_rounded,
-            label: 'New Customer',
+            label: s.newCustomer,
             color: AppColors.primary,
             onTap: () async {
               final saved = await context.push('/customers/add');
@@ -451,6 +453,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
   }
 
   void _showDeleteConfirmation(Customer customer) {
+    final s = ref.read(stringsProvider);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -458,7 +461,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
           borderRadius: BorderRadius.circular(AppConstants.radiusLG),
         ),
         title: Text(
-          'Delete Customer',
+          s.deleteCustomer,
           style: AppTypography.h6.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,

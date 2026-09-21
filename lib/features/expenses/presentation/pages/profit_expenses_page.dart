@@ -81,38 +81,44 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
     } else {
       setState(() => _isLoading = true);
     }
-    try {
-      final repo = ref.read(expenseRepositoryProvider);
-      final results = await Future.wait([
-        repo.fetchExpenses(from: from, to: to),
-        repo.fetchExpenseSummary(from: from, to: to),
-        repo.fetchExpenseAccounts(),
-        repo.fetchCashbookAccounts(),
-      ]);
-      if (!mounted) return;
-      final fetchedCategories = results[2] as List<ExpenseAccount>;
-      final fetchedCashbook = results[3] as List<ExpenseAccount>;
-      // Persist to local cache
-      if (fetchedCategories.isNotEmpty) _saveAccountsCache(_kCategoryCache, fetchedCategories);
-      if (fetchedCashbook.isNotEmpty) _saveAccountsCache(_kCashbookCache, fetchedCashbook);
-      final freshExpenses = results[0] as List<ExpenseItem>;
-      if (freshExpenses.isNotEmpty) {
-        cache.save('expenses', 'list', freshExpenses.map((e) => {
-          'flow_id': e.flowId, 'record_date': e.date, 'title': e.title,
-          'account_name': e.category, 'amount': e.amount,
-          'currency': e.currency, 'note': e.note,
-        }).toList());
-      }
-      setState(() {
-        _expenses = freshExpenses;
-        _summary = results[1] as ExpenseSummary;
-        if (fetchedCategories.isNotEmpty) _expenseAccounts = fetchedCategories;
-        if (fetchedCashbook.isNotEmpty) _cashbookAccounts = fetchedCashbook;
-        _isLoading = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+    final repo = ref.read(expenseRepositoryProvider);
+
+    // Fetch summary + expenses independently so account errors don't block them
+    final summaryFuture = repo.fetchExpenseSummary(from: from, to: to)
+        .catchError((_) => ExpenseSummary.empty);
+    final expensesFuture = repo.fetchExpenses(from: from, to: to)
+        .catchError((_) => <ExpenseItem>[]);
+    final accountsFuture = repo.fetchExpenseAccounts()
+        .catchError((_) => <ExpenseAccount>[]);
+    final cashbookFuture = repo.fetchCashbookAccounts()
+        .catchError((_) => <ExpenseAccount>[]);
+
+    final results = await Future.wait([
+      summaryFuture, expensesFuture, accountsFuture, cashbookFuture,
+    ]);
+    if (!mounted) return;
+
+    final summary = results[0] as ExpenseSummary;
+    final freshExpenses = results[1] as List<ExpenseItem>;
+    final fetchedCategories = results[2] as List<ExpenseAccount>;
+    final fetchedCashbook = results[3] as List<ExpenseAccount>;
+
+    if (fetchedCategories.isNotEmpty) _saveAccountsCache(_kCategoryCache, fetchedCategories);
+    if (fetchedCashbook.isNotEmpty) _saveAccountsCache(_kCashbookCache, fetchedCashbook);
+    if (freshExpenses.isNotEmpty) {
+      cache.save('expenses', 'list', freshExpenses.map((e) => {
+        'flow_id': e.flowId, 'record_date': e.date, 'title': e.title,
+        'account_name': e.category, 'amount': e.amount,
+        'currency': e.currency, 'note': e.note,
+      }).toList());
     }
+    setState(() {
+      _summary = summary;
+      _expenses = freshExpenses;
+      if (fetchedCategories.isNotEmpty) _expenseAccounts = fetchedCategories;
+      if (fetchedCashbook.isNotEmpty) _cashbookAccounts = fetchedCashbook;
+      _isLoading = false;
+    });
   }
 
   List<ExpenseItem> get _filteredExpenses {
@@ -147,6 +153,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
   }
 
   Future<void> _showAddExpenseDialog() async {
+    final s = ref.read(stringsProvider);
     // Ensure categories are loaded before opening dialog
     List<ExpenseAccount> expenseAccounts = List.of(_expenseAccounts);
     List<ExpenseAccount> cashbookAccounts = List.of(_cashbookAccounts);
@@ -212,7 +219,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
                 child: Row(
                   children: [
                     Text(
-                      'Add Expense',
+                      s.addExpense,
                       style: AppTypography.h6.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w700,
@@ -249,7 +256,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
                                 child: DropdownButton<String>(
                                   value: selectedCategoryId,
                                   hint: Text(
-                                    'Select category',
+                                    s.selectCategory,
                                     style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
                                   ),
                                   isExpanded: true,
@@ -271,7 +278,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
                                     content: TextField(
                                       controller: newCatController,
                                       decoration: InputDecoration(
-                                        hintText: 'Category name',
+                                        hintText: s.categoryNameHint,
                                         border: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
                                         ),
@@ -306,13 +313,13 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      _buildDialogFieldLabel('Expense Name'),
+                      _buildDialogFieldLabel(s.expenseName),
                       const SizedBox(height: 6),
                       TextField(
                         controller: nameController,
                         style: AppTypography.bodyMedium,
                         decoration: InputDecoration(
-                          hintText: 'Enter expense name',
+                          hintText: s.enterExpenseName,
                           hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
                           filled: true,
                           fillColor: AppColors.card,
@@ -526,7 +533,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
                                   if (!mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text(result['message']?.toString() ?? 'Failed to save expense'),
+                                      content: Text(result['message']?.toString() ?? s.failedToSaveExpense),
                                       backgroundColor: Colors.orange,
                                     ),
                                   );
@@ -539,7 +546,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                      'Expense saved successfully',
+                                      s.expenseSavedSuccessfully,
                                       style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
                                     ),
                                     backgroundColor: AppColors.success,
@@ -559,7 +566,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
                           },
                           icon: const Icon(Icons.check_rounded, size: 18, color: AppColors.textWhite),
                           label: Text(
-                            'Save Expense',
+                            s.saveExpense,
                             style: AppTypography.buttonLarge.copyWith(color: AppColors.textWhite),
                           ),
                           style: ElevatedButton.styleFrom(
@@ -594,6 +601,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
   }
 
   void _showDeleteDialog(ExpenseItem expense) {
+    final s = ref.read(stringsProvider);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -627,7 +635,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: Text(
-              'Cancel',
+              s.cancel,
               style: AppTypography.buttonLarge.copyWith(color: AppColors.textSecondary),
             ),
           ),
@@ -672,6 +680,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
   // ─── UI ──────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     ref.listen<FilterState>(filterProvider, (_, f) => _loadExpenses(from: f.from, to: f.to));
     final expenses = _filteredExpenses;
 
@@ -781,13 +790,14 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
 
   // ─── TODAY SUMMARY ───────────────────────────────────────────────────
   Widget _buildTodaySummary() {
+    final s = ref.read(stringsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       child: Row(
         children: [
           Expanded(
             child: _buildSummaryCard(
-              label: 'Today Total Expenses',
+              label: s.todayTotalExpenses,
               amount: _fmt(_todayExpenses),
               color: AppColors.primary,
               bgColor: const Color(0xFFEBF2FF),
@@ -797,7 +807,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
           const SizedBox(width: 12),
           Expanded(
             child: _buildSummaryCard(
-              label: 'Today Net Profit',
+              label: s.todayNetProfit,
               amount: _fmt(_todayNetProfit.abs()),
               color: AppColors.primary,
               bgColor: const Color(0xFFEBF2FF),
@@ -867,6 +877,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
 
   // ─── BREAKDOWN CARDS ────────────────────────────────────────────────
   Widget _buildBreakdownCards() {
+    final s = ref.read(stringsProvider);
     final items = [
       _BreakdownData('Total Sales', _fmt(_totalSales), Icons.point_of_sale_rounded, AppColors.primary, AppColors.primaryLight),
       _BreakdownData('Gross Profit', _fmt(_grossProfit), Icons.trending_up_rounded, AppColors.success, AppColors.successLight),
@@ -895,7 +906,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Detailed Breakdown',
+              s.detailedBreakdown,
               style: AppTypography.bodyMedium.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
@@ -947,6 +958,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
 
   // ─── ACTION BUTTONS ─────────────────────────────────────────────────
   Widget _buildActionButtons(BuildContext context) {
+    final s = ref.read(stringsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       child: Row(
@@ -958,7 +970,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
                 onPressed: () => context.push('/profit-expenses/reports'),
                 icon: const Icon(Icons.assessment_rounded, size: 18, color: AppColors.primary),
                 label: Text(
-                  'Report',
+                  s.report,
                   style: AppTypography.buttonLarge.copyWith(color: AppColors.primary),
                 ),
                 style: OutlinedButton.styleFrom(
@@ -980,7 +992,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
                 onPressed: _showAddExpenseDialog,
                 icon: const Icon(Icons.add_rounded, size: 18, color: AppColors.textWhite),
                 label: Text(
-                  'Add Expense',
+                  s.addExpense,
                   style: AppTypography.buttonLarge.copyWith(color: AppColors.textWhite),
                 ),
                 style: ElevatedButton.styleFrom(

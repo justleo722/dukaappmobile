@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/core/l10n/app_strings.dart';
+export 'package:dukaapp/core/l10n/app_strings.dart' show localeProvider, stringsProvider, AppStrings;
 import 'package:dukaapp/core/network/api_client.dart';
 import 'package:dukaapp/core/storage/secure_storage_service.dart';
 import 'package:dukaapp/core/storage/local_storage_service.dart';

@@ -18,6 +18,7 @@ import 'package:dukaapp/features/sales/presentation/widgets/receipt_widget.dart'
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/features/purchase/presentation/providers/purchase_provider.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class PurchaseOrdersPage extends ConsumerStatefulWidget {
   const PurchaseOrdersPage({super.key});
@@ -150,6 +151,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
   }
 
   void _showUpdateStatusDialog(int index) {
+    final s = ref.read(stringsProvider);
     final order = _orders[index];
     String? selectedStatus;
     String? selectedAccount;
@@ -187,7 +189,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Update Purchase Order Status',
+                          s.updatePurchaseOrderStatus,
                           style: AppTypography.h6.copyWith(
                             color: AppColors.textPrimary,
                             fontWeight: FontWeight.w700,
@@ -211,7 +213,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
                         child: DropdownButton<String>(
                           value: selectedStatus,
                           hint: Text(
-                            'Select Status',
+                            s.selectStatus,
                             style: AppTypography.bodyMedium.copyWith(
                               color: AppColors.textHint,
                             ),
@@ -234,7 +236,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
                   ),
                   const SizedBox(height: 14),
                   _buildDialogField(
-                    label: 'Payment Account',
+                    label: s.paymentAccount,
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -441,6 +443,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
   }
 
   void _showBackdateDialog(int index) async {
+    final s = ref.read(stringsProvider);
     final order = _orders[index];
     final dateStr = order['date'] as String;
     final parts = dateStr.split(' ');
@@ -461,7 +464,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
             borderRadius: BorderRadius.circular(AppConstants.radiusMD),
           ),
           title: Text(
-            'Backdate Purchase Order',
+            s.backdatePurchaseOrder,
             style: AppTypography.h6.copyWith(color: AppColors.textPrimary),
           ),
           content: Column(
@@ -549,7 +552,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
             TextButton(
               onPressed: () => Navigator.pop(context, selectedDate),
               child: Text(
-                'Backdate',
+                s.backdate,
                 style: AppTypography.bodyMedium.copyWith(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w600,
@@ -577,6 +580,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
   }
 
   void _showReceiptPreview(Map<String, dynamic> order) {
+    final s = ref.read(stringsProvider);
     final products = List<Map<String, dynamic>>.from(order['products']);
     final totalAmount = products.fold<double>(
       0,
@@ -585,7 +589,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
 
     ReceiptWidget.show(
       context,
-      title: 'Purchase Order Receipt',
+      title: s.purchaseOrderReceipt,
       receiptNumber: order['poNumber'],
       date: order['date'].split(' ').take(2).join(' '),
       time: order['date'].split(' ').last,
@@ -786,6 +790,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     ref.listen<FilterState>(filterProvider, (prev, next) {
       if (prev?.from != next.from || prev?.to != next.to) {
         _loadOrders(from: next.from, to: next.to);
@@ -825,6 +830,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final s = ref.read(stringsProvider);
     return AppBar(
       backgroundColor: AppColors.card,
       elevation: 0,
@@ -849,7 +855,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
       title: Column(
         children: [
           Text(
-            'Purchase Orders',
+            s.purchaseOrders,
             style: AppTypography.h6.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -870,6 +876,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
   }
 
   Widget _buildSummarySection() {
+    final s = ref.read(stringsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       child: Row(
@@ -913,7 +920,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Outstanding Balance',
+                          s.outstandingBalance,
                           style: AppTypography.caption.copyWith(
                             color: AppColors.textSecondary,
                             fontWeight: FontWeight.w500,
@@ -1005,6 +1012,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
   }
 
   Widget _buildActionButtons() {
+    final s = ref.read(stringsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       child: Row(
@@ -1054,7 +1062,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'New Purchase Order',
+                      s.newPurchaseOrder,
                       style: AppTypography.caption.copyWith(
                         color: AppColors.textWhite,
                         fontWeight: FontWeight.w600,
@@ -1345,6 +1353,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
     List<Map<String, dynamic>> products,
     double totalAmount,
   ) {
+    final s = ref.read(stringsProvider);
     final isExpanded = _expandedIndex == orderIndex;
     final isPending = order['status'] == 'PENDING';
     return AnimatedSize(
@@ -1393,7 +1402,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
                   ],
                   const SizedBox(height: 12),
                   Text(
-                    'Ordered Products',
+                    s.orderedProducts,
                     style: AppTypography.captionBold.copyWith(
                       color: AppColors.textPrimary,
                       fontSize: 11,

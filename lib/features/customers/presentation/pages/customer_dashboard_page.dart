@@ -80,6 +80,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -103,14 +104,14 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
             const SizedBox(height: 20),
             _buildSectionHeader(
               icon: Icons.account_balance_wallet_rounded,
-              title: 'Wallet Transactions',
+              title: s.walletTransactions,
             ),
             const SizedBox(height: 12),
             _buildWalletTransactions(),
             const SizedBox(height: 20),
             _buildSectionHeader(
               icon: Icons.receipt_long_rounded,
-              title: 'Sales Records',
+              title: s.salesRecords,
             ),
             const SizedBox(height: 12),
             _buildSalesRecords(),
@@ -121,6 +122,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
+    final s = ref.read(stringsProvider);
     return AppBar(
       backgroundColor: AppColors.card,
       elevation: 0,
@@ -143,7 +145,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
       ),
       leadingWidth: 56,
       title: Text(
-        'Customer Dashboard',
+        s.customerDashboard,
         style: AppTypography.h6.copyWith(
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w700,
@@ -161,6 +163,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
   }
 
   Widget _buildCustomerDetailsCard() {
+    final s = ref.read(stringsProvider);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -230,7 +233,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
             const SizedBox(height: 12),
             _buildDetailRow(
               Icons.account_balance_wallet_outlined,
-              'Credit Limit',
+              s.creditLimit,
               'TZS ${_customer.creditLimit.toStringAsFixed(0)}',
             ),
           ],
@@ -266,6 +269,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
   }
 
   Widget _buildSalesSummaryCard() {
+    final s = ref.read(stringsProvider);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.card,
@@ -284,7 +288,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Sales Summary',
+              s.salesSummary,
               style: AppTypography.label.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.w700,
@@ -303,7 +307,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: _buildSummaryItem(
-                    'Total Spent',
+                    s.totalSpent,
                     'TZS ${_customer.totalSpent.toStringAsFixed(0)}',
                     AppColors.textPrimary,
                   ),
@@ -323,7 +327,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: _buildSummaryItem(
-                    'Credit Balance',
+                    s.creditBalance,
                     'TZS ${_customer.creditBalance.toStringAsFixed(0)}',
                     _customer.creditBalance > 0
                         ? AppColors.danger
@@ -337,7 +341,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
               children: [
                 Expanded(
                   child: _buildSummaryItem(
-                    'Wallet Balance',
+                    s.walletBalance,
                     'TZS ${_walletBalance.toStringAsFixed(0)}',
                     AppColors.primary,
                   ),
@@ -384,6 +388,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
   }
 
   Widget _buildActionButtons() {
+    final s = ref.read(stringsProvider);
     return SizedBox(
       height: 42,
       child: ListView(
@@ -398,42 +403,42 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
           const SizedBox(width: 8),
           _buildActionChip(
             icon: Icons.account_balance_wallet_rounded,
-            label: 'Wallet Statement',
+            label: s.walletStatement,
             color: AppColors.primary,
             onTap: () => _showComingSoon('Wallet Statement'),
           ),
           const SizedBox(width: 8),
           _buildActionChip(
             icon: Icons.shopping_cart_rounded,
-            label: 'Wallet Sales',
+            label: s.walletSales,
             color: AppColors.success,
             onTap: () => _showComingSoon('Wallet Sales'),
           ),
           const SizedBox(width: 8),
           _buildActionChip(
             icon: Icons.add_circle_outline_rounded,
-            label: 'Add Cash',
+            label: s.addCash,
             color: AppColors.secondary,
             onTap: () => _showAddCashDialog(),
           ),
           const SizedBox(width: 8),
           _buildActionChip(
             icon: Icons.edit_rounded,
-            label: 'Edit Customer',
+            label: s.editCustomer,
             color: AppColors.primary,
             onTap: () => context.push('/customers/add', extra: _customer),
           ),
           const SizedBox(width: 8),
           _buildActionChip(
             icon: Icons.add_card_rounded,
-            label: 'Add Credit',
+            label: s.addCredit,
             color: AppColors.warning,
             onTap: () => _showAddCreditDialog(),
           ),
           const SizedBox(width: 8),
           _buildActionChip(
             icon: Icons.clear_all_rounded,
-            label: 'Clear Credit',
+            label: s.clearCredit,
             color: AppColors.danger,
             onTap: () => _showClearCreditDialog(),
           ),
@@ -507,13 +512,14 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
   }
 
   Widget _buildWalletTransactions() {
+    final s = ref.read(stringsProvider);
     if (_isLoadingData) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_walletTransactions.isEmpty) {
       return _buildEmptyPlaceholder(
         icon: Icons.account_balance_wallet_outlined,
-        message: 'No wallet transactions yet',
+        message: s.noWalletTransactionsYet,
       );
     }
     // Build from real API data
@@ -533,7 +539,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
     if (transactions.isEmpty) {
       return _buildEmptyPlaceholder(
         icon: Icons.account_balance_wallet_outlined,
-        message: 'No wallet transactions yet',
+        message: s.noWalletTransactionsYet,
       );
     }
 
@@ -715,13 +721,14 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
   }
 
   Widget _buildSalesRecords() {
+    final s = ref.read(stringsProvider);
     if (_isLoadingData) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_salesRecords.isEmpty) {
       return _buildEmptyPlaceholder(
         icon: Icons.receipt_long_outlined,
-        message: 'No sales records yet',
+        message: s.noSalesRecordsYet,
       );
     }
     double _d(dynamic v) => num.tryParse(v?.toString() ?? '')?.toDouble() ?? 0.0;
@@ -744,7 +751,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
     if (sales.isEmpty) {
       return _buildEmptyPlaceholder(
         icon: Icons.receipt_long_outlined,
-        message: 'No sales records yet',
+        message: s.noSalesRecordsYet,
       );
     }
 
@@ -993,6 +1000,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
   }
 
   void _showDeleteTransactionConfirmation() {
+    final s = ref.read(stringsProvider);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1000,7 +1008,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
           borderRadius: BorderRadius.circular(AppConstants.radiusLG),
         ),
         title: Text(
-          'Delete Transaction',
+          s.deleteTransaction,
           style: AppTypography.h6.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
@@ -1016,7 +1024,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              'Cancel',
+              s.cancel,
               style: AppTypography.buttonMedium.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -1028,7 +1036,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    'Transaction deleted',
+                    s.transactionDeleted,
                     style: AppTypography.bodyMedium.copyWith(
                       color: AppColors.textWhite,
                     ),
@@ -1042,7 +1050,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
               );
             },
             child: Text(
-              'Delete',
+              s.delete,
               style: AppTypography.buttonMedium.copyWith(
                 color: AppColors.danger,
               ),

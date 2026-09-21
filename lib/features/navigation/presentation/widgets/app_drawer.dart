@@ -142,6 +142,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     final authState  = ref.watch(authProvider);
     final screenWidth = MediaQuery.of(context).size.width;
     final drawerWidth = screenWidth * 0.78;
@@ -188,7 +189,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             ),
             DrawerMenuItem(
               icon          : Icons.add_rounded,
-              label         : 'Add Shop',
+              label         : s.addShop,
               showExpandIcon: true,
               onTap: () {
                 Navigator.pop(context);
@@ -215,7 +216,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             ),
             DrawerMenuItem(
               icon : Icons.book_rounded,
-              label: 'Guide',
+              label: s.guide,
               onTap: () {
                 Navigator.pop(context);
                 _openGuide();
@@ -224,7 +225,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
             const Spacer(),
             DrawerMenuItem(
               icon        : Icons.logout_rounded,
-              label       : 'Logout',
+              label       : s.logout,
               onTap       : () => _confirmLogout(),
               isDestructive: true,
             ),

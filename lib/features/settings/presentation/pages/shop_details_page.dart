@@ -103,10 +103,10 @@ class _ShopDetailsPageState extends ConsumerState<ShopDetailsPage> {
       if (!mounted) return;
       final status = res['status']?.toString() ?? '';
       if (status == 'success' || status == 'info') {
-        // Refresh cached shop config so dashboard and other pages update.
         ref.read(shopConfigProvider.notifier).refresh().ignore();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Shop details saved successfully'),
+        final msg = res['message']?.toString() ?? 'Shop details saved successfully';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(msg),
           backgroundColor: AppColors.success,
         ));
         context.go('/shop-settings');

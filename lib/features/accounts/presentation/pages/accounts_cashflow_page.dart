@@ -102,6 +102,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
 
   @override
   Widget build(BuildContext context) {
+    final s = ref.watch(stringsProvider);
     ref.listen<FilterState>(filterProvider, (prev, next) {
       if (prev?.from != next.from || prev?.to != next.to) {
         _loadCashflow(from: next.from, to: next.to);
@@ -136,12 +137,13 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
   }
 
   void _showAddCashInDialog() {
+    final s = ref.read(stringsProvider);
     String? selectedFromAccountId;
     String? selectedToAccountId;
     final titleController = TextEditingController();
     final amountController = TextEditingController();
     DateTime selectedDate = DateTime.now();
-    final categories = ['Capital', 'Loan', 'Balancing'];
+    final categories = [s.capital, s.loan, s.balancing];
     String? selectedCategory;
 
     showModalBottomSheet(
@@ -208,7 +210,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
                   return;
                 }
                 if (amount <= 0 || title.isEmpty || selectedFromAccountId == null || selectedToAccountId == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fill all fields and select both accounts')));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.fillAllFieldsAndSelectBothAccounts)));
                   return;
                 }
                 Navigator.pop(ctx);
@@ -233,7 +235,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.danger));
                 }
-              }, AppColors.primary, 'Save'),
+              }, AppColors.primary, s.save),
             ],
           ),
         ),
@@ -242,13 +244,14 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
   }
 
   void _showAddCashOutDialog() {
+    final s = ref.read(stringsProvider);
     String? selectedCategory;
     String? selectedFromAccountId;
     String? selectedToAccountId;
     final titleController = TextEditingController();
     final amountController = TextEditingController();
     DateTime selectedDate = DateTime.now();
-    final categories = ['To Bank', 'To Personal Use', 'Other'];
+    final categories = [s.toBank, s.toPersonalUse, 'Other'];
 
     showModalBottomSheet(
       context: context,
@@ -314,7 +317,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
                   return;
                 }
                 if (amount <= 0 || title.isEmpty || selectedFromAccountId == null || selectedToAccountId == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fill all fields and select both accounts')));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.fillAllFieldsAndSelectBothAccounts)));
                   return;
                 }
                 Navigator.pop(ctx);
@@ -339,7 +342,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.danger));
                 }
-              }, AppColors.danger, 'Save'),
+              }, AppColors.danger, s.save),
             ],
           ),
         ),
@@ -369,6 +372,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
   }
 
   Widget _buildAccountDropdown(BuildContext ctx, StateSetter setDialogState, String? value, ValueChanged<String?> onChanged) {
+    final s = ref.read(stringsProvider);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -376,7 +380,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
-          hint: Text(_accounts.isEmpty ? 'Loading accounts…' : 'Select account…', style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint)),
+          hint: Text(_accounts.isEmpty ? s.loadingAccounts : s.selectAccount, style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint)),
           isExpanded: true,
           items: _accounts.map((a) {
             final id = (a['account_id'] ?? a['id'] ?? '').toString();
@@ -475,6 +479,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
+    final s = ref.read(stringsProvider);
     return AppBar(
       backgroundColor: AppColors.card,
       elevation: 0,
@@ -487,7 +492,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
       ),
       leadingWidth: 56,
       title: Column(children: [
-        Text('Accounts and Cashflow', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+        Text(s.accountsAndCashflow, style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
         const SizedBox(height: 2),
         Text('Track cash movement.', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 10)),
       ]),
@@ -506,6 +511,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
   }
 
   Widget _buildSummaryCards() {
+    final s = ref.read(stringsProvider);
     return SizedBox(
       height: 120,
       child: ListView.separated(
@@ -515,10 +521,10 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
         separatorBuilder: (context, index) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
           switch (index) {
-            case 0: return _summaryCard('Cash In', _fmt(_totalCashIn), AppColors.success, AppColors.successLight, Icons.arrow_downward_rounded);
-            case 1: return _summaryCard('Cash Out', _fmt(_totalCashOut), AppColors.danger, AppColors.dangerLight, Icons.arrow_upward_rounded);
+            case 0: return _summaryCard(s.cashIn, _fmt(_totalCashIn), AppColors.success, AppColors.successLight, Icons.arrow_downward_rounded);
+            case 1: return _summaryCard(s.cashOut, _fmt(_totalCashOut), AppColors.danger, AppColors.dangerLight, Icons.arrow_upward_rounded);
             case 2: return _summaryCard('Cash in Hand', _fmt(_cashInHand.abs()), _cashInHand >= 0 ? AppColors.primary : AppColors.danger, _cashInHand >= 0 ? const Color(0xFFEBF2FF) : AppColors.dangerLight, Icons.payments_rounded);
-            case 3: return _summaryCard('Customer Wallet', _fmt(_customerWallet), const Color(0xFF14B8A6), const Color(0xFFE0FFF9), Icons.account_balance_wallet_rounded);
+            case 3: return _summaryCard(s.customerWallet, _fmt(_customerWallet), const Color(0xFF14B8A6), const Color(0xFFE0FFF9), Icons.account_balance_wallet_rounded);
             default: return const SizedBox.shrink();
           }
         },
@@ -609,6 +615,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
   }
 
   Widget _buildSearchField() {
+    final s = ref.read(stringsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       child: TextField(
@@ -616,7 +623,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
         onChanged: (_) => setState(() {}),
         style: AppTypography.bodyMedium,
         decoration: InputDecoration(
-          hintText: 'Search cashflow\u2026',
+          hintText: s.searchCashflow,
           hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
           prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textHint, size: 20),
           suffixIcon: _searchController.text.isNotEmpty ? IconButton(onPressed: () { _searchController.clear(); setState(() {}); }, icon: const Icon(Icons.close_rounded, color: AppColors.textHint, size: 18)) : null,
@@ -632,9 +639,10 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
   }
 
   Widget _buildSectionHeader() {
+    final s = ref.read(stringsProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-      child: Text('Cashflow', style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+      child: Text(s.cashflow, style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
     );
   }
 
