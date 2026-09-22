@@ -507,7 +507,7 @@ class _CustomersWalletPageState extends ConsumerState<CustomersWalletPage> {
   void _showAddCashDialog(Customer customer) {
     showDialog(
       context: context,
-      builder: (context) => AddCashDialog(customer: customer),
+      builder: (context) => AddCashDialog(customer: customer, onSuccess: _loadWallets),
     );
   }
 
@@ -517,6 +517,7 @@ class _CustomersWalletPageState extends ConsumerState<CustomersWalletPage> {
       builder: (context) => ClearWalletDialog(
         customer: wallet.customer,
         walletBalance: wallet.walletBalance,
+        onSuccess: _loadWallets,
       ),
     );
   }

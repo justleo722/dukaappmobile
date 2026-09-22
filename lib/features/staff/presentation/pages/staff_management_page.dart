@@ -6,6 +6,7 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/staff/data/models/staff_models.dart';
 import 'package:dukaapp/features/staff/presentation/providers/staff_provider.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/core/providers.dart';
 
 class StaffManagementPage extends ConsumerStatefulWidget {
@@ -92,6 +93,9 @@ class _StaffManagementPageState extends ConsumerState<StaffManagementPage> {
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(stringsProvider);
+    ref.listen(authProvider.select((s) => s.activeShop?.id), (prev, next) {
+      if (prev != next && next != null) _loadTeam();
+    });
     final attendants = _filteredAttendants;
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),

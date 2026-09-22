@@ -17,6 +17,7 @@ class ReceiptWidget extends ConsumerWidget {
   final double subtotal;
   final double totalPaid;
   final double amountReceived;
+  final double discount;
   final String? footerNote;
   final VoidCallback? onClose;
   final VoidCallback? onPrint;
@@ -33,6 +34,7 @@ class ReceiptWidget extends ConsumerWidget {
     required this.subtotal,
     required this.totalPaid,
     required this.amountReceived,
+    this.discount = 0,
     this.footerNote,
     this.onClose,
     this.onPrint,
@@ -50,6 +52,7 @@ class ReceiptWidget extends ConsumerWidget {
     required double subtotal,
     required double totalPaid,
     required double amountReceived,
+    double discount = 0,
     String? footerNote,
   }) {
     showDialog(
@@ -69,6 +72,7 @@ class ReceiptWidget extends ConsumerWidget {
           subtotal: subtotal,
           totalPaid: totalPaid,
           amountReceived: amountReceived,
+          discount: discount,
           footerNote: footerNote,
           onClose: () => Navigator.pop(context),
           onPrint: () {
@@ -347,6 +351,10 @@ class ReceiptWidget extends ConsumerWidget {
     return Column(
       children: [
         _buildTotalRow('Subtotal:', _formatCurrency(subtotal)),
+        if (discount > 0) ...[
+          const SizedBox(height: 8),
+          _buildTotalRow('Discount:', '- ${_formatCurrency(discount)}', color: AppColors.success),
+        ],
         const SizedBox(height: 8),
         _buildTotalRow('Total Paid:', _formatCurrency(totalPaid)),
         const SizedBox(height: 8),

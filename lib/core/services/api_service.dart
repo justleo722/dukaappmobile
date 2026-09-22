@@ -246,6 +246,13 @@ class ApiService {
   Future<Response> getSales({String? from, String? to}) =>
       _client.get(ApiEndpoints.getDataSales, queryParameters: _range(from, to));
 
+  /// Sales filtered by customer ID.
+  Future<Response> getCustomerSales(String customerId, {String? from, String? to}) =>
+      _client.get(ApiEndpoints.getDataSales, queryParameters: {
+        ..._range(from, to),
+        'customer_id': customerId,
+      });
+
   /// Sales summary card totals.
   Future<Response> getSalesSummary({String? from, String? to}) =>
       _client.get(ApiEndpoints.getDataSalesSummary, queryParameters: _range(from, to));

@@ -7,6 +7,7 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/suppliers/data/models/supplier_model.dart';
 import 'package:dukaapp/features/suppliers/presentation/providers/supplier_provider.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/features/suppliers/presentation/pages/credit_purchases_page.dart';
@@ -142,6 +143,9 @@ class _SuppliersPageState extends ConsumerState<SuppliersPage> {
   Widget build(BuildContext context) {
     final s = ref.watch(stringsProvider);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
+    ref.listen(authProvider.select((s) => s.activeShop?.id), (prev, next) {
+      if (prev != next && next != null) _loadSuppliers();
+    });
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),

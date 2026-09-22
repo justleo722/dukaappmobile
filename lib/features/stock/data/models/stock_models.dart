@@ -60,10 +60,12 @@ class StockProduct {
     this.loss = 0,
   });
 
-  bool get isLowStock =>
-      reorderLevel > 0 && available <= reorderLevel;
+  bool get isService => type?.toLowerCase() == 'service';
 
-  bool get isOutOfStock => available <= 0;
+  bool get isLowStock =>
+      !isService && reorderLevel > 0 && available <= reorderLevel;
+
+  bool get isOutOfStock => !isService && available <= 0;
 
   factory StockProduct.fromJson(Map<String, dynamic> j) {
     return StockProduct(

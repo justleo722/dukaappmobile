@@ -167,11 +167,23 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
     final shopId = _extractShopId(_selectedShop);
     if (shopId == null) return;
 
-    // Auto-add any pending checkbox selections before transferring.
+    // If the user tapped Transfer while products are only checked (not yet added
+    // to the transfer list), add them first and stop — let the user review
+    // quantities on the cards before confirming the transfer.
     if (_pendingIndices.isNotEmpty) {
       final products = _getFilteredProducts();
       _addSelectedProducts(products, Set.from(_pendingIndices));
-      _pendingIndices.clear();
+      setState(() => _pendingIndices.clear());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Set the transfer quantity for each product, then tap Transfer.',
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+        ),
+      );
+      return;
     }
 
     final transferItems = _items

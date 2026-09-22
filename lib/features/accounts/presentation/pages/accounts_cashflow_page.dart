@@ -10,6 +10,7 @@ import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/features/accounts/data/models/cashflow_models.dart';
 import 'package:dukaapp/features/accounts/presentation/providers/cashflow_provider.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/core/providers.dart';
 
 class AccountsCashflowPage extends ConsumerStatefulWidget {
@@ -108,6 +109,12 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
         _loadCashflow(from: next.from, to: next.to);
       }
     });
+    ref.listen(authProvider.select((s) => s.activeShop?.id), (prev, next) {
+      if (prev != next && next != null) {
+        _loadCashflow();
+        _loadAccounts();
+      }
+    });
     final items = _filteredItems;
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
@@ -138,8 +145,6 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
 
   void _showAddCashInDialog() {
     final s = ref.read(stringsProvider);
-    String? selectedFromAccountId;
-    String? selectedToAccountId;
     final titleController = TextEditingController();
     final amountController = TextEditingController();
     DateTime selectedDate = DateTime.now();
@@ -152,7 +157,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => Container(
-          height: MediaQuery.of(ctx).size.height * 0.7,
+          height: MediaQuery.of(ctx).size.height * 0.6,
           decoration: const BoxDecoration(
             color: AppColors.card,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -183,14 +188,6 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
                       const SizedBox(height: 6),
                       _buildDropdown(ctx, setDialogState, selectedCategory, categories, (v) { setDialogState(() => selectedCategory = v); }),
                       const SizedBox(height: 16),
-                      _fieldLabel('From Account (source)'),
-                      const SizedBox(height: 6),
-                      _buildAccountDropdown(ctx, setDialogState, selectedFromAccountId, (v) { setDialogState(() => selectedFromAccountId = v); }),
-                      const SizedBox(height: 16),
-                      _fieldLabel('To Account (destination)'),
-                      const SizedBox(height: 6),
-                      _buildAccountDropdown(ctx, setDialogState, selectedToAccountId, (v) { setDialogState(() => selectedToAccountId = v); }),
-                      const SizedBox(height: 16),
                       _fieldLabel('Amount'),
                       const SizedBox(height: 6),
                       _buildAmountInput(amountController),
@@ -205,12 +202,8 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
               _buildDialogActions(ctx, () async {
                 final amount = double.tryParse(amountController.text) ?? 0;
                 final title = titleController.text.trim();
-                if (_accounts.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No accounts found. Configure payment accounts first.')));
-                  return;
-                }
-                if (amount <= 0 || title.isEmpty || selectedFromAccountId == null || selectedToAccountId == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.fillAllFieldsAndSelectBothAccounts)));
+                if (amount <= 0 || title.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter title and amount.')));
                   return;
                 }
                 Navigator.pop(ctx);
@@ -220,8 +213,6 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
                     'type': 'cashin',
                     'title': title,
                     'amount': amount,
-                    if (selectedFromAccountId != null) 'from_account_id': selectedFromAccountId,
-                    if (selectedToAccountId != null) 'to_account_id': selectedToAccountId,
                     'record_date': DateFormat('yyyy-MM-dd').format(selectedDate),
                     if (selectedCategory != null) 'category': selectedCategory,
                   });
@@ -246,8 +237,6 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
   void _showAddCashOutDialog() {
     final s = ref.read(stringsProvider);
     String? selectedCategory;
-    String? selectedFromAccountId;
-    String? selectedToAccountId;
     final titleController = TextEditingController();
     final amountController = TextEditingController();
     DateTime selectedDate = DateTime.now();
@@ -259,7 +248,7 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => Container(
-          height: MediaQuery.of(ctx).size.height * 0.85,
+          height: MediaQuery.of(ctx).size.height * 0.6,
           decoration: const BoxDecoration(
             color: AppColors.card,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -290,14 +279,6 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
                       const SizedBox(height: 6),
                       _buildDropdown(ctx, setDialogState, selectedCategory, categories, (v) { setDialogState(() => selectedCategory = v); }),
                       const SizedBox(height: 16),
-                      _fieldLabel('From Account (source)'),
-                      const SizedBox(height: 6),
-                      _buildAccountDropdown(ctx, setDialogState, selectedFromAccountId, (v) { setDialogState(() => selectedFromAccountId = v); }),
-                      const SizedBox(height: 16),
-                      _fieldLabel('To Account (destination)'),
-                      const SizedBox(height: 6),
-                      _buildAccountDropdown(ctx, setDialogState, selectedToAccountId, (v) { setDialogState(() => selectedToAccountId = v); }),
-                      const SizedBox(height: 16),
                       _fieldLabel('Amount'),
                       const SizedBox(height: 6),
                       _buildAmountInput(amountController),
@@ -312,12 +293,8 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
               _buildDialogActions(ctx, () async {
                 final amount = double.tryParse(amountController.text) ?? 0;
                 final title = titleController.text.trim();
-                if (_accounts.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No accounts found. Configure payment accounts first.')));
-                  return;
-                }
-                if (amount <= 0 || title.isEmpty || selectedFromAccountId == null || selectedToAccountId == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.fillAllFieldsAndSelectBothAccounts)));
+                if (amount <= 0 || title.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter title and amount.')));
                   return;
                 }
                 Navigator.pop(ctx);
@@ -327,8 +304,6 @@ class _AccountsCashflowPageState extends ConsumerState<AccountsCashflowPage> {
                     'type': 'cashout',
                     'title': title,
                     'amount': amount,
-                    if (selectedFromAccountId != null) 'from_account_id': selectedFromAccountId,
-                    if (selectedToAccountId != null) 'to_account_id': selectedToAccountId,
                     'record_date': DateFormat('yyyy-MM-dd').format(selectedDate),
                     if (selectedCategory != null) 'category': selectedCategory,
                   });

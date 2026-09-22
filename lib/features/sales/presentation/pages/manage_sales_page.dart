@@ -387,12 +387,6 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
           ),
           const SizedBox(width: 10),
           SalesActionButton(
-            icon: Icons.receipt_rounded,
-            label: 'Receipt',
-            onTap: () => context.push('/sales/invoices'),
-          ),
-          const SizedBox(width: 10),
-          SalesActionButton(
             icon: Icons.people_rounded,
             label: 'Customer',
             onTap: () => context.push('/customers'),
@@ -520,10 +514,13 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
     final saleId = sale['sale_id']?.toString() ?? '';
     final amountController = TextEditingController(text: balance.toStringAsFixed(0));
     final formKey = GlobalKey<FormState>();
+    String selectedPaymentMode = 'Cash';
+    final paymentModes = ['Cash', 'Bank', 'Mobile Money', 'Cheque', 'Other'];
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Pay Credit Balance',
             style: AppTypography.h6.copyWith(color: AppColors.textPrimary)),
@@ -541,7 +538,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                 decoration: InputDecoration(
                   labelText: s.amountPaid,
                   prefixText: 'TZS ',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
                 ),
                 validator: (v) {
                   final d = double.tryParse(v ?? '');
@@ -549,6 +546,18 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                   if (d > balance) return s.exceedsBalance;
                   return null;
                 },
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: selectedPaymentMode,
+                decoration: const InputDecoration(
+                  labelText: 'Payment Mode',
+                  border: OutlineInputBorder(),
+                ),
+                items: paymentModes
+                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                    .toList(),
+                onChanged: (v) => setDialogState(() => selectedPaymentMode = v ?? 'Cash'),
               ),
             ],
           ),
@@ -567,7 +576,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                 final res = await repo.addPayment({
                   'sale_id': saleId,
                   'amount': amountController.text.trim(),
-                  'payment_mode': 'Cash',
+                  'payment_mode': selectedPaymentMode,
                 });
                 final ok = res['status']?.toString() == '1' ||
                     res['status'] == true ||
@@ -588,6 +597,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
             child: Text(s.pay, style: const TextStyle(color: Colors.white)),
           ),
         ],
+      ),
       ),
     );
   }
@@ -909,6 +919,10 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
               pw.Expanded(child: pw.Text('Total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
               pw.Text('Tsh ${_toD(sale['totalRaw'] ?? sale['total']).toStringAsFixed(0)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
             ]),
+            if (_toD(sale['discount']) > 0) pw.Row(children: [
+              pw.Expanded(child: pw.Text('Discount')),
+              pw.Text('- Tsh ${_toD(sale['discount']).toStringAsFixed(0)}'),
+            ]),
             pw.Row(children: [
               pw.Expanded(child: pw.Text('Paid')),
               pw.Text('Tsh ${_toD(sale['paid']).toStringAsFixed(0)}'),
@@ -952,6 +966,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
       subtotal: totalAmount,
       totalPaid: _toD(sale['paid']),
       amountReceived: _toD(sale['paid']),
+      discount: _toD(sale['discount']),
     );
   }
 }

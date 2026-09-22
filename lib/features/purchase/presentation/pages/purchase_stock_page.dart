@@ -805,8 +805,18 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                         purchaseBody['payment_mode'] = _accountIdMap[_selectedAccount ?? ''] ?? (_selectedAccount ?? '');
                         purchaseBody['record_date']  = DateFormat('yyyy-MM-dd').format(_purchaseDate);
                         purchaseBody['type']         = widget.createMode ? 'order' : 'restock';
-                        await repo.createPurchase(purchaseBody);
+                        final res = await repo.createPurchase(purchaseBody);
                         if (!mounted) return;
+                        final ok = res['status']?.toString() == 'success' ||
+                            res['status']?.toString() == '1' ||
+                            res['status'] == true;
+                        if (!ok) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(res['message']?.toString() ?? 'Failed to save purchase', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+                            backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+                          ));
+                          return;
+                        }
                         // Invalidate stock cache so balance reflects the restock
                         ref.read(stockProvider.notifier).refresh();
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(

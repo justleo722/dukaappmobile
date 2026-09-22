@@ -19,6 +19,7 @@ import 'package:dukaapp/features/sales/presentation/widgets/receipt_widget.dart'
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
 import 'package:dukaapp/features/purchase/presentation/providers/purchase_provider.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/core/providers.dart';
 
 class PurchasesPage extends ConsumerStatefulWidget {
@@ -54,9 +55,14 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
         _purchases = list.map((p) => {
           'purchase_id': p.purchaseId,
           'date': p.date,
-          'status': ['paid', 'cleared', 'completed'].contains(p.paymentStatus.toLowerCase())
-              ? 'PAID'
-              : 'PENDING',
+          'status': () {
+            final s = p.paymentStatus.toLowerCase();
+            if (['paid', 'cleared', 'completed', 'cash'].contains(s)) return 'PAID';
+            if (['partial'].contains(s)) return 'PARTIAL';
+            if (['credit', 'unpaid'].contains(s)) return 'CREDIT';
+            if (s == 'order') return 'ORDER';
+            return 'PENDING';
+          }(),
           'createdBy': p.createdBy,
           'supplier': p.supplier,
           'products': p.items,
@@ -1170,6 +1176,9 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   Widget build(BuildContext context) {
     final s = ref.watch(stringsProvider);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
+    ref.listen(authProvider.select((s) => s.activeShop?.id), (prev, next) {
+      if (prev != next && next != null) _loadPurchases();
+    });
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
@@ -1620,7 +1629,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
 
   Widget _buildPurchaseAccordion(Map<String, dynamic> purchase, int index) {
     final products = List<Map<String, dynamic>>.from(purchase['products']);
-    final isPaid = purchase['status'] == 'PAID';
+    final accentColor = _statusColor(purchase['status'] as String? ?? 'PENDING');
     final totalAmount = products.fold<double>(
       0,
       (sum, p) => sum + _toD(p['price']) * _toI(p['quantity']),
@@ -1660,7 +1669,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                     Container(
                       width: 4,
                       decoration: BoxDecoration(
-                        color: isPaid ? AppColors.success : AppColors.warning,
+                        color: accentColor,
                         borderRadius: const BorderRadius.only(
                           topLeft: Radius.circular(14),
                           bottomLeft: Radius.circular(14),
@@ -1712,8 +1721,18 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
     );
   }
 
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'PAID': return AppColors.success;
+      case 'PARTIAL': return AppColors.warning;
+      case 'CREDIT': return AppColors.danger;
+      case 'ORDER': return AppColors.primary;
+      default: return AppColors.warning;
+    }
+  }
+
   Widget _buildPurchaseInfo(Map<String, dynamic> purchase) {
-    final isPaid = purchase['status'] == 'PAID';
+    final statusColor = _statusColor(purchase['status'] as String? ?? 'PENDING');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1732,15 +1751,13 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: isPaid
-                    ? AppColors.success.withValues(alpha: 0.1)
-                    : AppColors.warning.withValues(alpha: 0.1),
+                color: statusColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
                 purchase['status'],
                 style: AppTypography.caption.copyWith(
-                  color: isPaid ? AppColors.success : AppColors.warning,
+                  color: statusColor,
                   fontWeight: FontWeight.w600,
                   fontSize: 10,
                 ),
@@ -1866,7 +1883,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
 
   Widget _buildPurchaseActions(int purchaseIndex, Map<String, dynamic> purchase) {
     final s = ref.read(stringsProvider);
-    final isPending = purchase['status'] == 'PENDING';
+    final isPending = ['PENDING', 'CREDIT', 'PARTIAL'].contains(purchase['status']);
     return SizedBox(
       height: 80,
       child: ListView(

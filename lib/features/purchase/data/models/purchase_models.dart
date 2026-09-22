@@ -36,8 +36,8 @@ class PurchaseItem {
       totalAmount: _toDouble(j['total_amount']),
       paidAmount: _toDouble(j['paid_amount']),
       balance: _toDouble(j['balance_amount'] ?? j['balance']),
-      paymentStatus: j['payment_status']?.toString() ?? 'pending',
-      purchaseType: j['purchase_type']?.toString() ?? 'purchase',
+      paymentStatus: j['payment_status']?.toString() ?? j['status_label']?.toString() ?? j['purchase_group']?.toString() ?? 'pending',
+      purchaseType: j['purchase_type']?.toString() ?? j['purchase_group']?.toString() ?? 'purchase',
       createdBy: j['username']?.toString() ?? '',
       currency: j['currency']?.toString() ?? 'TSh',
       // Normalise each item so downstream pages can safely use typed values.

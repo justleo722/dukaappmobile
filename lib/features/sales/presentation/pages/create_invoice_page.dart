@@ -11,6 +11,7 @@ import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/add_sale_item_tile.dart';
 import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 import 'package:dukaapp/features/customers/presentation/pages/add_customer_page.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class CreateInvoicePage extends ConsumerStatefulWidget {
   const CreateInvoicePage({super.key});
@@ -46,6 +47,33 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   ];
 
   final List<Map<String, dynamic>> _items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCustomers());
+  }
+
+  Future<void> _loadCustomers() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getCustomers();
+      final raw = res.data;
+      final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? raw['customers'] ?? []) : []);
+      if (!mounted) return;
+      setState(() {
+        _customers
+          ..clear()
+          ..add('Walk-in');
+        for (final c in list) {
+          if (c is Map) {
+            final name = (c['customer_name'] ?? c['name'] ?? '').toString();
+            if (name.isNotEmpty) _customers.add(name);
+          }
+        }
+      });
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -238,14 +266,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
         builder: (_) => const AddCustomerPage(),
       ),
     );
-    if (result != null && mounted) {
-      final name = result.name;
-      if (name.isNotEmpty) {
-        setState(() {
-          _customers.add(name);
-          _selectedCustomer = name;
-        });
-      }
+    if (result == true && mounted) {
+      await _loadCustomers();
     }
   }
 

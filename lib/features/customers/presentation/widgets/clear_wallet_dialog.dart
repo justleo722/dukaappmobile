@@ -1,43 +1,62 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/customers/data/models/customer_model.dart';
 
-class ClearWalletDialog extends StatefulWidget {
+class ClearWalletDialog extends ConsumerStatefulWidget {
   final Customer customer;
   final double walletBalance;
+  final VoidCallback? onSuccess;
 
   const ClearWalletDialog({
     super.key,
     required this.customer,
     required this.walletBalance,
+    this.onSuccess,
   });
 
   @override
-  State<ClearWalletDialog> createState() => _ClearWalletDialogState();
+  ConsumerState<ClearWalletDialog> createState() => _ClearWalletDialogState();
 }
 
-class _ClearWalletDialogState extends State<ClearWalletDialog> {
+class _ClearWalletDialogState extends ConsumerState<ClearWalletDialog> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
-  DateTime _selectedDate = DateTime.now();
-  String? _selectedCollectionMode;
-  String? _selectedAccount;
+  String? _selectedAccountId;
+  List<Map<String, dynamic>> _accounts = [];
+  bool _isLoadingAccounts = false;
+  bool _isSaving = false;
 
-  final List<String> _collectionModes = [
-    'Cash',
-    'Mobile Money',
-    'Bank Transfer',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadAccounts());
+  }
 
-  final List<String> _accounts = [
-    'Main Cash Account',
-    'Bank Account',
-    'Mobile Money Account',
-  ];
+  Future<void> _loadAccounts() async {
+    if (!mounted) return;
+    setState(() => _isLoadingAccounts = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getCashbookAccounts();
+      final raw = res.data;
+      final list = raw is List
+          ? raw
+          : (raw is Map ? (raw['data'] ?? raw['result'] ?? raw['items'] ?? []) : []);
+      if (!mounted) return;
+      setState(() {
+        _accounts = (list as List).whereType<Map<String, dynamic>>().toList();
+        _isLoadingAccounts = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingAccounts = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -45,102 +64,55 @@ class _ClearWalletDialogState extends State<ClearWalletDialog> {
     super.dispose();
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: AppColors.primary,
-              onPrimary: AppColors.textWhite,
-              surface: AppColors.card,
-              onSurface: AppColors.textPrimary,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() => _selectedDate = picked);
-    }
+  void _snack(String msg, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg, style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+    ));
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
-  }
-
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedCollectionMode == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please select collection mode',
-            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-          ),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-          ),
-        ),
-      );
-      return;
-    }
-    if (_selectedAccount == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please select account',
-            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-          ),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-          ),
-        ),
-      );
+    if (_selectedAccountId == null) {
+      _snack('Please select account', AppColors.danger);
       return;
     }
 
     final amount = double.tryParse(_amountController.text) ?? 0;
     if (amount > widget.walletBalance) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Amount exceeds wallet balance',
-            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-          ),
-          backgroundColor: AppColors.danger,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-          ),
-        ),
-      );
+      _snack('Amount exceeds wallet balance', AppColors.danger);
       return;
     }
 
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'TZS ${_amountController.text} cleared from ${widget.customer.name} wallet',
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-        ),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-        ),
-      ),
-    );
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final body = {
+        'customer_id': widget.customer.id,
+        'amount': _amountController.text.trim(),
+        'account_id': _selectedAccountId,
+        'action': 'clear_wallet',
+      };
+      final res = await api.postWalletCustomerCreate(body);
+      final ok = res['status']?.toString() == '1' ||
+          res['status'] == true ||
+          res['status']?.toString() == 'success';
+      if (!mounted) return;
+      if (ok) {
+        Navigator.pop(context);
+        _snack('TZS ${_amountController.text} cleared from ${widget.customer.name} wallet', AppColors.success);
+        widget.onSuccess?.call();
+      } else {
+        _snack(res['message']?.toString() ?? 'Failed to clear wallet', AppColors.danger);
+      }
+    } catch (e) {
+      if (mounted) _snack('Error: $e', AppColors.danger);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -176,16 +148,6 @@ class _ClearWalletDialogState extends State<ClearWalletDialog> {
                         icon: Icons.person_rounded,
                       ),
                       const SizedBox(height: 16),
-                      _buildDropdownField(
-                        label: 'Collection Mode',
-                        value: _selectedCollectionMode,
-                        items: _collectionModes,
-                        icon: Icons.payment_rounded,
-                        onChanged: (value) {
-                          setState(() => _selectedCollectionMode = value);
-                        },
-                      ),
-                      const SizedBox(height: 16),
                       _buildDateField(),
                       const SizedBox(height: 16),
                       _buildTextField(
@@ -209,15 +171,7 @@ class _ClearWalletDialogState extends State<ClearWalletDialog> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      _buildDropdownField(
-                        label: 'Add From Account',
-                        value: _selectedAccount,
-                        items: _accounts,
-                        icon: Icons.account_balance_rounded,
-                        onChanged: (value) {
-                          setState(() => _selectedAccount = value);
-                        },
-                      ),
+                      _buildAccountDropdown(),
                       const SizedBox(height: 12),
                       Container(
                         width: double.infinity,
@@ -353,18 +307,12 @@ class _ClearWalletDialogState extends State<ClearWalletDialog> {
     );
   }
 
-  Widget _buildDropdownField({
-    required String label,
-    required String? value,
-    required List<String> items,
-    required IconData icon,
-    required ValueChanged<String?> onChanged,
-  }) {
+  Widget _buildAccountDropdown() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
+          'Account',
           style: AppTypography.label.copyWith(color: AppColors.textPrimary),
         ),
         const SizedBox(height: 8),
@@ -376,51 +324,71 @@ class _ClearWalletDialogState extends State<ClearWalletDialog> {
             borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
             border: Border.all(color: AppColors.inputBorder),
           ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: value,
-              isExpanded: true,
-              hint: Row(
-                children: [
-                  Icon(icon, color: AppColors.textHint, size: 20),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Select',
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: AppColors.textHint,
+          child: _isLoadingAccounts
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+                )
+              : DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedAccountId,
+                    isExpanded: true,
+                    hint: Row(
+                      children: [
+                        const Icon(Icons.account_balance_rounded, color: AppColors.textHint, size: 20),
+                        const SizedBox(width: 12),
+                        Text('Select account', style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint)),
+                      ],
                     ),
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textHint),
+                    style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
+                    items: _accounts.map((account) {
+                      final id = account['account_id']?.toString() ?? account['id']?.toString() ?? '';
+                      final name = account['account_name']?.toString() ?? account['name']?.toString() ?? 'Account';
+                      return DropdownMenuItem(value: id, child: Text(name));
+                    }).toList(),
+                    onChanged: (value) => setState(() => _selectedAccountId = value),
                   ),
-                ],
-              ),
-              icon: const Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: AppColors.textHint,
-              ),
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textPrimary,
-              ),
-              items: items.map((item) {
-                return DropdownMenuItem(
-                  value: item,
-                  child: Text(item),
-                );
-              }).toList(),
-              onChanged: onChanged,
-            ),
-          ),
+                ),
         ),
       ],
     );
+  }
+
+  DateTime _selectedDate = DateTime.now();
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: AppColors.primary,
+              onPrimary: AppColors.textWhite,
+              surface: AppColors.card,
+              onSurface: AppColors.textPrimary,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) setState(() => _selectedDate = picked);
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
   Widget _buildDateField() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Date',
-          style: AppTypography.label.copyWith(color: AppColors.textPrimary),
-        ),
+        Text('Date', style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
         const SizedBox(height: 8),
         GestureDetector(
           onTap: _pickDate,
@@ -429,30 +397,16 @@ class _ClearWalletDialogState extends State<ClearWalletDialog> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: AppColors.card,
-              borderRadius:
-                  BorderRadius.circular(AppConstants.textFieldRadius),
+              borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
               border: Border.all(color: AppColors.inputBorder),
             ),
             child: Row(
               children: [
-                const Icon(
-                  Icons.calendar_today_rounded,
-                  color: AppColors.primary,
-                  size: 20,
-                ),
+                const Icon(Icons.calendar_today_rounded, color: AppColors.primary, size: 20),
                 const SizedBox(width: 12),
-                Text(
-                  _formatDate(_selectedDate),
-                  style: AppTypography.bodyMedium.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                ),
+                Text(_formatDate(_selectedDate), style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary)),
                 const Spacer(),
-                const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.textHint,
-                  size: 20,
-                ),
+                const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textHint, size: 20),
               ],
             ),
           ),
@@ -473,62 +427,41 @@ class _ClearWalletDialogState extends State<ClearWalletDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: AppTypography.label.copyWith(color: AppColors.textPrimary),
-        ),
+        Text(label, style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
           validator: validator,
-          style: AppTypography.bodyMedium.copyWith(
-            color: AppColors.textPrimary,
-          ),
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
           cursorColor: AppColors.primary,
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: AppTypography.bodyMedium.copyWith(
-              color: AppColors.textHint,
-            ),
+            hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
             prefixIcon: Icon(icon, color: AppColors.textHint, size: 20),
             filled: true,
             fillColor: AppColors.card,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             border: OutlineInputBorder(
-              borderRadius:
-                  BorderRadius.circular(AppConstants.textFieldRadius),
+              borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
               borderSide: const BorderSide(color: AppColors.inputBorder),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius:
-                  BorderRadius.circular(AppConstants.textFieldRadius),
+              borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
               borderSide: const BorderSide(color: AppColors.inputBorder),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius:
-                  BorderRadius.circular(AppConstants.textFieldRadius),
-              borderSide: const BorderSide(
-                color: AppColors.inputFocusBorder,
-                width: 1.5,
-              ),
+              borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+              borderSide: const BorderSide(color: AppColors.inputFocusBorder, width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
-              borderRadius:
-                  BorderRadius.circular(AppConstants.textFieldRadius),
+              borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
               borderSide: const BorderSide(color: AppColors.danger),
             ),
             focusedErrorBorder: OutlineInputBorder(
-              borderRadius:
-                  BorderRadius.circular(AppConstants.textFieldRadius),
-              borderSide: const BorderSide(
-                color: AppColors.danger,
-                width: 1.5,
-              ),
+              borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+              borderSide: const BorderSide(color: AppColors.danger, width: 1.5),
             ),
           ),
         ),
@@ -543,7 +476,7 @@ class _ClearWalletDialogState extends State<ClearWalletDialog> {
         width: double.infinity,
         height: AppConstants.buttonHeight,
         child: ElevatedButton(
-          onPressed: _submit,
+          onPressed: _isSaving ? null : _submit,
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,
             foregroundColor: AppColors.textWhite,
@@ -552,12 +485,9 @@ class _ClearWalletDialogState extends State<ClearWalletDialog> {
               borderRadius: BorderRadius.circular(AppConstants.radiusMD),
             ),
           ),
-          child: Text(
-            'Clear Wallet',
-            style: AppTypography.buttonLarge.copyWith(
-              color: AppColors.textWhite,
-            ),
-          ),
+          child: _isSaving
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textWhite))
+              : Text('Clear Wallet', style: AppTypography.buttonLarge.copyWith(color: AppColors.textWhite)),
         ),
       ),
     );

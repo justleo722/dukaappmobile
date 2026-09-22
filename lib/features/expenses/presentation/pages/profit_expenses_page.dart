@@ -10,6 +10,7 @@ import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/expenses/data/models/expense_models.dart';
 import 'package:dukaapp/features/expenses/presentation/providers/expense_provider.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/core/providers.dart';
 
 class ProfitExpensesPage extends ConsumerStatefulWidget {
@@ -682,6 +683,9 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
   Widget build(BuildContext context) {
     final s = ref.watch(stringsProvider);
     ref.listen<FilterState>(filterProvider, (_, f) => _loadExpenses(from: f.from, to: f.to));
+    ref.listen(authProvider.select((s) => s.activeShop?.id), (prev, next) {
+      if (prev != next && next != null) _loadExpenses();
+    });
     final expenses = _filteredExpenses;
 
     return Scaffold(

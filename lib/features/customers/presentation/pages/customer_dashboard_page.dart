@@ -41,7 +41,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
       final api = ref.read(apiServiceProvider);
       final customerId = _customer.id;
       final results = await Future.wait([
-        api.getWalletCustomerSalesStatement(customerId),
+        api.getCustomerSales(customerId),
         api.getWalletCustomerStatement(customerId),
       ]);
 
@@ -733,13 +733,13 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
     }
     double _d(dynamic v) => num.tryParse(v?.toString() ?? '')?.toDouble() ?? 0.0;
     final sales = _salesRecords.map((s) {
-      final total = _d(s['total'] ?? s['amount']);
-      final paid = _d(s['paid'] ?? s['amount_paid']);
-      final balance = _d(s['balance'] ?? s['amount_due']);
+      final total = _d(s['total_amount'] ?? s['total'] ?? s['amount']);
+      final paid = _d(s['paid_amount'] ?? s['paid'] ?? s['amount_paid']);
+      final balance = _d(s['balance'] ?? s['balance_amount'] ?? s['amount_due']);
       final status = balance > 0.01 ? 'Unpaid' : 'Paid';
       return <String, String>{
-        'sale': '#${s['sale_id'] ?? s['id'] ?? ''}',
-        'date': s['date']?.toString() ?? s['created_at']?.toString() ?? '',
+        'sale': '#${s['sale_id'] ?? s['invoice_no'] ?? s['id'] ?? ''}',
+        'date': s['record_date']?.toString() ?? s['date']?.toString() ?? s['created_at']?.toString() ?? '',
         'type': s['payment_mode']?.toString() ?? s['type']?.toString() ?? 'Cash',
         'status': status,
         'total': 'TZS ${total.toStringAsFixed(0)}',
