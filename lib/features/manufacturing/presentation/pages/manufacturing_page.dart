@@ -9,7 +9,7 @@ import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/core/services/local_cache_service.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
-import 'package:dukaapp/features/auth/presentation/providers/auth_provider.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 
 class ManufacturingPage extends ConsumerStatefulWidget {
   const ManufacturingPage({super.key});

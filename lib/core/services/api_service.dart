@@ -935,8 +935,7 @@ class ApiService {
 
   /// Build a query-parameter map for date-range filtering.
   /// Only includes keys that are non-null.
-  Map<String, dynamic>? _range(String? from, String? to) {
-    if (from == null && to == null) return null;
+  Map<String, dynamic> _range(String? from, String? to) {
     return {
       if (from != null) 'from': from,
       if (to != null) 'to': to,
