@@ -1,11 +1,13 @@
 // features/online_shop/presentation/pages/online_shop_add_coupon_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 
-class OnlineShopAddCouponPage extends StatefulWidget {
+class OnlineShopAddCouponPage extends ConsumerStatefulWidget {
   const OnlineShopAddCouponPage({
     super.key,
     this.existingCoupon,
@@ -14,10 +16,10 @@ class OnlineShopAddCouponPage extends StatefulWidget {
   final Map<String, dynamic>? existingCoupon;
 
   @override
-  State<OnlineShopAddCouponPage> createState() => _OnlineShopAddCouponPageState();
+  ConsumerState<OnlineShopAddCouponPage> createState() => _OnlineShopAddCouponPageState();
 }
 
-class _OnlineShopAddCouponPageState extends State<OnlineShopAddCouponPage> {
+class _OnlineShopAddCouponPageState extends ConsumerState<OnlineShopAddCouponPage> {
   final _formKey = GlobalKey<FormState>();
   final _codeController = TextEditingController();
   final _discountValueController = TextEditingController();
@@ -29,6 +31,7 @@ class _OnlineShopAddCouponPageState extends State<OnlineShopAddCouponPage> {
   DateTime? _expiryDate;
   Map<String, dynamic>? _existingCoupon;
   bool get _isEditing => _existingCoupon != null;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -108,37 +111,43 @@ class _OnlineShopAddCouponPageState extends State<OnlineShopAddCouponPage> {
     }
   }
 
-  void _saveCoupon() {
-    if (_formKey.currentState!.validate()) {
-      final couponData = {
-        'id': _isEditing ? _existingCoupon!['id'] : 'CPN-${DateTime.now().millisecondsSinceEpoch}',
+  Future<void> _saveCoupon() async {
+    if (!_formKey.currentState!.validate() || _isSaving) return;
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      String discountTypeKey = 'percentage';
+      if (_discountType == 'Fixed Amount') discountTypeKey = 'fixed';
+      if (_discountType == 'Free Shipping') discountTypeKey = 'free_shipping';
+      final body = <String, dynamic>{
         'code': _codeController.text.trim().toUpperCase(),
-        'discountType': _discountType,
-        'discountValue': _discountType == 'Free Shipping'
-            ? 'Free'
-            : _discountType == 'Percentage'
-                ? '${_discountValueController.text}%'
-                : 'Tsh ${_discountValueController.text}',
-        'minOrder': _minOrderController.text.isEmpty
-            ? 'Tsh 0'
-            : 'Tsh ${_minOrderController.text}',
-        'maxUses': _maxUsesController.text.isEmpty ? 'Unlimited' : _maxUsesController.text,
-        'usedCount': _isEditing ? _existingCoupon!['usedCount'] : 0,
-        'expiryDate': _expiryDate != null
+        'discount_type': discountTypeKey,
+        'discount_value': _discountValueController.text.trim(),
+        'min_order_amount': _minOrderController.text.trim(),
+        'max_uses': _maxUsesController.text.trim(),
+        'expiry_date': _expiryDate != null
             ? '${_expiryDate!.year}-${_expiryDate!.month.toString().padLeft(2, '0')}-${_expiryDate!.day.toString().padLeft(2, '0')}'
             : '',
-        'status': _status,
+        'status': _status.toLowerCase(),
       };
-
-      debugPrint('Coupon saved: $couponData');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_isEditing ? 'Coupon updated' : 'Coupon created'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-      context.go('/online-shop/coupons');
+      if (_isEditing) {
+        body['coupon_id'] = (_existingCoupon!['coupon_id'] ?? _existingCoupon!['id'] ?? '').toString();
+      }
+      final result = await api.postOnlineshopCouponSave(body);
+      if (!mounted) return;
+      final status = result['status']?.toString() ?? '';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(status == 'success'
+            ? (_isEditing ? 'Coupon updated' : 'Coupon created')
+            : (result['message']?.toString() ?? 'Failed to save')),
+        backgroundColor: status == 'success' ? AppColors.success : AppColors.danger,
+      ));
+      if (status == 'success') context.go('/online-shop/coupons');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -304,14 +313,16 @@ class _OnlineShopAddCouponPageState extends State<OnlineShopAddCouponPage> {
                     child: SizedBox(
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: _saveCoupon,
+                        onPressed: _isSaving ? null : _saveCoupon,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF2563EB),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(AppConstants.radiusSM),
                           ),
                         ),
-                        child: Text(
+                        child: _isSaving
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : Text(
                           _isEditing ? 'Update Coupon' : 'Save Coupon',
                           style: GoogleFonts.poppins(
                             fontSize: 14,

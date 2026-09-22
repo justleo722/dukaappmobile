@@ -3,26 +3,29 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 
-class OnlineShopOrderDetailsPage extends StatefulWidget {
+class OnlineShopOrderDetailsPage extends ConsumerStatefulWidget {
   final Map<String, dynamic> order;
 
   const OnlineShopOrderDetailsPage({super.key, required this.order});
 
   @override
-  State<OnlineShopOrderDetailsPage> createState() =>
+  ConsumerState<OnlineShopOrderDetailsPage> createState() =>
       _OnlineShopOrderDetailsPageState();
 }
 
 class _OnlineShopOrderDetailsPageState
-    extends State<OnlineShopOrderDetailsPage> {
+    extends ConsumerState<OnlineShopOrderDetailsPage> {
   late String _currentStatus;
+  bool _isUpdatingStatus = false;
   final GlobalKey _invoiceKey = GlobalKey();
 
   @override
@@ -502,13 +505,26 @@ class _OnlineShopOrderDetailsPageState
                   width: double.infinity,
                   height: AppConstants.buttonHeight,
                   child: ElevatedButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Status updated to $_currentStatus'),
-                          backgroundColor: AppColors.success,
-                        ),
-                      );
+                    onPressed: _isUpdatingStatus ? null : () async {
+                      setState(() => _isUpdatingStatus = true);
+                      try {
+                        final api = ref.read(apiServiceProvider);
+                        final result = await api.postOnlineshopOrderUpdateStatus({
+                          'order_code': widget.order['orderId']?.toString() ?? '',
+                          'status': _currentStatus,
+                        });
+                        if (!mounted) return;
+                        final ok = result['status']?.toString() == 'success';
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(ok ? 'Status updated to $_currentStatus' : (result['message']?.toString() ?? 'Failed to update')),
+                          backgroundColor: ok ? AppColors.success : AppColors.danger,
+                        ));
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger));
+                      } finally {
+                        if (mounted) setState(() => _isUpdatingStatus = false);
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
@@ -519,7 +535,9 @@ class _OnlineShopOrderDetailsPageState
                       ),
                       elevation: 0,
                     ),
-                    child: Row(
+                    child: _isUpdatingStatus
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Icon(Icons.update_rounded, size: 20),

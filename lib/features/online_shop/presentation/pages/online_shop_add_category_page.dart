@@ -1,12 +1,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 
-class OnlineShopAddCategoryPage extends StatefulWidget {
+class OnlineShopAddCategoryPage extends ConsumerStatefulWidget {
   const OnlineShopAddCategoryPage({
     super.key,
     this.existingCategory,
@@ -15,11 +17,11 @@ class OnlineShopAddCategoryPage extends StatefulWidget {
   final Map<String, dynamic>? existingCategory;
 
   @override
-  State<OnlineShopAddCategoryPage> createState() =>
+  ConsumerState<OnlineShopAddCategoryPage> createState() =>
       _OnlineShopAddCategoryPageState();
 }
 
-class _OnlineShopAddCategoryPageState extends State<OnlineShopAddCategoryPage> {
+class _OnlineShopAddCategoryPageState extends ConsumerState<OnlineShopAddCategoryPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -28,6 +30,7 @@ class _OnlineShopAddCategoryPageState extends State<OnlineShopAddCategoryPage> {
   File? _iconFile;
   Map<String, dynamic>? _existingCategory;
   bool get _isEditing => _existingCategory != null;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -79,25 +82,33 @@ class _OnlineShopAddCategoryPageState extends State<OnlineShopAddCategoryPage> {
     });
   }
 
-  void _saveCategory() {
-    if (_formKey.currentState!.validate()) {
-      final categoryData = {
-        'name': _nameController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'status': _status,
-        'icon': _existingCategory?['icon'] ?? Icons.category_rounded,
-        'products': _existingCategory?['products'] ?? 0,
+  Future<void> _saveCategory() async {
+    if (!_formKey.currentState!.validate() || _isSaving) return;
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final body = <String, dynamic>{
+        'category': _nameController.text.trim(),
+        'status': _status.toLowerCase(),
       };
-
-      debugPrint('Category saved: $categoryData');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_isEditing ? 'Category updated' : 'Category created'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-      context.go('/online-shop/categories');
+      if (_isEditing) {
+        body['category_id'] = (_existingCategory!['category_id'] ?? _existingCategory!['id'] ?? '').toString();
+      }
+      final result = await api.postOnlineshopCategorySave(body);
+      if (!mounted) return;
+      final status = result['status']?.toString() ?? '';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(status == 'success'
+            ? (_isEditing ? 'Category updated' : 'Category created')
+            : (result['message']?.toString() ?? 'Failed to save')),
+        backgroundColor: status == 'success' ? AppColors.success : AppColors.danger,
+      ));
+      if (status == 'success') context.go('/online-shop/categories');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -195,14 +206,16 @@ class _OnlineShopAddCategoryPageState extends State<OnlineShopAddCategoryPage> {
                     child: SizedBox(
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: _saveCategory,
+                        onPressed: _isSaving ? null : _saveCategory,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(AppConstants.radiusSM),
                           ),
                         ),
-                        child: Text(
+                        child: _isSaving
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : Text(
                           _isEditing ? 'Update Category' : 'Save Category',
                           style: GoogleFonts.poppins(
                             fontSize: 14,

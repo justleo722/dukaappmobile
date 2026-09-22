@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 
-class OnlineShopAddDeliveryMethodPage extends StatefulWidget {
+class OnlineShopAddDeliveryMethodPage extends ConsumerStatefulWidget {
   const OnlineShopAddDeliveryMethodPage({
     super.key,
     this.existingMethod,
@@ -13,12 +15,12 @@ class OnlineShopAddDeliveryMethodPage extends StatefulWidget {
   final Map<String, dynamic>? existingMethod;
 
   @override
-  State<OnlineShopAddDeliveryMethodPage> createState() =>
+  ConsumerState<OnlineShopAddDeliveryMethodPage> createState() =>
       _OnlineShopAddDeliveryMethodPageState();
 }
 
 class _OnlineShopAddDeliveryMethodPageState
-    extends State<OnlineShopAddDeliveryMethodPage> {
+    extends ConsumerState<OnlineShopAddDeliveryMethodPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _feeController = TextEditingController();
@@ -28,6 +30,7 @@ class _OnlineShopAddDeliveryMethodPageState
   String _status = 'Active';
   Map<String, dynamic>? _existingMethod;
   bool get _isEditing => _existingMethod != null;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -70,27 +73,36 @@ class _OnlineShopAddDeliveryMethodPageState
     super.dispose();
   }
 
-  void _saveMethod() {
-    if (_formKey.currentState!.validate()) {
-      final methodData = {
-        'name': _nameController.text.trim(),
-        'fee': int.tryParse(_feeController.text.trim()) ?? 0,
-        'estimatedDelivery': _deliveryTimeController.text.trim(),
-        'minimumOrder': int.tryParse(_minOrderController.text.trim()) ?? 0,
-        'status': _status,
+  Future<void> _saveMethod() async {
+    if (!_formKey.currentState!.validate() || _isSaving) return;
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final body = <String, dynamic>{
+        'method_name': _nameController.text.trim(),
+        'fee': _feeController.text.trim(),
+        'estimated_time': _deliveryTimeController.text.trim(),
+        'min_order_amount': _minOrderController.text.trim(),
+        'status': _status.toLowerCase(),
       };
-
-      debugPrint('Delivery method saved: $methodData');
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _isEditing ? 'Delivery method updated' : 'Delivery method created',
-          ),
-          backgroundColor: AppColors.success,
-        ),
-      );
-      context.go('/online-shop/delivery');
+      if (_isEditing) {
+        body['delivery_id'] = (_existingMethod!['delivery_id'] ?? _existingMethod!['id'] ?? '').toString();
+      }
+      final result = await api.postOnlineshopDeliveryMethodSave(body);
+      if (!mounted) return;
+      final status = result['status']?.toString() ?? '';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(status == 'success'
+            ? (_isEditing ? 'Delivery method updated' : 'Delivery method created')
+            : (result['message']?.toString() ?? 'Failed to save')),
+        backgroundColor: status == 'success' ? AppColors.success : AppColors.danger,
+      ));
+      if (status == 'success') context.go('/online-shop/delivery');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -209,7 +221,7 @@ class _OnlineShopAddDeliveryMethodPageState
                     child: SizedBox(
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: _saveMethod,
+                        onPressed: _isSaving ? null : _saveMethod,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           shape: RoundedRectangleBorder(
@@ -217,7 +229,9 @@ class _OnlineShopAddDeliveryMethodPageState
                                 BorderRadius.circular(AppConstants.radiusSM),
                           ),
                         ),
-                        child: Text(
+                        child: _isSaving
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : Text(
                           _isEditing ? 'Update Method' : 'Save Method',
                           style: GoogleFonts.poppins(
                             fontSize: 14,
