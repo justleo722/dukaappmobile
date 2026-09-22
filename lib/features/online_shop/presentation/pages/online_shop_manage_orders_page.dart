@@ -66,7 +66,7 @@ class _OnlineShopManageOrdersPageState
             }
           } catch (_) {}
           return {
-            'orderId': 'ORD-${m['sale_id'] ?? m['invoice_no'] ?? ''}',
+            'orderId': (m['order_code'] ?? m['invoice_no'] ?? 'ORD-${m['sale_id'] ?? ''}').toString(),
             'customer': m['customer'] ?? 'Unknown',
             'items': int.tryParse(m['items_count']?.toString() ?? '') ?? 0,
             'total': 'Tsh ${fmt.format(total.round())}',

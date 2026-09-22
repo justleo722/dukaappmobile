@@ -25,7 +25,7 @@ class ShopSettingsPage extends ConsumerWidget {
     {
       'icon': Icons.backup_rounded,
       'title': 'Data Backup',
-      'description': 'Backup, restore and secure your business data.',
+      'description': 'Backup and secure your business data.',
       'color': Color(0xFFF59E0B),
     },
     {

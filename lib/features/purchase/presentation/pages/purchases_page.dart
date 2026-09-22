@@ -37,11 +37,34 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
   bool _isLoading = false;
 
   List<Map<String, dynamic>> _purchases = [];
+  List<Map<String, dynamic>> _cashbookAccounts = [];
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadPurchases());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadPurchases();
+      _loadAccounts();
+    });
+  }
+
+  Future<void> _loadAccounts() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getCashbookAccounts();
+      final raw = res.data;
+      List<dynamic> list = [];
+      if (raw is List) {
+        list = raw;
+      } else if (raw is Map) {
+        final v = raw['data'] ?? raw['accounts'] ?? raw['result'];
+        if (v is List) list = v;
+      }
+      if (!mounted) return;
+      setState(() {
+        _cashbookAccounts = list.whereType<Map<String, dynamic>>().toList();
+      });
+    } catch (_) {}
   }
 
   Future<void> _loadPurchases({String? from, String? to}) async {
@@ -295,7 +318,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
     final supplier = purchase['supplier'] as String;
     final amountController = TextEditingController(text: balance.toStringAsFixed(0));
     DateTime selectedDate = DateTime.now();
-    String? selectedAccount;
+    String? selectedAccountId;
 
     showDialog(
       context: context,
@@ -487,7 +510,6 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
-                          value: selectedAccount,
                           hint: Text(
                             'Select Account',
                             style: AppTypography.bodyMedium.copyWith(
@@ -499,13 +521,14 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                             Icons.keyboard_arrow_down_rounded,
                             color: AppColors.textHint,
                           ),
-                          items: const [
-                            DropdownMenuItem(value: 'Cash', child: Text('Cash')),
-                            DropdownMenuItem(value: 'Bank', child: Text('Bank')),
-                            DropdownMenuItem(value: 'Mobile Money', child: Text('Mobile Money')),
-                          ],
+                          value: selectedAccountId,
+                          items: _cashbookAccounts.map((a) {
+                            final id = (a['account_id'] ?? a['id'] ?? '').toString();
+                            final name = (a['account_name'] ?? a['name'] ?? id).toString();
+                            return DropdownMenuItem(value: id, child: Text(name));
+                          }).toList(),
                           onChanged: (value) {
-                            setDialogState(() => selectedAccount = value);
+                            setDialogState(() => selectedAccountId = value);
                           },
                         ),
                       ),
@@ -546,14 +569,15 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                               return;
                             }
                             final purchaseId = _purchases[index]['purchase_id']?.toString() ?? '';
+                            if (purchaseId.isEmpty) return;
                             Navigator.pop(context);
                             try {
                               final repo = ref.read(purchaseRepositoryProvider);
                               await repo.addPayment({
-                                'purchase_id': purchaseId,
+                                'purchase_ids': purchaseId,
                                 'amount': amount,
                                 'date': DateFormat('yyyy-MM-dd').format(selectedDate),
-                                if (selectedAccount != null) 'account': selectedAccount,
+                                if (selectedAccountId != null) 'from_account_id': selectedAccountId,
                               });
                               if (!mounted) return;
                               setState(() {
@@ -1179,6 +1203,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
     ref.listen(authProvider.select((s) => s.activeShop?.id), (prev, next) {
       if (prev != next && next != null) _loadPurchases();
     });
+    ref.listen<FilterState>(filterProvider, (_, f) => _loadPurchases(from: f.from, to: f.to));
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),

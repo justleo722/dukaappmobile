@@ -88,7 +88,7 @@ class _DataBackupPageState extends ConsumerState<DataBackupPage> {
             child: Row(children: [
               const Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 20),
               const SizedBox(width: 10),
-              Expanded(child: Text('Backup exports all your shop data as an Excel file.', style: AppTypography.bodySmall.copyWith(color: AppColors.primary))),
+              Expanded(child: Text('Backup exports all your shop data as an Excel file. Database restore is not available.', style: AppTypography.bodySmall.copyWith(color: AppColors.primary))),
             ]),
           ),
           const SizedBox(height: 24),

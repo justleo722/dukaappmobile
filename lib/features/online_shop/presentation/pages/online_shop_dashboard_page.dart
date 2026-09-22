@@ -56,7 +56,7 @@ class _OnlineShopDashboardPageState extends ConsumerState<OnlineShopDashboardPag
         final m = o as Map<String, dynamic>;
         final total = double.tryParse(m['total_amount']?.toString() ?? '') ?? 0;
         return {
-          'orderId': 'ORD-${m['sale_id'] ?? ''}',
+          'orderId': (m['order_code'] ?? m['invoice_no'] ?? 'ORD-${m['sale_id'] ?? ''}').toString(),
           'customer': m['customer'] ?? 'Unknown',
           'amount': 'Tsh ${fmt.format(total.round())}',
           'status': _normalizeStatus(m['status']?.toString() ?? 'Pending'),
