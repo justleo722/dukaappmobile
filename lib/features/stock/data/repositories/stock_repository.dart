@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:dukaapp/core/database/database_service.dart';
 import 'package:dukaapp/features/stock/data/datasources/stock_remote_datasource.dart';
 import 'package:dukaapp/features/stock/data/models/stock_models.dart';
@@ -34,11 +35,11 @@ class StockRepository {
 
   // ── WRITE ────────────────────────────────────────────────────────────────
 
-  Future<Map<String, dynamic>> createProduct(Map<String, dynamic> body) =>
-      _remote.createProduct(body);
+  Future<Map<String, dynamic>> createProduct(Map<String, dynamic> body, {List<File>? photos}) =>
+      _remote.createProduct(body, photos: photos);
 
-  Future<Map<String, dynamic>> updateProduct(Map<String, dynamic> body) =>
-      _remote.updateProduct(body);
+  Future<Map<String, dynamic>> updateProduct(Map<String, dynamic> body, {List<File>? photos}) =>
+      _remote.updateProduct(body, photos: photos);
 
   Future<Map<String, dynamic>> adjustStockBalance(Map<String, dynamic> body) =>
       _remote.adjustStockBalance(body);

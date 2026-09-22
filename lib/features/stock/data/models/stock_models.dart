@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:dukaapp/core/config/api_config.dart';
 
 /// Product row returned by GET getdata/stock
 class StockProduct {
@@ -157,8 +158,7 @@ class StockProduct {
     if (raw == null || raw.trim().isEmpty) return null;
     final path = raw.trim();
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    // Remove leading slash if present, then prepend base URL
-    const baseUrl = 'https://dukaapp.com';
+    final baseUrl = ApiConfig.baseUrl;
     return '$baseUrl/${path.replaceFirst(RegExp(r'^/+'), '')}';
   }
 }

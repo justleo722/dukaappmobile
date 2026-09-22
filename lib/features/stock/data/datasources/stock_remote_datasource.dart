@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dukaapp/core/network/api_client.dart';
 import 'package:dukaapp/core/services/api_endpoints.dart';
@@ -153,15 +154,33 @@ class StockRemoteDatasource {
   static final _formOptions = Options(contentType: 'application/x-www-form-urlencoded');
 
   /// Create a new product (stock/register/create)
-  Future<Map<String, dynamic>> createProduct(Map<String, dynamic> body) async {
-    final res = await _client.post(ApiEndpoints.postStockRegisterCreate, data: body, options: _formOptions);
-    return _json(res.data);
+  Future<Map<String, dynamic>> createProduct(Map<String, dynamic> body, {List<File>? photos}) async {
+    final data = await _buildProductData(body, photos);
+    final res = await _client.post(ApiEndpoints.postStockRegisterCreate, data: data,
+        options: Options(responseType: ResponseType.plain));
+    return _jsonFromPlain(res.data);
   }
 
   /// Update existing product details (stock/product/update)
-  Future<Map<String, dynamic>> updateProduct(Map<String, dynamic> body) async {
-    final res = await _client.post(ApiEndpoints.postStockProductUpdate, data: body, options: _formOptions);
-    return _json(res.data);
+  Future<Map<String, dynamic>> updateProduct(Map<String, dynamic> body, {List<File>? photos}) async {
+    final data = await _buildProductData(body, photos);
+    final res = await _client.post(ApiEndpoints.postStockProductUpdate, data: data,
+        options: Options(responseType: ResponseType.plain));
+    return _jsonFromPlain(res.data);
+  }
+
+  Future<dynamic> _buildProductData(Map<String, dynamic> body, List<File>? photos) async {
+    if (photos == null || photos.isEmpty) {
+      return body.entries.where((e) => e.value != null)
+          .map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value.toString())}')
+          .join('&');
+    }
+    final form = FormData.fromMap(body.map((k, v) => MapEntry(k, v?.toString() ?? '')));
+    for (final file in photos) {
+      final name = file.path.split('/').last;
+      form.files.add(MapEntry('photos[]', await MultipartFile.fromFile(file.path, filename: name)));
+    }
+    return form;
   }
 
   /// Adjust stock balance (stock/restock/balance).

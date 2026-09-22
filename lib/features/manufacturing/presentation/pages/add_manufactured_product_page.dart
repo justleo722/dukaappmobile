@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class _RawMaterialRow {
   final String name;
@@ -18,80 +21,40 @@ class _RawMaterialRow {
   });
 }
 
-class AddManufacturedProductPage extends StatefulWidget {
+class AddManufacturedProductPage extends ConsumerStatefulWidget {
   final Map<String, dynamic>? productData;
 
   const AddManufacturedProductPage({super.key, this.productData});
 
   @override
-  State<AddManufacturedProductPage> createState() => _AddManufacturedProductPageState();
+  ConsumerState<AddManufacturedProductPage> createState() => _AddManufacturedProductPageState();
 }
 
-class _AddManufacturedProductPageState extends State<AddManufacturedProductPage> {
+class _AddManufacturedProductPageState extends ConsumerState<AddManufacturedProductPage> {
   final _nameController = TextEditingController();
   final _quantityController = TextEditingController(text: '1');
   final _alertLevelController = TextEditingController(text: '10');
   final _sellingPriceController = TextEditingController();
   final _wholesalePriceController = TextEditingController();
 
-  String? _selectedRecipe;
+  String? _selectedRecipeId;  // recipe_id as string
+  String? _selectedRecipeName;
   int _yieldPerRecipe = 1;
   DateTime _expiryDate = DateTime.now().add(const Duration(days: 365));
   DateTime _productionDate = DateTime.now();
   List<_RawMaterialRow> _rawMaterials = [];
+  bool _isSaving = false;
+  bool _isLoadingRecipes = false;
 
-  final List<Map<String, dynamic>> _recipes = [
-    {
-      'name': 'Basic Tee',
-      'yield': 10,
-      'materials': [
-        {'name': 'Cotton Fabric', 'unit': 'meters', 'qty': 5.0, 'stock': 120},
-        {'name': 'Thread', 'unit': 'rolls', 'qty': 2.0, 'stock': 80},
-        {'name': 'Dye', 'unit': 'liters', 'qty': 1.0, 'stock': 50},
-      ],
-    },
-    {
-      'name': 'Slim Fit Denim',
-      'yield': 8,
-      'materials': [
-        {'name': 'Denim Fabric', 'unit': 'meters', 'qty': 6.0, 'stock': 90},
-        {'name': 'Zipper', 'unit': 'pcs', 'qty': 1.0, 'stock': 200},
-        {'name': 'Button', 'unit': 'pcs', 'qty': 3.0, 'stock': 300},
-      ],
-    },
-    {
-      'name': 'Winter Hoodie',
-      'yield': 5,
-      'materials': [
-        {'name': 'Fleece Fabric', 'unit': 'meters', 'qty': 8.0, 'stock': 60},
-        {'name': 'Zipper', 'unit': 'pcs', 'qty': 1.0, 'stock': 200},
-        {'name': 'Drawstring', 'unit': 'pcs', 'qty': 1.0, 'stock': 150},
-      ],
-    },
-    {
-      'name': 'Casual Linen',
-      'yield': 12,
-      'materials': [
-        {'name': 'Linen Fabric', 'unit': 'meters', 'qty': 4.0, 'stock': 75},
-        {'name': 'Thread', 'unit': 'rolls', 'qty': 1.5, 'stock': 80},
-      ],
-    },
-    {
-      'name': 'Active Shorts',
-      'yield': 15,
-      'materials': [
-        {'name': 'Polyester Fabric', 'unit': 'meters', 'qty': 3.0, 'stock': 100},
-        {'name': 'Elastic Band', 'unit': 'meters', 'qty': 1.0, 'stock': 90},
-        {'name': 'Drawstring', 'unit': 'pcs', 'qty': 1.0, 'stock': 150},
-      ],
-    },
-  ];
+  // Loaded from API: list of raw recipe objects with recipe_id, recipe_name, yield_quantity, ingredients
+  List<Map<String, dynamic>> _recipes = [];
 
   bool get _isEditMode => widget.productData != null;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadRecipes());
     if (_isEditMode) {
       final data = widget.productData!;
       _nameController.text = data['name'] ?? '';
@@ -99,11 +62,30 @@ class _AddManufacturedProductPageState extends State<AddManufacturedProductPage>
       _alertLevelController.text = (data['alertLevel'] ?? 10).toString();
       _sellingPriceController.text = (data['sellingPrice'] ?? 0).toString();
       _wholesalePriceController.text = (data['wholesalePrice'] ?? 0).toString();
-      _selectedRecipe = data['recipe'];
-      _yieldPerRecipe = data['yield'] ?? 1;
-      if (data['expiryDate'] != null) _expiryDate = data['expiryDate'];
-      if (data['productionDate'] != null) _productionDate = data['productionDate'];
-      _loadRecipeMaterials();
+      _selectedRecipeId = data['recipe_id']?.toString();
+      _selectedRecipeName = data['recipe'];
+    }
+  }
+
+  Future<void> _loadRecipes() async {
+    if (!mounted) return;
+    setState(() => _isLoadingRecipes = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getMfRecipes();
+      final raw = res.data;
+      List<dynamic> list = raw is List ? raw : (raw is Map ? (raw['data'] ?? raw['recipes'] ?? []) : []);
+      if (!mounted) return;
+      setState(() {
+        _recipes = list.whereType<Map<String, dynamic>>().toList();
+        // If editing, find the matching recipe to populate materials
+        if (_selectedRecipeId != null) {
+          _applyRecipeById(_selectedRecipeId!);
+        }
+      });
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isLoadingRecipes = false);
     }
   }
 
@@ -117,23 +99,29 @@ class _AddManufacturedProductPageState extends State<AddManufacturedProductPage>
     super.dispose();
   }
 
-  void _loadRecipeMaterials() {
-    if (_selectedRecipe == null) {
-      setState(() => _rawMaterials = []);
-      return;
+  void _applyRecipeById(String recipeId) {
+    if (_recipes.isEmpty) return;
+    try {
+      final recipe = _recipes.firstWhere((r) => r['recipe_id']?.toString() == recipeId);
+      final yield_ = double.tryParse((recipe['yield_quantity'] ?? 1).toString()) ?? 1;
+      final ingredients = (recipe['ingredients'] as List? ?? []);
+      setState(() {
+        _selectedRecipeId = recipeId;
+        _selectedRecipeName = recipe['recipe_name']?.toString() ?? '';
+        _yieldPerRecipe = yield_.toInt().clamp(1, 99999);
+        _rawMaterials = ingredients.map((m) {
+          final map = m as Map<String, dynamic>;
+          return _RawMaterialRow(
+            name: map['material_name']?.toString() ?? '',
+            unit: map['unit']?.toString() ?? '',
+            quantityToUse: double.tryParse((map['quantity_required'] ?? 0).toString()) ?? 0,
+            availableStock: (double.tryParse((map['current_stock'] ?? 0).toString()) ?? 0).toInt(),
+          );
+        }).toList();
+      });
+    } catch (_) {
+      setState(() { _rawMaterials = []; });
     }
-    final recipe = _recipes.firstWhere((r) => r['name'] == _selectedRecipe);
-    setState(() {
-      _yieldPerRecipe = recipe['yield'] as int;
-      _rawMaterials = (recipe['materials'] as List).map((m) {
-        return _RawMaterialRow(
-          name: m['name'] as String,
-          unit: m['unit'] as String,
-          quantityToUse: (m['qty'] as num).toDouble(),
-          availableStock: m['stock'] as int,
-        );
-      }).toList();
-    });
   }
 
   double get _totalCost {
@@ -176,6 +164,73 @@ class _AddManufacturedProductPageState extends State<AddManufacturedProductPage>
       ),
     );
     if (picked != null) setState(() => _productionDate = picked);
+  }
+
+  Future<void> _save() async {
+    final name = _nameController.text.trim();
+    final quantity = _quantityController.text.trim();
+    final alertLevel = _alertLevelController.text.trim();
+    final sellingPrice = _sellingPriceController.text.trim();
+    final wholesalePrice = _wholesalePriceController.text.trim();
+
+    if (name.isEmpty || _selectedRecipeId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Please fill in product name and select a recipe.',
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+      ));
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final body = {
+        'recipe_id': _selectedRecipeId!,
+        'product_name': name,
+        'quantity': quantity.isEmpty ? '1' : quantity,
+        'selling_price': sellingPrice.isEmpty ? '0' : sellingPrice,
+        'wholesale_price': wholesalePrice.isEmpty ? '0' : wholesalePrice,
+        'production_date': DateFormat('yyyy-MM-dd').format(_productionDate),
+        'expiry_date': DateFormat('yyyy-MM-dd').format(_expiryDate),
+        'alert_level': alertLevel.isEmpty ? '10' : alertLevel,
+      };
+      final data = await api.postMfProductionSave(body);
+      final status = data['status']?.toString() ?? '';
+      if (!mounted) return;
+      if (status == 'success') {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            _isEditMode ? 'Product updated successfully' : 'Product saved successfully',
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+          ),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+        ));
+        context.pop(true);
+      } else {
+        final msg = data['message']?.toString() ?? 'Failed to save product';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(msg, style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+        ));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Error: $e', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+      ));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -260,7 +315,7 @@ class _AddManufacturedProductPageState extends State<AddManufacturedProductPage>
   Widget _buildRawMaterialsCard() {
     return _formCard(
       title: 'Raw Materials Needed',
-      subtitle: _selectedRecipe != null ? 'Linked to: $_selectedRecipe' : 'Select a recipe first',
+      subtitle: _selectedRecipeName != null ? 'Linked to: $_selectedRecipeName' : 'Select a recipe first',
       children: [
         if (_rawMaterials.isEmpty)
           Container(
@@ -272,7 +327,7 @@ class _AddManufacturedProductPageState extends State<AddManufacturedProductPage>
             ),
             child: Center(
               child: Text(
-                _selectedRecipe == null
+                _selectedRecipeId == null
                     ? 'Select a recipe to view raw materials'
                     : 'No raw materials linked',
                 style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
@@ -420,16 +475,26 @@ class _AddManufacturedProductPageState extends State<AddManufacturedProductPage>
           color: const Color(0xFFF5F7FB), borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
           border: Border.all(color: AppColors.inputBorder),
         ),
-        child: DropdownButton<String>(
-          value: _selectedRecipe, isExpanded: true, underline: const SizedBox(),
-          hint: Text('Choose a recipe', style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint)),
-          style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
-          items: _recipes.map((r) => DropdownMenuItem(value: r['name'] as String, child: Text(r['name'] as String))).toList(),
-          onChanged: (v) {
-            setState(() => _selectedRecipe = v);
-            _loadRecipeMaterials();
-          },
-        ),
+        child: _isLoadingRecipes
+            ? const Padding(
+                padding: EdgeInsets.symmetric(vertical: 14),
+                child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+              )
+            : DropdownButton<String>(
+                value: _selectedRecipeId,
+                isExpanded: true,
+                underline: const SizedBox(),
+                hint: Text('Choose a recipe', style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint)),
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
+                items: _recipes.map((r) {
+                  final id = r['recipe_id']?.toString() ?? '';
+                  final name = r['recipe_name']?.toString() ?? id;
+                  return DropdownMenuItem<String>(value: id, child: Text(name));
+                }).toList(),
+                onChanged: (id) {
+                  if (id != null) _applyRecipeById(id);
+                },
+              ),
       ),
     ]);
   }
@@ -521,26 +586,15 @@ class _AddManufacturedProductPageState extends State<AddManufacturedProductPage>
           child: SizedBox(
             height: AppConstants.buttonHeight,
             child: ElevatedButton(
-              onPressed: _nameController.text.isNotEmpty ? () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      _isEditMode ? 'Product updated successfully' : 'Product saved successfully',
-                      style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-                    ),
-                    backgroundColor: AppColors.success,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
-                  ),
-                );
-                context.pop();
-              } : null,
+              onPressed: (_nameController.text.isNotEmpty && !_isSaving) ? _save : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary, foregroundColor: AppColors.textWhite, elevation: 0,
                 disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.4),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD)),
               ),
-              child: Text(_isEditMode ? 'Update Product' : 'Save Product', style: AppTypography.buttonLarge),
+              child: _isSaving
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : Text(_isEditMode ? 'Update Product' : 'Save Product', style: AppTypography.buttonLarge),
             ),
           ),
         ),

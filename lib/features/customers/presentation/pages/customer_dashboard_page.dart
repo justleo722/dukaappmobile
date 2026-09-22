@@ -405,14 +405,14 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
             icon: Icons.account_balance_wallet_rounded,
             label: s.walletStatement,
             color: AppColors.primary,
-            onTap: () => _showComingSoon('Wallet Statement'),
+            onTap: () => context.push('/customers/wallet'),
           ),
           const SizedBox(width: 8),
           _buildActionChip(
             icon: Icons.shopping_cart_rounded,
             label: s.walletSales,
             color: AppColors.success,
-            onTap: () => _showComingSoon('Wallet Sales'),
+            onTap: () => context.push('/customers/wallet'),
           ),
           const SizedBox(width: 8),
           _buildActionChip(

@@ -4,10 +4,11 @@ import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
-import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/core/providers.dart';
 
 class _ReproduceProduct {
+  final String productId;
+  final String recipeId;
   final String name;
   final String recipe;
   int quantity;
@@ -17,6 +18,8 @@ class _ReproduceProduct {
   DateTime expiryDate;
 
   _ReproduceProduct({
+    required this.productId,
+    required this.recipeId,
     required this.name,
     required this.recipe,
     required this.quantity,
@@ -45,6 +48,7 @@ class _ReproduceProductsPageState extends ConsumerState<ReproduceProductsPage> {
   DateTime _productionDate = DateTime.now();
   final List<_ReproduceProduct> _items = [];
   List<Map<String, dynamic>> _allProducts = [];
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -64,6 +68,8 @@ class _ReproduceProductsPageState extends ConsumerState<ReproduceProductsPage> {
           products = data.map((e) {
             final m = Map<String, dynamic>.from(e as Map);
             return {
+              'product_id': (m['product_id'] ?? m['id'] ?? '').toString(),
+              'recipe_id': (m['recipe_id'] ?? '').toString(),
               'name': m['product_name'] ?? m['name'] ?? '',
               'recipe': m['recipe_name'] ?? m['recipe'] ?? '',
               'productionCost': (m['unit_cost'] ?? m['cost_price'] ?? 0.0) as num,
@@ -91,6 +97,8 @@ class _ReproduceProductsPageState extends ConsumerState<ReproduceProductsPage> {
       final name = product['name'] as String;
       if (_items.any((item) => item.name == name)) continue;
       _items.add(_ReproduceProduct(
+        productId: (product['product_id'] ?? '').toString(),
+        recipeId: (product['recipe_id'] ?? '').toString(),
         name: name,
         recipe: (product['recipe'] ?? '').toString(),
         quantity: 1,
@@ -107,6 +115,60 @@ class _ReproduceProductsPageState extends ConsumerState<ReproduceProductsPage> {
           backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))),
       );
+    }
+  }
+
+  Future<void> _save() async {
+    final itemsWithQty = _items.where((i) => i.quantity > 0 && i.productId.isNotEmpty).toList();
+    if (itemsWithQty.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Enter quantity for at least one product.', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+        backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      // Backend reads: product_id[], quantity[product_id], recipe_id[product_id],
+      // selling_price[product_id], expiry_date[product_id], production_date
+      final body = <String, dynamic>{
+        'production_date': _productionDate.toIso8601String().substring(0, 10),
+      };
+      for (int i = 0; i < itemsWithQty.length; i++) {
+        final item = itemsWithQty[i];
+        final pid = item.productId;
+        body['product_id[$i]'] = pid;
+        body['quantity[$pid]'] = item.quantity.toString();
+        if (item.recipeId.isNotEmpty) body['recipe_id[$pid]'] = item.recipeId;
+        body['selling_price[$pid]'] = item.sellingPriceController.text.trim().isEmpty ? '0' : item.sellingPriceController.text.trim();
+        body['wholesale_price[$pid]'] = item.wholesalePriceController.text.trim().isEmpty ? '0' : item.wholesalePriceController.text.trim();
+        body['expiry_date[$pid]'] = item.expiryDate.toIso8601String().substring(0, 10);
+      }
+      final result = await api.postMfProductionReproduce(body);
+      if (!mounted) return;
+      final status = result['status']?.toString() ?? '';
+      if (status == 'success') {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Re-production saved successfully', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+          backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
+        context.pop(true);
+      } else {
+        final msg = result['message']?.toString() ?? 'Failed to save';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(msg, style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+          backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Error: $e', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+        backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -529,15 +591,12 @@ class _ReproduceProductsPageState extends ConsumerState<ReproduceProductsPage> {
         ))),
         const SizedBox(width: 12),
         Expanded(flex: 2, child: SizedBox(height: AppConstants.buttonHeight, child: ElevatedButton(
-          onPressed: _items.isNotEmpty ? () {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('Re-production saved successfully', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
-              backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
-          } : null,
+          onPressed: (_items.isNotEmpty && !_isSaving) ? _save : null,
           style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: AppColors.textWhite, elevation: 0, disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.4),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD))),
-          child: Text('Save', style: AppTypography.buttonLarge),
+          child: _isSaving
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : Text('Save', style: AppTypography.buttonLarge),
         ))),
       ]),
     );

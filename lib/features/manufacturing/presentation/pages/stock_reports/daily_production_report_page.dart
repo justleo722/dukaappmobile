@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -10,7 +11,9 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 
 class _ProductionItem {
   final int sn;
@@ -32,23 +35,65 @@ class _ProductionItem {
   });
 }
 
-class DailyProductionReportPage extends StatefulWidget {
+class DailyProductionReportPage extends ConsumerStatefulWidget {
   const DailyProductionReportPage({super.key});
 
   @override
-  State<DailyProductionReportPage> createState() => _DailyProductionReportPageState();
+  ConsumerState<DailyProductionReportPage> createState() => _DailyProductionReportPageState();
 }
 
-class _DailyProductionReportPageState extends State<DailyProductionReportPage> {
+class _DailyProductionReportPageState extends ConsumerState<DailyProductionReportPage> {
   final TextEditingController _searchController = TextEditingController();
+  bool _isLoading = true;
+  List<_ProductionItem> _items = [];
 
-  static final List<_ProductionItem> _items = [
-    _ProductionItem(sn: 1, date: '15/08/2026', productName: 'White T-Shirt', recipeUsed: 'Basic Tee', qtyProduced: 120, unit: 'pcs', costPerUnit: 450, totalCost: 54000, expiryDate: DateTime(2027, 8, 15), producedBy: 'John', status: 'Completed'),
-    _ProductionItem(sn: 2, date: '15/08/2026', productName: 'Denim Jeans', recipeUsed: 'Slim Fit Denim', qtyProduced: 8, unit: 'pcs', costPerUnit: 1200, totalCost: 9600, expiryDate: DateTime(2027, 8, 15), producedBy: 'Mary', status: 'Completed'),
-    _ProductionItem(sn: 3, date: '14/08/2026', productName: 'Cotton Hoodie', recipeUsed: 'Winter Hoodie', qtyProduced: 45, unit: 'pcs', costPerUnit: 900, totalCost: 40500, expiryDate: DateTime(2027, 8, 14), producedBy: 'John', status: 'Completed'),
-    _ProductionItem(sn: 4, date: '14/08/2026', productName: 'Sport Shorts', recipeUsed: 'Active Shorts', qtyProduced: 60, unit: 'pcs', costPerUnit: 350, totalCost: 21000, expiryDate: DateTime(2027, 8, 14), producedBy: 'Ali', status: 'In Progress'),
-    _ProductionItem(sn: 5, date: '13/08/2026', productName: 'Linen Shirt', recipeUsed: 'Casual Linen', qtyProduced: 30, unit: 'pcs', costPerUnit: 700, totalCost: 21000, expiryDate: DateTime(2027, 8, 13), producedBy: 'Mary', status: 'Completed'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
+
+  Future<void> _loadData({String? from, String? to}) async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getMfDailyProduction(from: from, to: to);
+      final body = res.data;
+      List<_ProductionItem> items = [];
+      List raw = [];
+      if (body is List) {
+        raw = body;
+      } else if (body is Map) {
+        final d = body['data'] ?? body['items'] ?? body['result'];
+        if (d is List) raw = d;
+      }
+      for (int i = 0; i < raw.length; i++) {
+        final m = raw[i] as Map;
+        final costUnit = num.tryParse((m['cost_per_unit'] ?? 0).toString()) ?? 0;
+        final totalCost = num.tryParse((m['total_cost'] ?? 0).toString()) ?? 0;
+        final expRaw = m['expiry_date']?.toString() ?? '';
+        DateTime expiry = DateTime.now().add(const Duration(days: 365));
+        try { expiry = DateTime.parse(expRaw); } catch (_) {}
+        items.add(_ProductionItem(
+          sn: i + 1,
+          date: m['production_date']?.toString() ?? '',
+          productName: m['product_name']?.toString() ?? '',
+          recipeUsed: m['recipe_name']?.toString() ?? '',
+          qtyProduced: int.tryParse((m['quantity_produced'] ?? 0).toString()) ?? 0,
+          unit: m['unit']?.toString() ?? '',
+          costPerUnit: costUnit.toDouble(),
+          totalCost: totalCost.toDouble(),
+          expiryDate: expiry,
+          producedBy: m['produced_by']?.toString() ?? '',
+          status: m['status']?.toString() ?? 'Completed',
+        ));
+      }
+      if (mounted) setState(() { _items = items; _isLoading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   List<_ProductionItem> get _filteredItems {
     final q = _searchController.text.toLowerCase().trim();
@@ -117,13 +162,15 @@ class _DailyProductionReportPageState extends State<DailyProductionReportPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, f) => _loadData(from: f.from, to: f.to));
     final items = _filteredItems;
     return Scaffold(backgroundColor: const Color(0xFFF5F7FB), appBar: _buildAppBar(context),
       body: SafeArea(top: false, child: SingleChildScrollView(
         child: Column(children: [
           _buildActionButtons(context), const SizedBox(height: 12),
           _buildSearchField(), const SizedBox(height: 12),
-          if (items.isEmpty) _buildEmptyState() else _buildTable(items),
+          if (_isLoading) const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+          else if (items.isEmpty) _buildEmptyState() else _buildTable(items),
           const SizedBox(height: 24),
         ]),
       )),

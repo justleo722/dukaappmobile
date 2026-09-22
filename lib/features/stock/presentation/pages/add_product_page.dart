@@ -188,9 +188,10 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
         if (isEditing) 'product_id': widget.product!['product_id']?.toString() ?? '',
       };
 
+      final photos = _selectedPhotos.isNotEmpty ? _selectedPhotos : null;
       final result = isEditing
-          ? await repo.updateProduct(body)
-          : await repo.createProduct(body);
+          ? await repo.updateProduct(body, photos: photos)
+          : await repo.createProduct(body, photos: photos);
 
       final status = result['status']?.toString() ?? '';
       final message = result['message']?.toString() ??

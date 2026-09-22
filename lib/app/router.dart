@@ -92,7 +92,6 @@ import 'package:dukaapp/features/manufacturing/presentation/pages/manage_recipes
 import 'package:dukaapp/features/manufacturing/presentation/pages/create_recipe_page.dart';
 import 'package:dukaapp/features/manufacturing/presentation/pages/edit_recipe_page.dart';
 import 'package:dukaapp/features/manufacturing/presentation/pages/add_manufactured_product_page.dart';
-import 'package:dukaapp/features/manufacturing/presentation/pages/edit_manufactured_product_page.dart';
 import 'package:dukaapp/features/manufacturing/presentation/pages/manufacturing_reports_page.dart';
 import 'package:dukaapp/features/manufacturing/presentation/pages/stock_reports/daily_production_report_page.dart';
 import 'package:dukaapp/features/manufacturing/presentation/pages/stock_reports/raw_material_consumption_report_page.dart';
@@ -509,6 +508,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 builder: (context, state) {
                   final data = state.extra as Map<String, dynamic>;
                   return EditRawMaterialPage(
+                    materialId: data['materialId']?.toString() ?? '',
                     name: data['name'] ?? '',
                     unit: data['unit'] ?? 'item',
                     unitCost: (data['unitCost'] as num?)?.toDouble() ?? 0,
@@ -532,13 +532,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: 'edit',
                 name: 'edit-recipe',
                 builder: (context, state) {
-                  final data = state.extra as Map<String, dynamic>;
-                  return EditRecipePage(
-                    name: data['name'] ?? '',
-                    yieldAmount: data['yieldAmount'] ?? '1',
-                    ingredients: List<String>.from(data['ingredients'] ?? []),
-                    estimatedCost: (data['estimatedCost'] as num?)?.toDouble() ?? 0,
-                  );
+                  final data = state.extra as Map<String, dynamic>? ?? {};
+                  return EditRecipePage(recipeData: data);
                 },
               ),
             ],
@@ -552,16 +547,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: 'edit-product',
             name: 'edit-manufactured-product',
             builder: (context, state) {
-              final data = state.extra as Map<String, dynamic>;
-              return EditManufacturedProductPage(
-                name: data['name'] ?? '',
-                recipe: data['recipe'] ?? '',
-                quantity: data['quantity'] ?? 1,
-                unitCost: (data['unitCost'] as num?)?.toDouble() ?? 0,
-                sellingPrice: (data['sellingPrice'] as num?)?.toDouble() ?? 0,
-                wholesalePrice: (data['wholesalePrice'] as num?)?.toDouble() ?? 0,
-                alertLevel: data['alertLevel'] ?? 10,
-              );
+              final data = state.extra as Map<String, dynamic>? ?? {};
+              return AddManufacturedProductPage(productData: data);
             },
           ),
           GoRoute(

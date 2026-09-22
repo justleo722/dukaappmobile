@@ -41,7 +41,7 @@ class _StoragePageState extends ConsumerState<StoragePage> {
       final api = ref.read(apiServiceProvider);
       final results = await Future.wait([
         api.getStorageUsage(),
-        api.getStorageSummary(),
+        api.getAttendantSettings(),
       ]);
 
       // --- storage_usage ---
@@ -60,16 +60,16 @@ class _StoragePageState extends ConsumerState<StoragePage> {
         _suppliers = _toInt(usage['suppliers']);
       }
 
-      // --- storage_summary → attendants ---
-      final sumBody = results[1].data;
-      List rawSum = [];
-      if (sumBody is List) {
-        rawSum = sumBody;
-      } else if (sumBody is Map) {
-        final d = sumBody['data'] ?? sumBody['summary'] ?? sumBody['result'];
-        if (d is List) rawSum = d;
+      // --- attendant_settings ---
+      final attBody = results[1].data;
+      List rawAtt = [];
+      if (attBody is List) {
+        rawAtt = attBody;
+      } else if (attBody is Map) {
+        final d = attBody['data'] ?? attBody['result'] ?? attBody['attendants'];
+        if (d is List) rawAtt = d;
       }
-      _attendants = rawSum.whereType<Map<String, dynamic>>().toList();
+      _attendants = rawAtt.whereType<Map<String, dynamic>>().toList();
     } catch (_) {}
     if (mounted) setState(() => _isLoading = false);
   }
@@ -129,16 +129,29 @@ class _StoragePageState extends ConsumerState<StoragePage> {
     );
   }
 
+  TimeOfDay _parseTime(String? raw, {required int defaultHour}) {
+    if (raw == null || raw.isEmpty) return TimeOfDay(hour: defaultHour, minute: 0);
+    final parts = raw.split(':');
+    final h = int.tryParse(parts[0]) ?? defaultHour;
+    final m = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
   void _showAttendantDialog(Map<String, dynamic> att) {
     final name = att['username']?.toString() ?? att['name']?.toString() ?? 'Attendant';
-    TimeOfDay lockTime   = const TimeOfDay(hour: 8,  minute: 0);
-    TimeOfDay unlockTime = const TimeOfDay(hour: 17, minute: 0);
+    final roleId = att['role_id']?.toString() ?? '';
+    TimeOfDay lockTime   = _parseTime(att['auto_lock_time']?.toString(), defaultHour: 8);
+    TimeOfDay unlockTime = _parseTime(att['auto_unlock_time']?.toString(), defaultHour: 17);
+    bool isSaving = false;
 
     String formatTime(TimeOfDay t) {
       final h = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
       final m = t.minute.toString().padLeft(2, '0');
       return '$h:$m ${t.period == DayPeriod.am ? 'AM' : 'PM'}';
     }
+
+    String toHHMM(TimeOfDay t) =>
+        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
     showDialog(
       context: context,
@@ -172,18 +185,38 @@ class _StoragePageState extends ConsumerState<StoragePage> {
               )),
               const SizedBox(width: 12),
               Expanded(child: ElevatedButton(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('$name settings saved'), backgroundColor: AppColors.success),
-                  );
+                onPressed: isSaving ? null : () async {
+                  setDialogState(() => isSaving = true);
+                  try {
+                    final api = ref.read(apiServiceProvider);
+                    final result = await api.postSettingsAttendantSaveAccess({
+                      'role_id': roleId,
+                      'lock_time': toHHMM(lockTime),
+                      'unlock_time': toHHMM(unlockTime),
+                    });
+                    if (!ctx.mounted) return;
+                    Navigator.of(ctx).pop();
+                    final status = result['status']?.toString() ?? '';
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(status == 'success' ? '$name settings saved' : (result['message']?.toString() ?? 'Failed to save')),
+                      backgroundColor: status == 'success' ? AppColors.success : AppColors.danger,
+                    ));
+                  } catch (e) {
+                    if (!ctx.mounted) return;
+                    setDialogState(() => isSaving = false);
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('Error: $e'), backgroundColor: AppColors.danger));
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary, foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                child: Text('Save', style: AppTypography.bodyMedium.copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
+                child: isSaving
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : Text('Save', style: AppTypography.bodyMedium.copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
               )),
             ]),
           ],
@@ -287,7 +320,7 @@ class _StoragePageState extends ConsumerState<StoragePage> {
                             ),
                             title: Text(name, style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
                             subtitle: Text(
-                              att['role']?.toString() ?? 'Attendant',
+                              att['staff_role']?.toString() ?? att['role']?.toString() ?? 'Attendant',
                               style: AppTypography.caption.copyWith(fontSize: 10),
                             ),
                             trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textHint, size: 20),

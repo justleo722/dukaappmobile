@@ -1,67 +1,48 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class _Ingredient {
-  String material;
+  String materialId;
+  String materialName;
   String quantity;
   String unit;
 
-  _Ingredient({this.material = '', this.quantity = '1', this.unit = 'kg'});
+  _Ingredient({this.materialId = '', this.materialName = '', this.quantity = '1', this.unit = 'kg'});
 }
 
-class CreateRecipePage extends StatefulWidget {
+class CreateRecipePage extends ConsumerStatefulWidget {
   const CreateRecipePage({super.key});
 
   @override
-  State<CreateRecipePage> createState() => _CreateRecipePageState();
+  ConsumerState<CreateRecipePage> createState() => _CreateRecipePageState();
 }
 
-class _CreateRecipePageState extends State<CreateRecipePage> {
+class _CreateRecipePageState extends ConsumerState<CreateRecipePage> {
   final _nameController = TextEditingController();
   final _yieldController = TextEditingController(text: '1');
   final List<_Ingredient> _ingredients = [_Ingredient()];
 
-  static const List<String> _materials = [
-    'Cotton Fabric (White)', 'Polyester Thread', 'Denim Fabric',
-    'Zipper (Metal)', 'Button (Plastic)', 'Elastic Band',
-    'Fabric Dye (Blue)', 'Bleach Solution', 'Interfacing Cloth',
-    'Sewing Needles', 'Linen Fabric', 'Silk Thread',
-  ];
+  List<Map<String, dynamic>> _rawMaterials = [];
+  bool _isLoadingMaterials = false;
+  bool _isSaving = false;
 
   static const List<String> _units = [
-    'Kilograms (kg)', 'Grams (g)', 'Milligrams (mg)', 'Pounds (lb)', 'Ounces (oz)',
-    'Liters (ltr)', 'Milliliters (ml)', 'Gallons (gal)', 'Pints (pt)', 'Quarts (qt)',
-    'Cups', 'Tablespoons (tbsp)', 'Teaspoons (tsp)',
-    'Bottle Pieces (pcs)', 'Items', 'Dozen', 'Slice', 'Roll', 'Stick', 'Bar',
-    'Packet', 'Box', 'Tray', 'Carton', 'Bag', 'Sack', 'Bundle', 'Pack',
+    'kg', 'g', 'mg', 'lb', 'oz',
+    'ltr', 'ml', 'gal', 'pint', 'qt',
+    'cups', 'tbsp', 'tsp',
+    'pcs', 'items', 'dozen', 'slice', 'roll', 'stick', 'bar',
+    'packet', 'box', 'tray', 'carton', 'bag', 'sack', 'bundle', 'pack',
   ];
 
-  static const Map<String, double> _materialCosts = {
-    'Cotton Fabric (White)': 3500,
-    'Polyester Thread': 1200,
-    'Denim Fabric': 5500,
-    'Zipper (Metal)': 200,
-    'Button (Plastic)': 50,
-    'Elastic Band': 150,
-    'Fabric Dye (Blue)': 4500,
-    'Bleach Solution': 2200,
-    'Interfacing Cloth': 1800,
-    'Sewing Needles': 300,
-    'Linen Fabric': 6000,
-    'Silk Thread': 2500,
-  };
-
-  double get _totalCost {
-    double total = 0;
-    for (final ing in _ingredients) {
-      final cost = _materialCosts[ing.material] ?? 0;
-      final qty = double.tryParse(ing.quantity) ?? 0;
-      total += cost * qty;
-    }
-    return total;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadMaterials());
   }
 
   @override
@@ -69,6 +50,94 @@ class _CreateRecipePageState extends State<CreateRecipePage> {
     _nameController.dispose();
     _yieldController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadMaterials() async {
+    if (!mounted) return;
+    setState(() => _isLoadingMaterials = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getMfRawMaterials();
+      final raw = res.data;
+      final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? raw['materials'] ?? []) : []);
+      if (!mounted) return;
+      setState(() {
+        _rawMaterials = (list as List).whereType<Map<String, dynamic>>().toList();
+      });
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isLoadingMaterials = false);
+    }
+  }
+
+  Future<void> _save() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
+
+    final validIngredients = _ingredients
+        .where((i) => i.materialId.isNotEmpty && (double.tryParse(i.quantity) ?? 0) > 0)
+        .toList();
+
+    if (validIngredients.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Add at least one ingredient.',
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+      ));
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      // Backend expects: recipe_name, yield_quantity, ingredients as JSON string
+      // Each ingredient: raw_material_id, quantity_required, unit
+      final ingredientsData = validIngredients.map((i) => {
+        'raw_material_id': i.materialId,
+        'quantity_required': i.quantity,
+        'unit': i.unit,
+      }).toList();
+
+      final body = {
+        'recipe_name': name,
+        'yield_quantity': _yieldController.text.trim().isEmpty ? '1' : _yieldController.text.trim(),
+        'ingredients': ingredientsData,
+      };
+
+      final result = await api.postMfRecipeSave(body);
+      if (!mounted) return;
+      final status = result['status']?.toString() ?? '';
+      if (status == 'success') {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Recipe saved successfully',
+              style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+        ));
+        context.pop(true);
+      } else {
+        final msg = result['message']?.toString() ?? 'Failed to save recipe';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(msg, style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+          backgroundColor: AppColors.danger,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+        ));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Error: $e', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+        backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+      ));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   void _addIngredient() {
@@ -100,8 +169,6 @@ class _CreateRecipePageState extends State<CreateRecipePage> {
                     _buildRecipeInfoCard(),
                     const SizedBox(height: 14),
                     _buildIngredientsSection(),
-                    const SizedBox(height: 14),
-                    _buildTotalCostCard(),
                     SizedBox(height: 24 + bottomPadding),
                   ],
                 ),
@@ -162,8 +229,11 @@ class _CreateRecipePageState extends State<CreateRecipePage> {
             children: [
               Text('Ingredients', style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
               const Spacer(),
-              Text('${_ingredients.length} item${_ingredients.length == 1 ? '' : 's'}',
-                style: AppTypography.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
+              if (_isLoadingMaterials)
+                const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              else
+                Text('${_ingredients.length} item${_ingredients.length == 1 ? '' : 's'}',
+                    style: AppTypography.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
             ],
           ),
           const SizedBox(height: 14),
@@ -195,61 +265,78 @@ class _CreateRecipePageState extends State<CreateRecipePage> {
 
   Widget _buildIngredientRow(int index) {
     final ing = _ingredients[index];
+    final materialItems = _rawMaterials.map((m) {
+      final id = m['raw_material_id']?.toString() ?? m['id']?.toString() ?? '';
+      final name = m['material_name']?.toString() ?? m['name']?.toString() ?? id;
+      return DropdownMenuItem<String>(value: id, child: Text(name, style: AppTypography.caption.copyWith(fontSize: 10)));
+    }).toList();
+    final isValidMaterial = ing.materialId.isNotEmpty && _rawMaterials.any((m) =>
+        (m['raw_material_id']?.toString() ?? m['id']?.toString() ?? '') == ing.materialId);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: _buildInlineDropdown('Material', ing.material, ['Select material', ..._materials], (v) {
-                  setState(() => ing.material = v == 'Select material' ? '' : v!);
-                }),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 1,
-                child: _buildInlineTextField('Qty', ing.quantity, TextInputType.number, (v) {
-                  setState(() => ing.quantity = v);
-                }),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 1,
-                child: _buildInlineDropdown('Unit', ing.unit, _units, (v) => setState(() => ing.unit = v!)),
-              ),
-              const SizedBox(width: 4),
-              GestureDetector(
-                onTap: () => _removeIngredient(index),
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(6)),
-                  child: Icon(Icons.delete_rounded, size: 14, color: AppColors.danger),
-                ),
-              ),
-            ],
-          ),
-          if (ing.material.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Row(
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline_rounded, size: 12, color: AppColors.textHint),
-                const SizedBox(width: 4),
-                Text(
-                  'Unit cost: ${_fmt(_materialCosts[ing.material] ?? 0)} × ${ing.quantity} = ${_fmt((_materialCosts[ing.material] ?? 0) * (double.tryParse(ing.quantity) ?? 0))}',
-                  style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 10),
+                Text('Material', style: AppTypography.caption.copyWith(color: AppColors.textHint, fontSize: 9)),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(color: const Color(0xFFF5F7FB), borderRadius: BorderRadius.circular(6), border: Border.all(color: AppColors.inputBorder)),
+                  child: _isLoadingMaterials
+                      ? const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)))
+                      : DropdownButton<String>(
+                          value: isValidMaterial ? ing.materialId : null,
+                          isExpanded: true, underline: const SizedBox(),
+                          hint: Text('Select', style: AppTypography.caption.copyWith(color: AppColors.textHint, fontSize: 10)),
+                          items: materialItems,
+                          onChanged: (id) {
+                            final mat = _rawMaterials.firstWhere(
+                              (m) => (m['raw_material_id']?.toString() ?? m['id']?.toString() ?? '') == id,
+                              orElse: () => {},
+                            );
+                            setState(() {
+                              ing.materialId = id ?? '';
+                              ing.materialName = mat['material_name']?.toString() ?? mat['name']?.toString() ?? '';
+                            });
+                          },
+                        ),
                 ),
               ],
             ),
-          ],
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 1,
+            child: _buildInlineTextField('Qty', ing.quantity, TextInputType.number, (v) {
+              setState(() => ing.quantity = v);
+            }),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 1,
+            child: _buildInlineDropdown('Unit', ing.unit, _units, (v) => setState(() => ing.unit = v!)),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: () => _removeIngredient(index),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(6)),
+              child: Icon(Icons.delete_rounded, size: 14, color: AppColors.danger),
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildInlineDropdown(String label, String value, List<String> items, ValueChanged<String?> onChanged) {
-    final isValidValue = value.isNotEmpty && items.contains(value);
+    final isValid = items.contains(value);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -259,7 +346,7 @@ class _CreateRecipePageState extends State<CreateRecipePage> {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(color: const Color(0xFFF5F7FB), borderRadius: BorderRadius.circular(6), border: Border.all(color: AppColors.inputBorder)),
           child: DropdownButton<String>(
-            value: isValidValue ? value : null,
+            value: isValid ? value : null,
             isExpanded: true, underline: const SizedBox(),
             hint: Text(items.first, style: AppTypography.caption.copyWith(color: AppColors.textHint, fontSize: 10)),
             style: AppTypography.caption.copyWith(color: AppColors.textPrimary, fontSize: 10),
@@ -315,40 +402,6 @@ class _CreateRecipePageState extends State<CreateRecipePage> {
     );
   }
 
-  Widget _buildTotalCostCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.card, borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 2))],
-      ),
-      child: Row(
-        children: [
-          Container(width: 40, height: 40,
-            decoration: BoxDecoration(color: AppColors.successLight, borderRadius: BorderRadius.circular(10)),
-            child: Icon(Icons.attach_money_rounded, color: AppColors.success, size: 20)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Total Cost', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text(_fmt(_totalCost), style: AppTypography.h6.copyWith(color: AppColors.success, fontWeight: FontWeight.w700)),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: const Color(0xFFEEF2FF), borderRadius: BorderRadius.circular(6)),
-            child: Text('${_ingredients.where((i) => i.material.isNotEmpty).length} materials',
-              style: AppTypography.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 10)),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildBottomBar(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(AppConstants.paddingLG),
@@ -378,32 +431,20 @@ class _CreateRecipePageState extends State<CreateRecipePage> {
             child: SizedBox(
               height: AppConstants.buttonHeight,
               child: ElevatedButton(
-                onPressed: _nameController.text.isNotEmpty ? () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Recipe saved successfully', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
-                      backgroundColor: AppColors.success,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
-                    ),
-                  );
-                  context.pop();
-                } : null,
+                onPressed: (_nameController.text.isNotEmpty && !_isSaving) ? _save : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary, foregroundColor: AppColors.textWhite, elevation: 0,
                   disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.4),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD)),
                 ),
-                child: Text('Save Recipe', style: AppTypography.buttonLarge),
+                child: _isSaving
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : Text('Save Recipe', style: AppTypography.buttonLarge),
               ),
             ),
           ),
         ],
       ),
     );
-  }
-
-  String _fmt(double v) {
-    return 'Tsh ${v.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
   }
 }

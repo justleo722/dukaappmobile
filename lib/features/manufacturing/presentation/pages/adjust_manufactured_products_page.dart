@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
-import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/adjust_product_card.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/adjustment_status_dropdown.dart';
@@ -12,12 +11,13 @@ import 'package:dukaapp/features/stock/presentation/widgets/adjustment_summary_c
 import 'package:dukaapp/features/stock/presentation/widgets/adjust_bottom_bar.dart';
 
 class _AdjustItem {
+  final String productId;
   final String name;
   final int currentStock;
   int adjustQuantity;
   AdjustmentStatus status;
 
-  _AdjustItem({required this.name, required this.currentStock})
+  _AdjustItem({required this.productId, required this.name, required this.currentStock})
       : adjustQuantity = 0,
         status = AdjustmentStatus.none;
 }
@@ -34,6 +34,7 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
   final List<_AdjustItem> _items = [];
   final Set<int> _selectedProducts = {};
   List<Map<String, dynamic>> _allProducts = [];
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -53,6 +54,7 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
           products = data.map((e) {
             final m = Map<String, dynamic>.from(e as Map);
             return {
+              'product_id': (m['product_id'] ?? m['id'] ?? '').toString(),
               'name': m['product_name'] ?? m['name'] ?? '',
               'stock': (m['quantity'] ?? m['stock'] ?? 0) as num,
             };
@@ -83,7 +85,11 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
       final product = products[index];
       final name = product['name'] as String;
       if (_items.any((item) => item.name == name)) continue;
-      _items.add(_AdjustItem(name: name, currentStock: (product['stock'] as num).toInt()));
+      _items.add(_AdjustItem(
+        productId: (product['product_id'] ?? '').toString(),
+        name: name,
+        currentStock: (product['stock'] as num).toInt(),
+      ));
       addedCount++;
     }
     setState(() => _selectedProducts.clear());
@@ -112,6 +118,55 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
     });
   }
 
+  Future<void> _save() async {
+    final validItems = _items.where((i) => i.adjustQuantity > 0 && i.status != AdjustmentStatus.none && i.productId.isNotEmpty).toList();
+    if (validItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Set quantity and reason for at least one product.', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+        backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      // Backend reads: product_id[], quantity[product_id], reason[product_id]
+      // reason values: balancing, bad, expired, lost
+      final body = <String, dynamic>{};
+      for (int i = 0; i < validItems.length; i++) {
+        final item = validItems[i];
+        final pid = item.productId;
+        body['product_id[$i]'] = pid;
+        body['quantity[$pid]'] = item.adjustQuantity.toString();
+        body['reason[$pid]'] = item.status.name; // 'balancing','bad','expired','lost'
+      }
+      final result = await api.postMfProductionAdjust(body);
+      if (!mounted) return;
+      final status = result['status']?.toString() ?? '';
+      if (status == 'success') {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Adjustments saved successfully', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+          backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
+        context.pop(true);
+      } else {
+        final msg = result['message']?.toString() ?? 'Failed to save adjustments';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(msg, style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+          backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Error: $e', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+        backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
@@ -131,12 +186,7 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
         )),
         AdjustBottomBar(
           onClose: () => context.pop(),
-          onSave: _items.isNotEmpty ? () {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('Adjustments saved successfully', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
-              backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
-          } : null,
+          onSave: (_items.isNotEmpty && !_isSaving) ? _save : null,
         ),
       ])),
     );

@@ -8,6 +8,8 @@ import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/core/services/local_cache_service.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
+import 'package:dukaapp/features/auth/presentation/providers/auth_provider.dart';
 
 class ManufacturingPage extends ConsumerStatefulWidget {
   const ManufacturingPage({super.key});
@@ -27,7 +29,7 @@ class _ManufacturingPageState extends ConsumerState<ManufacturingPage> {
     _loadData();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _loadData({String? from, String? to}) async {
     // Serve cache immediately
     final cache = ref.read(localCacheProvider);
     final cached = await cache.loadList('manufacturing', 'products');
@@ -38,7 +40,7 @@ class _ManufacturingPageState extends ConsumerState<ManufacturingPage> {
     }
     try {
       final api = ref.read(apiServiceProvider);
-      final res = await api.getMfManufacturedProducts();
+      final res = await api.getMfManufacturedProducts(from: from, to: to);
       final body = res.data;
       List<Map<String, dynamic>> products = [];
       List<dynamic> rawList = [];
@@ -77,6 +79,10 @@ class _ManufacturingPageState extends ConsumerState<ManufacturingPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(authProvider.select((s) => s.activeShop?.id), (prev, next) {
+      if (prev != next && next != null) _loadData();
+    });
+    ref.listen<FilterState>(filterProvider, (_, f) => _loadData(from: f.from, to: f.to));
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: _buildAppBar(context),

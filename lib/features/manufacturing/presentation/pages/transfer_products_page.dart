@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
-import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/transfer_shop_dropdown.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/transfer_product_card.dart';
@@ -12,11 +11,12 @@ import 'package:dukaapp/features/stock/presentation/widgets/transfer_summary_car
 import 'package:dukaapp/features/stock/presentation/widgets/transfer_bottom_bar.dart';
 
 class _TransferItem {
+  final String productId;
   final String name;
   final int availableStock;
   int transferQuantity;
 
-  _TransferItem({required this.name, required this.availableStock}) : transferQuantity = 0;
+  _TransferItem({required this.productId, required this.name, required this.availableStock}) : transferQuantity = 0;
 }
 
 class TransferProductsPage extends ConsumerStatefulWidget {
@@ -32,6 +32,7 @@ class _TransferProductsPageState extends ConsumerState<TransferProductsPage> {
   final List<_TransferItem> _items = [];
   List<Map<String, dynamic>> _allProducts = [];
   bool _isLoadingProducts = true;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -51,6 +52,7 @@ class _TransferProductsPageState extends ConsumerState<TransferProductsPage> {
           products = data.map((e) {
             final m = Map<String, dynamic>.from(e as Map);
             return {
+              'product_id': (m['product_id'] ?? m['id'] ?? '').toString(),
               'name': m['product_name'] ?? m['name'] ?? '',
               'stock': (m['quantity'] ?? m['stock'] ?? 0) as num,
             };
@@ -81,7 +83,11 @@ class _TransferProductsPageState extends ConsumerState<TransferProductsPage> {
       final product = products[index];
       final name = product['name'] as String;
       if (_items.any((item) => item.name == name)) continue;
-      _items.add(_TransferItem(name: name, availableStock: product['stock'] as int));
+      _items.add(_TransferItem(
+        productId: (product['product_id'] ?? '').toString(),
+        name: name,
+        availableStock: (product['stock'] as num).toInt(),
+      ));
       addedCount++;
     }
     if (addedCount > 0) {
@@ -90,6 +96,53 @@ class _TransferProductsPageState extends ConsumerState<TransferProductsPage> {
         content: Text('$addedCount product${addedCount == 1 ? '' : 's'} added', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
         backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
+    }
+  }
+
+  Future<void> _save() async {
+    if (_selectedShop == null || _items.isEmpty) return;
+    final itemsWithQty = _items.where((i) => i.transferQuantity > 0).toList();
+    if (itemsWithQty.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Enter quantity for at least one product.', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+        backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
+      return;
+    }
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      // Backend reads: to_shop_id, product_id[], quantity[product_id]
+      final body = <String, dynamic>{'to_shop_id': _selectedShop!};
+      for (int i = 0; i < itemsWithQty.length; i++) {
+        final item = itemsWithQty[i];
+        body['product_id[$i]'] = item.productId;
+        body['quantity[${item.productId}]'] = item.transferQuantity.toString();
+      }
+      final result = await api.postMfProductionTransfer(body);
+      if (!mounted) return;
+      final status = result['status']?.toString() ?? '';
+      if (status == 'success') {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Transfer completed successfully', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+          backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
+        context.pop(true);
+      } else {
+        final msg = result['message']?.toString() ?? 'Transfer failed';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(msg, style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+          backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Error: $e', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+        backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -111,12 +164,7 @@ class _TransferProductsPageState extends ConsumerState<TransferProductsPage> {
         )),
         TransferBottomBar(
           onClose: () => context.pop(),
-          onTransfer: _items.isNotEmpty && _selectedShop != null ? () {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('Transfer initiated successfully', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
-              backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
-          } : null,
+          onTransfer: (_items.isNotEmpty && _selectedShop != null && !_isSaving) ? _save : null,
         ),
       ])),
     );
@@ -285,7 +333,7 @@ class _ProductSelectionListState extends State<_ProductSelectionList> {
         final index = entry.key;
         final product = entry.value;
         final name = product['name'] as String;
-        final stock = product['stock'] as int;
+        final stock = (product['stock'] as num).toInt();
         final isAlreadyAdded = widget.addedNames.contains(name);
         final isSelected = _selectedIndices.contains(index);
 

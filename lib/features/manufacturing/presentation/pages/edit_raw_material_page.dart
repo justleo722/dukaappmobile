@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 
-class EditRawMaterialPage extends StatefulWidget {
+class EditRawMaterialPage extends ConsumerStatefulWidget {
+  final String materialId;
   final String name;
   final String unit;
   final double unitCost;
@@ -12,6 +15,7 @@ class EditRawMaterialPage extends StatefulWidget {
 
   const EditRawMaterialPage({
     super.key,
+    required this.materialId,
     required this.name,
     required this.unit,
     required this.unitCost,
@@ -19,10 +23,10 @@ class EditRawMaterialPage extends StatefulWidget {
   });
 
   @override
-  State<EditRawMaterialPage> createState() => _EditRawMaterialPageState();
+  ConsumerState<EditRawMaterialPage> createState() => _EditRawMaterialPageState();
 }
 
-class _EditRawMaterialPageState extends State<EditRawMaterialPage> {
+class _EditRawMaterialPageState extends ConsumerState<EditRawMaterialPage> {
   late final TextEditingController _nameController;
   late final TextEditingController _unitCostController;
   late final TextEditingController _initialStockController;
@@ -31,6 +35,7 @@ class _EditRawMaterialPageState extends State<EditRawMaterialPage> {
   late String _selectedUnit;
   String _selectedAccount = 'Cash';
   DateTime _expiryDate = DateTime.now().add(const Duration(days: 365));
+  bool _isSaving = false;
 
   final List<String> _units = [
     'Kilograms (kg)', 'Grams (g)', 'Milligrams (mg)', 'Pounds (lb)', 'Ounces (oz)',
@@ -40,6 +45,11 @@ class _EditRawMaterialPageState extends State<EditRawMaterialPage> {
     'Packet', 'Box', 'Tray', 'Carton', 'Bag', 'Sack', 'Bundle', 'Pack',
   ];
   final List<String> _accounts = ['Cash', 'Bank', 'Mobile Money'];
+
+  String _unitShort(String full) {
+    final m = RegExp(r'\(([^)]+)\)').firstMatch(full);
+    return m != null ? m.group(1)! : full.toLowerCase().split(' ').first;
+  }
 
   @override
   void initState() {
@@ -66,7 +76,12 @@ class _EditRawMaterialPageState extends State<EditRawMaterialPage> {
       case 'item': return 'Items';
       case 'roll': return 'Roll';
       case 'pack': return 'Pack';
-      default: return unit;
+      default:
+        final match = _units.firstWhere(
+          (u) => u.toLowerCase().contains(unit.toLowerCase()),
+          orElse: () => unit,
+        );
+        return match;
     }
   }
 
@@ -94,6 +109,41 @@ class _EditRawMaterialPageState extends State<EditRawMaterialPage> {
       ),
     );
     if (picked != null) setState(() => _expiryDate = picked);
+  }
+
+  Future<void> _save() async {
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final result = await api.postMfRawMaterialSave({
+        'raw_material_id': widget.materialId,
+        'material_name': _nameController.text.trim(),
+        'unit': _unitShort(_selectedUnit),
+        'unit_cost': _unitCostController.text.trim(),
+        'initial_stock': _initialStockController.text.trim(),
+        'alert_level': _alertLevelController.text.trim(),
+        'expiry_date': '${_expiryDate.year}-${_expiryDate.month.toString().padLeft(2, '0')}-${_expiryDate.day.toString().padLeft(2, '0')}',
+      });
+      if (!mounted) return;
+      final status = result['status']?.toString() ?? '';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(status == 'success' ? 'Raw material updated successfully' : (result['message']?.toString() ?? 'Failed to update')),
+        backgroundColor: status == 'success' ? AppColors.success : AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+      ));
+      if (status == 'success') context.pop();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Error: $e'), backgroundColor: AppColors.danger,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+      ));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -178,6 +228,7 @@ class _EditRawMaterialPageState extends State<EditRawMaterialPage> {
         const SizedBox(height: 6),
         TextField(
           controller: controller, keyboardType: keyboardType,
+          onChanged: (_) => setState(() {}),
           style: AppTypography.bodyMedium,
           decoration: InputDecoration(
             hintText: hint,
@@ -232,7 +283,7 @@ class _EditRawMaterialPageState extends State<EditRawMaterialPage> {
             ),
             child: Row(
               children: [
-                Icon(Icons.calendar_today_rounded, color: AppColors.textHint, size: 18),
+                const Icon(Icons.calendar_today_rounded, color: AppColors.textHint, size: 18),
                 const SizedBox(width: 10),
                 Text('${date.day}/${date.month}/${date.year}', style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary)),
               ],
@@ -272,23 +323,15 @@ class _EditRawMaterialPageState extends State<EditRawMaterialPage> {
             child: SizedBox(
               height: AppConstants.buttonHeight,
               child: ElevatedButton(
-                onPressed: _nameController.text.isNotEmpty ? () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Raw material updated successfully', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
-                      backgroundColor: AppColors.success,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
-                    ),
-                  );
-                  context.pop();
-                } : null,
+                onPressed: (_nameController.text.isNotEmpty && !_isSaving) ? _save : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary, foregroundColor: AppColors.textWhite, elevation: 0,
                   disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.4),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD)),
                 ),
-                child: Text('Update Raw Material', style: AppTypography.buttonLarge),
+                child: _isSaving
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : Text('Update Raw Material', style: AppTypography.buttonLarge),
               ),
             ),
           ),
