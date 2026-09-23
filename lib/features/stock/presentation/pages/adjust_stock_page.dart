@@ -146,31 +146,16 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
 
   Future<void> _saveAdjustments() async {
     final repo = ref.read(stockRepositoryProvider);
-    // Items without stock_id cannot be saved — warn user and abort
-    final missingStock = _items.where((item) =>
-        item.status != AdjustmentStatus.none && (item.stockId == null || item.stockId.toString().isEmpty)).toList();
-    if (missingStock.isNotEmpty) {
-      final names = missingStock.map((e) => e.name).join(', ');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Bidhaa hizi hazina batch ya stock: $names', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
-          backgroundColor: AppColors.warning,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
-        ));
-      }
-      return;
-    }
 
     final adjustedItems = _items
         .where((item) =>
             item.productId != null &&
-            item.stockId != null &&
             item.status != AdjustmentStatus.none)
         .map((item) => {
               'product_id': item.productId,
-              'stock_id': item.stockId,
+              'stock_id': item.stockId, // may be null — backend handles it
               'quantity': item.adjustQuantity.abs(),
+              'opening_quantity': item.currentStock,
               // Map Flutter status → PHP movement_type
               'movement_type': item.status == AdjustmentStatus.balancing
                   ? 'balanced'
