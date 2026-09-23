@@ -797,6 +797,12 @@ class ApiService {
   Future<Map<String, dynamic>> postOnlineshopOrderUpdateStatus(Map<String, dynamic> body) =>
       _post(ApiEndpoints.postOnlineshopOrderUpdateStatus, body);
 
+  Future<Map<String, dynamic>> postSubscriptionPackageList(Map<String, dynamic> body) =>
+      _post(ApiEndpoints.postSubscriptionPackageList, body);
+
+  Future<Map<String, dynamic>> postSubscriptionPaymentComplete(Map<String, dynamic> body) =>
+      _post(ApiEndpoints.postSubscriptionPaymentComplete, body);
+
   // ═══════════════════════════════════════════════════════════════════════════
   // MICROFINANCE
   // ═══════════════════════════════════════════════════════════════════════════

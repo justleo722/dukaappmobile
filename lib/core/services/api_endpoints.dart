@@ -437,6 +437,10 @@ abstract final class ApiEndpoints {
   static final postOnlineshopDeliveryMethodDelete = _p('onlineshop/delivery-method/delete');
   static final postOnlineshopOrderUpdateStatus    = _p('onlineshop/order/update-status');
 
+  // ── Subscription ──────────────────────────────────────────────────────
+  static final postSubscriptionPackageList        = _p('subscription/package/list');
+  static final postSubscriptionPaymentComplete    = _p('subscription/payment/complete');
+
   // ── Sales ─────────────────────────────────────────────────────────────
 
   /// Create a new sale. Body: {items:[...], customer_id?, payment_mode, …}
