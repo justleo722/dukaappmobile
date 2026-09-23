@@ -46,19 +46,21 @@ class _TransferProductsPageState extends ConsumerState<TransferProductsPage> {
       final res = await api.getMfManufacturedProducts();
       final body = res.data;
       List<Map<String, dynamic>> products = [];
-      if (body is Map) {
-        final data = body['data'] ?? body['products'] ?? body;
-        if (data is List) {
-          products = data.map((e) {
-            final m = Map<String, dynamic>.from(e as Map);
-            return {
-              'product_id': (m['product_id'] ?? m['id'] ?? '').toString(),
-              'name': m['product_name'] ?? m['name'] ?? '',
-              'stock': (m['quantity'] ?? m['stock'] ?? 0) as num,
-            };
-          }).toList();
-        }
+      List rawList = [];
+      if (body is List) {
+        rawList = body;
+      } else if (body is Map) {
+        final data = body['data'] ?? body['products'] ?? [];
+        if (data is List) rawList = data;
       }
+      products = rawList.map((e) {
+        final m = Map<String, dynamic>.from(e as Map);
+        return {
+          'product_id': (m['product_id'] ?? m['id'] ?? '').toString(),
+          'name': m['product_name'] ?? m['name'] ?? '',
+          'stock': (m['quantity'] ?? m['stock'] ?? 0) as num,
+        };
+      }).toList();
       setState(() { _allProducts = products; _isLoadingProducts = false; });
     } catch (_) {
       setState(() => _isLoadingProducts = false);

@@ -1,10 +1,11 @@
 name: dukaapp
 description: "DukaApp - POS"
 publish_to: 'none'
-version: 1.0.0+108
+version: 1.0.0+109
 
 environment:
   sdk: ^3.12.2
+
 
 dependencies:
   flutter:

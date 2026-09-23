@@ -35,8 +35,10 @@ class _ManageRecipesPageState extends ConsumerState<ManageRecipesPage> {
       final res = await api.getMfRecipes();
       final body = res.data;
       List<Map<String, dynamic>> recipes = [];
-      if (body is Map) {
-        final data = body['data'] ?? body['recipes'] ?? body;
+      if (body is List) {
+        recipes = body.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } else if (body is Map) {
+        final data = body['data'] ?? body['recipes'] ?? [];
         if (data is List) {
           recipes = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
         }

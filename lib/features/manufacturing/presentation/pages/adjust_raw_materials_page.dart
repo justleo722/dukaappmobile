@@ -11,66 +11,66 @@ import 'package:dukaapp/features/stock/presentation/widgets/adjustment_summary_c
 import 'package:dukaapp/features/stock/presentation/widgets/adjust_bottom_bar.dart';
 
 class _AdjustItem {
-  final String productId;
+  final String rawMaterialId;
   final String name;
   final int currentStock;
   int adjustQuantity;
   AdjustmentStatus status;
 
-  _AdjustItem({required this.productId, required this.name, required this.currentStock})
+  _AdjustItem({required this.rawMaterialId, required this.name, required this.currentStock})
       : adjustQuantity = 0,
         status = AdjustmentStatus.none;
 }
 
-class AdjustManufacturedProductsPage extends ConsumerStatefulWidget {
-  const AdjustManufacturedProductsPage({super.key});
+class AdjustRawMaterialsPage extends ConsumerStatefulWidget {
+  const AdjustRawMaterialsPage({super.key});
 
   @override
-  ConsumerState<AdjustManufacturedProductsPage> createState() => _AdjustManufacturedProductsPageState();
+  ConsumerState<AdjustRawMaterialsPage> createState() => _AdjustRawMaterialsPageState();
 }
 
-class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufacturedProductsPage> {
+class _AdjustRawMaterialsPageState extends ConsumerState<AdjustRawMaterialsPage> {
   final TextEditingController _searchController = TextEditingController();
   final List<_AdjustItem> _items = [];
-  final Set<int> _selectedProducts = {};
-  List<Map<String, dynamic>> _allProducts = [];
+  final Set<int> _selectedMaterials = {};
+  List<Map<String, dynamic>> _allMaterials = [];
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _loadProducts();
+    _loadMaterials();
   }
 
-  Future<void> _loadProducts() async {
+  Future<void> _loadMaterials() async {
     try {
       final api = ref.read(apiServiceProvider);
-      final res = await api.getMfManufacturedProducts();
+      final res = await api.getMfRawMaterials();
       final body = res.data;
-      List<Map<String, dynamic>> products = [];
+      List<Map<String, dynamic>> materials = [];
       List rawList = [];
       if (body is List) {
         rawList = body;
       } else if (body is Map) {
-        final data = body['data'] ?? body['products'] ?? [];
+        final data = body['data'] ?? body['materials'] ?? [];
         if (data is List) rawList = data;
       }
-      products = rawList.map((e) {
+      materials = rawList.map((e) {
         final m = Map<String, dynamic>.from(e as Map);
         return {
-          'product_id': (m['product_id'] ?? m['id'] ?? '').toString(),
-          'name': m['product_name'] ?? m['name'] ?? '',
-          'stock': (m['quantity'] ?? m['stock'] ?? 0) as num,
+          'raw_material_id': (m['raw_material_id'] ?? m['id'] ?? '').toString(),
+          'name': (m['material_name'] ?? m['name'] ?? '').toString(),
+          'stock': (m['current_stock'] ?? m['quantity'] ?? m['stock'] ?? 0) as num,
         };
       }).toList();
-      setState(() => _allProducts = products);
+      setState(() => _allMaterials = materials);
     } catch (_) {}
   }
 
-  List<Map<String, dynamic>> get _filteredProducts {
+  List<Map<String, dynamic>> get _filteredMaterials {
     final query = _searchController.text.toLowerCase().trim();
-    if (query.isEmpty) return _allProducts;
-    return _allProducts.where((p) => (p['name'] as String).toLowerCase().contains(query)).toList();
+    if (query.isEmpty) return _allMaterials;
+    return _allMaterials.where((m) => (m['name'] as String).toLowerCase().contains(query)).toList();
   }
 
   int get _totalAdjustedQuantity => _items.fold(0, (sum, item) => sum + item.adjustQuantity);
@@ -79,25 +79,25 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
   @override
   void dispose() { _searchController.dispose(); super.dispose(); }
 
-  void _addSelectedProducts() {
-    final products = _filteredProducts;
+  void _addSelectedMaterials() {
+    final materials = _filteredMaterials;
     int addedCount = 0;
-    for (final index in _selectedProducts) {
-      if (index >= products.length) continue;
-      final product = products[index];
-      final name = product['name'] as String;
+    for (final index in _selectedMaterials) {
+      if (index >= materials.length) continue;
+      final m = materials[index];
+      final name = m['name'] as String;
       if (_items.any((item) => item.name == name)) continue;
       _items.add(_AdjustItem(
-        productId: (product['product_id'] ?? '').toString(),
+        rawMaterialId: (m['raw_material_id'] ?? '').toString(),
         name: name,
-        currentStock: (product['stock'] as num).toInt(),
+        currentStock: (m['stock'] as num).toInt(),
       ));
       addedCount++;
     }
-    setState(() => _selectedProducts.clear());
+    setState(() => _selectedMaterials.clear());
     if (addedCount > 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('$addedCount product${addedCount == 1 ? '' : 's'} added', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+        content: Text('$addedCount material${addedCount == 1 ? '' : 's'} added', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
         backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
     }
@@ -105,26 +105,26 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
 
   void _toggleSelection(int index) {
     setState(() {
-      if (_selectedProducts.contains(index)) { _selectedProducts.remove(index); }
-      else { _selectedProducts.add(index); }
+      if (_selectedMaterials.contains(index)) { _selectedMaterials.remove(index); }
+      else { _selectedMaterials.add(index); }
     });
   }
 
   void _toggleAll() {
-    final products = _filteredProducts;
-    final selectableIndices = products.asMap().keys.where((i) => !_items.any((item) => item.name == products[i]['name'])).toSet();
-    final allSelected = selectableIndices.every((i) => _selectedProducts.contains(i));
+    final materials = _filteredMaterials;
+    final selectableIndices = materials.asMap().keys.where((i) => !_items.any((item) => item.name == materials[i]['name'])).toSet();
+    final allSelected = selectableIndices.every((i) => _selectedMaterials.contains(i));
     setState(() {
-      if (allSelected) { _selectedProducts.removeAll(selectableIndices); }
-      else { _selectedProducts.addAll(selectableIndices); }
+      if (allSelected) { _selectedMaterials.removeAll(selectableIndices); }
+      else { _selectedMaterials.addAll(selectableIndices); }
     });
   }
 
   Future<void> _save() async {
-    final validItems = _items.where((i) => i.adjustQuantity > 0 && i.status != AdjustmentStatus.none && i.productId.isNotEmpty).toList();
+    final validItems = _items.where((i) => i.adjustQuantity > 0 && i.status != AdjustmentStatus.none && i.rawMaterialId.isNotEmpty).toList();
     if (validItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Set quantity and reason for at least one product.', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+        content: Text('Set quantity and reason for at least one material.', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
         backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
       return;
@@ -132,17 +132,16 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
     setState(() => _isSaving = true);
     try {
       final api = ref.read(apiServiceProvider);
-      // Backend reads: product_id[], quantity[product_id], reason[product_id]
-      // reason values: balancing, bad, expired, lost
+      // Backend: raw_material_id[], quantity[id], reason[id]
       final body = <String, dynamic>{};
       for (int i = 0; i < validItems.length; i++) {
         final item = validItems[i];
-        final pid = item.productId;
-        body['product_id[$i]'] = pid;
-        body['quantity[$pid]'] = item.adjustQuantity.toString();
-        body['reason[$pid]'] = item.status.name; // 'balancing','bad','expired','lost'
+        final id = item.rawMaterialId;
+        body['raw_material_id[$i]'] = id;
+        body['quantity[$id]'] = item.adjustQuantity.toString();
+        body['reason[$id]'] = item.status.name; // 'balancing','bad','expired','lost'
       }
-      final result = await api.postMfProductionAdjust(body);
+      final result = await api.postMfRawMaterialAdjust(body);
       if (!mounted) return;
       final status = result['status']?.toString() ?? '';
       if (status == 'success') {
@@ -177,12 +176,12 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
         Expanded(child: SingleChildScrollView(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const SizedBox(height: 16), _buildSearchSection(), const SizedBox(height: 12),
-            _buildProductsHeader(), const SizedBox(height: 8),
+            _buildMaterialsHeader(), const SizedBox(height: 8),
             if (_items.isNotEmpty) ...[
               _buildAdjustmentCards(), const SizedBox(height: 16),
               AdjustmentSummaryCard(productsSelected: _items.length, adjustedQuantity: _totalAdjustedQuantity, adjustmentTypeCount: _adjustmentTypeCount),
             ],
-            if (_items.isEmpty) _buildProductList(),
+            if (_items.isEmpty) _buildMaterialList(),
             SizedBox(height: 24 + bottomPadding),
           ]),
         )),
@@ -202,9 +201,9 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
       )),
       leadingWidth: 56,
       title: Column(children: [
-        Text('Adjust Manufactured Products', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+        Text('Adjust Raw Materials', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
         const SizedBox(height: 2),
-        Text('Adjust product quantities and record adjustment reasons.', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 10)),
+        Text('Adjust quantities and record adjustment reasons.', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 10)),
       ]),
       centerTitle: true, bottom: PreferredSize(preferredSize: const Size.fromHeight(1), child: Container(height: 1, color: AppColors.divider)),
     );
@@ -217,7 +216,7 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
         decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(18),
           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4))]),
         child: TextField(controller: _searchController, onChanged: (_) => setState(() {}), style: AppTypography.bodyMedium,
-          decoration: InputDecoration(hintText: 'Search product name', hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
+          decoration: InputDecoration(hintText: 'Search raw material name', hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
             prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textHint, size: 20),
             suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(onPressed: () { _searchController.clear(); setState(() {}); }, icon: const Icon(Icons.close_rounded, color: AppColors.textHint, size: 18))
@@ -229,10 +228,10 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
     );
   }
 
-  Widget _buildProductsHeader() {
-    final products = _filteredProducts;
-    final selectableIndices = products.asMap().keys.where((i) => !_items.any((item) => item.name == products[i]['name'])).toSet();
-    final allSelected = selectableIndices.isNotEmpty && selectableIndices.every((i) => _selectedProducts.contains(i));
+  Widget _buildMaterialsHeader() {
+    final materials = _filteredMaterials;
+    final selectableIndices = materials.asMap().keys.where((i) => !_items.any((item) => item.name == materials[i]['name'])).toSet();
+    final allSelected = selectableIndices.isNotEmpty && selectableIndices.every((i) => _selectedMaterials.contains(i));
 
     return Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       child: Row(children: [
@@ -242,9 +241,9 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
             child: Text('${_items.length} item${_items.length == 1 ? '' : 's'}', style: AppTypography.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600))),
           const SizedBox(width: 8),
         ],
-        Text(_items.isEmpty ? 'Products' : 'Adjustment Items', style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
+        Text(_items.isEmpty ? 'Raw Materials' : 'Adjustment Items', style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
         const Spacer(),
-        if (_items.isEmpty && products.isNotEmpty) ...[
+        if (_items.isEmpty && materials.isNotEmpty) ...[
           SizedBox(width: 24, height: 24, child: Checkbox(
             value: allSelected, onChanged: selectableIndices.isNotEmpty ? (_) => _toggleAll() : null,
             activeColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
@@ -267,29 +266,29 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
     }));
   }
 
-  Widget _buildProductList() {
-    final products = _filteredProducts;
-    if (_searchController.text.isNotEmpty && products.isEmpty) {
+  Widget _buildMaterialList() {
+    final materials = _filteredMaterials;
+    if (_searchController.text.isNotEmpty && materials.isEmpty) {
       return Center(child: Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingXXL, vertical: 60),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(width: 120, height: 120, decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.06), shape: BoxShape.circle),
             child: Icon(Icons.search_off_rounded, size: 56, color: AppColors.primary.withValues(alpha: 0.4))),
           const SizedBox(height: 24),
-          Text('No Products Found', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+          Text('No Materials Found', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          Text('Search a product to begin adjusting stock.', style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary), textAlign: TextAlign.center),
+          Text('Search a material to begin adjusting stock.', style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary), textAlign: TextAlign.center),
         ]),
       ));
     }
 
     return Column(children: [
-      ...products.asMap().entries.map((entry) {
+      ...materials.asMap().entries.map((entry) {
         final index = entry.key;
-        final product = entry.value;
-        final name = product['name'] as String;
-        final stock = product['stock'] as int;
+        final material = entry.value;
+        final name = material['name'] as String;
+        final stock = (material['stock'] as num).toInt();
         final isAlreadyAdded = _items.any((item) => item.name == name);
-        final isSelected = _selectedProducts.contains(index);
+        final isSelected = _selectedMaterials.contains(index);
 
         return Container(margin: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG, vertical: 4),
           decoration: BoxDecoration(color: isSelected ? AppColors.primary.withValues(alpha: 0.04) : AppColors.card,
@@ -323,15 +322,14 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
           ),
         );
       }),
-      if (_selectedProducts.isNotEmpty) ...[
+      if (_selectedMaterials.isNotEmpty) ...[
         const SizedBox(height: 12),
         Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
           child: SizedBox(width: double.infinity, height: AppConstants.buttonHeight,
-            child: ElevatedButton.icon(onPressed: _addSelectedProducts, icon: const Icon(Icons.add_rounded, size: 20),
-              label: Text('Add Selected (${_selectedProducts.length})', style: AppTypography.buttonLarge),
+            child: ElevatedButton.icon(onPressed: _addSelectedMaterials, icon: const Icon(Icons.add_rounded, size: 20),
+              label: Text('Add Selected (${_selectedMaterials.length})', style: AppTypography.buttonLarge),
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: AppColors.textWhite, elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD))))),
-        ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD)))))),
       ],
     ]);
   }

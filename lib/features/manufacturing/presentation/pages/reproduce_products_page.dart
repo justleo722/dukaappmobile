@@ -62,23 +62,25 @@ class _ReproduceProductsPageState extends ConsumerState<ReproduceProductsPage> {
       final res = await api.getMfManufacturedProducts();
       final body = res.data;
       List<Map<String, dynamic>> products = [];
-      if (body is Map) {
-        final data = body['data'] ?? body['products'] ?? body;
-        if (data is List) {
-          products = data.map((e) {
-            final m = Map<String, dynamic>.from(e as Map);
-            return {
-              'product_id': (m['product_id'] ?? m['id'] ?? '').toString(),
-              'recipe_id': (m['recipe_id'] ?? '').toString(),
-              'name': m['product_name'] ?? m['name'] ?? '',
-              'recipe': m['recipe_name'] ?? m['recipe'] ?? '',
-              'productionCost': (m['unit_cost'] ?? m['cost_price'] ?? 0.0) as num,
-              'sellingPrice': (m['selling_price'] ?? m['price'] ?? 0.0) as num,
-              'wholesalePrice': (m['wholesale_price'] ?? 0.0) as num,
-            };
-          }).toList();
-        }
+      List rawList = [];
+      if (body is List) {
+        rawList = body;
+      } else if (body is Map) {
+        final data = body['data'] ?? body['products'] ?? [];
+        if (data is List) rawList = data;
       }
+      products = rawList.map((e) {
+        final m = Map<String, dynamic>.from(e as Map);
+        return {
+          'product_id': (m['product_id'] ?? m['id'] ?? '').toString(),
+          'recipe_id': (m['recipe_id'] ?? '').toString(),
+          'name': m['product_name'] ?? m['name'] ?? '',
+          'recipe': m['recipe_name'] ?? m['recipe'] ?? '',
+          'productionCost': (m['unit_cost'] ?? m['cost_price'] ?? 0.0) as num,
+          'sellingPrice': (m['selling_price'] ?? m['price'] ?? 0.0) as num,
+          'wholesalePrice': (m['wholesale_price'] ?? 0.0) as num,
+        };
+      }).toList();
       setState(() => _allProducts = products);
     } catch (_) {}
   }

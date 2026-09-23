@@ -58,11 +58,11 @@ class _ProductByRecipeReportPageState extends ConsumerState<ProductByRecipeRepor
       final res = await api.getMfProductionByRecipe();
       final body = res.data;
       List<_RecipeProductItem> items = [];
-      if (body is Map) {
-        final data = body['data'] ?? body['items'] ?? body;
-        if (data is List) {
-          for (int i = 0; i < data.length; i++) {
-            final m = data[i] as Map;
+      final List rawList = body is List ? body : (body is Map ? ((body['data'] ?? body['items'] ?? []) as List? ?? []) : []);
+      {
+        {
+          for (int i = 0; i < rawList.length; i++) {
+            final m = rawList[i] as Map;
             final qty = (m['total_qty_produced'] ?? m['total_quantity'] ?? 0) as num;
             final costUnit = (m['estimated_cost_per_unit'] ?? m['cost_per_unit'] ?? 0.0) as num;
             items.add(_RecipeProductItem(

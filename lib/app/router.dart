@@ -100,6 +100,7 @@ import 'package:dukaapp/features/manufacturing/presentation/pages/stock_reports/
 import 'package:dukaapp/features/manufacturing/presentation/pages/stock_reports/product_by_recipe_report_page.dart';
 import 'package:dukaapp/features/manufacturing/presentation/pages/reproduce_products_page.dart';
 import 'package:dukaapp/features/manufacturing/presentation/pages/adjust_manufactured_products_page.dart';
+import 'package:dukaapp/features/manufacturing/presentation/pages/adjust_raw_materials_page.dart';
 import 'package:dukaapp/features/manufacturing/presentation/pages/transfer_products_page.dart';
 import 'package:dukaapp/features/online_shop/presentation/pages/online_shop_dashboard_page.dart';
 import 'package:dukaapp/features/online_shop/presentation/pages/online_shop_manage_products_page.dart';
@@ -577,6 +578,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: 'transfer',
             name: 'transfer-products',
             builder: (context, state) => const TransferProductsPage(),
+          ),
+          GoRoute(
+            path: 'adjust-raw-materials',
+            name: 'adjust-raw-materials',
+            builder: (context, state) => const AdjustRawMaterialsPage(),
           ),
         ],
       ),

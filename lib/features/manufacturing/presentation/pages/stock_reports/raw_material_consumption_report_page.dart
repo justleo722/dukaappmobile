@@ -59,11 +59,11 @@ class _RawMaterialConsumptionReportPageState extends ConsumerState<RawMaterialCo
       final res = await api.getMfRawConsumption();
       final body = res.data;
       List<_ConsumptionItem> items = [];
-      if (body is Map) {
-        final data = body['data'] ?? body['items'] ?? body;
-        if (data is List) {
-          for (int i = 0; i < data.length; i++) {
-            final m = data[i] as Map;
+      final List rawList = body is List ? body : (body is Map ? ((body['data'] ?? body['items'] ?? []) as List? ?? []) : []);
+      {
+        {
+          for (int i = 0; i < rawList.length; i++) {
+            final m = rawList[i] as Map;
             items.add(_ConsumptionItem(
               sn: i + 1,
               date: (m['date'] ?? '').toString(),

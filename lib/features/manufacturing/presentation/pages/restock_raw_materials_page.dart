@@ -12,6 +12,7 @@ import 'package:dukaapp/features/purchase/presentation/widgets/purchase_summary_
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_bottom_bar.dart';
 
 class _RestockItem {
+  final String rawMaterialId;
   final String name;
   final int currentStock;
   int quantity;
@@ -19,6 +20,7 @@ class _RestockItem {
   DateTime? expiryDate;
 
   _RestockItem({
+    required this.rawMaterialId,
     required this.name,
     required this.currentStock,
     double unitCostValue = 0,
@@ -56,19 +58,22 @@ class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPag
       final res = await api.getMfRawMaterials();
       final body = res.data;
       List<Map<String, dynamic>> materials = [];
-      if (body is Map) {
-        final data = body['data'] ?? body['materials'] ?? body;
-        if (data is List) {
-          materials = data.map((e) {
-            final m = Map<String, dynamic>.from(e as Map);
-            return {
-              'name': m['material_name'] ?? m['name'] ?? '',
-              'stock': (m['quantity'] ?? m['stock'] ?? 0) as num,
-              'unitCost': (m['unit_cost'] ?? m['cost'] ?? 0.0) as num,
-            };
-          }).toList();
-        }
+      List rawList = [];
+      if (body is List) {
+        rawList = body;
+      } else if (body is Map) {
+        final data = body['data'] ?? body['materials'] ?? [];
+        if (data is List) rawList = data;
       }
+      materials = rawList.map((e) {
+        final m = Map<String, dynamic>.from(e as Map);
+        return {
+          'raw_material_id': (m['raw_material_id'] ?? m['id'] ?? '').toString(),
+          'name': m['material_name'] ?? m['name'] ?? '',
+          'stock': (m['current_stock'] ?? m['quantity'] ?? m['stock'] ?? 0) as num,
+          'unitCost': (m['unit_cost'] ?? m['cost'] ?? 0.0) as num,
+        };
+      }).toList();
       setState(() => _allMaterials = materials);
     } catch (_) {}
   }
@@ -98,6 +103,7 @@ class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPag
       final name = material['name'] as String;
       if (_items.any((item) => item.name == name)) continue;
       _items.add(_RestockItem(
+        rawMaterialId: material['raw_material_id']?.toString() ?? '',
         name: name,
         currentStock: (material['stock'] as num).toInt(),
         unitCostValue: (material['unitCost'] as num).toDouble(),
@@ -415,16 +421,38 @@ class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPag
               onClose: () => context.pop(),
               saveLabel: 'Save Restock',
               onSave: _items.isNotEmpty
-                  ? () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Restock saved successfully',
+                  ? () async {
+                      try {
+                        final api = ref.read(apiServiceProvider);
+                        final body = <String, dynamic>{
+                          'record_date': '${_restockDate.year}-${_restockDate.month.toString().padLeft(2,'0')}-${_restockDate.day.toString().padLeft(2,'0')}',
+                          if (_selectedAccount != null) 'account_id': _selectedAccount!,
+                        };
+                        for (int i = 0; i < _items.length; i++) {
+                          final item = _items[i];
+                          final id = item.rawMaterialId;
+                          body['raw_material_id[$i]'] = id;
+                          body['quantity[$id]'] = item.quantity.toString();
+                          body['unit_cost[$id]'] = item.unitCostController.text.trim().isEmpty ? '0' : item.unitCostController.text.trim();
+                          if (item.expiryDate != null) {
+                            body['expiry_date[$id]'] = '${item.expiryDate!.year}-${item.expiryDate!.month.toString().padLeft(2,'0')}-${item.expiryDate!.day.toString().padLeft(2,'0')}';
+                          }
+                        }
+                        final result = await api.postMfRawMaterialRestock(body);
+                        if (!mounted) return;
+                        final status = result['status']?.toString() ?? '';
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(status == 'success' ? 'Restock saved successfully' : (result['message']?.toString() ?? 'Failed'),
                             style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
-                          backgroundColor: AppColors.success,
+                          backgroundColor: status == 'success' ? AppColors.success : AppColors.danger,
                           behavior: SnackBarBehavior.floating,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
-                        ),
-                      );
+                        ));
+                        if (status == 'success') context.pop(true);
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger));
+                      }
                     }
                   : null,
             ),

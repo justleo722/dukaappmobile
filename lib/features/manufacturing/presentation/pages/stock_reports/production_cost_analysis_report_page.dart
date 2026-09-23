@@ -59,11 +59,11 @@ class _ProductionCostAnalysisReportPageState extends ConsumerState<ProductionCos
       final res = await api.getMfCostAnalysis();
       final body = res.data;
       List<_CostItem> items = [];
-      if (body is Map) {
-        final data = body['data'] ?? body['items'] ?? body;
-        if (data is List) {
-          for (int i = 0; i < data.length; i++) {
-            final m = data[i] as Map;
+      final List rawList = body is List ? body : (body is Map ? ((body['data'] ?? body['items'] ?? []) as List? ?? []) : []);
+      {
+        {
+          for (int i = 0; i < rawList.length; i++) {
+            final m = rawList[i] as Map;
             final qty = (m['quantity'] ?? m['qty_produced'] ?? 0) as num;
             final costUnit = (m['cost_per_unit'] ?? m['unit_cost'] ?? 0.0) as num;
             final totalCost = (m['total_cost'] ?? m['total_production_cost'] ?? costUnit * qty) as num;

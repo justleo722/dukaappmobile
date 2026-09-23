@@ -57,11 +57,11 @@ class _LowStockAlertReportPageState extends ConsumerState<LowStockAlertReportPag
       final res = await api.getMfLowStockAlerts();
       final body = res.data;
       List<_LowStockItem> items = [];
-      if (body is Map) {
-        final data = body['data'] ?? body['alerts'] ?? body;
-        if (data is List) {
-          for (int i = 0; i < data.length; i++) {
-            final m = data[i] as Map;
+      final List rawList = body is List ? body : (body is Map ? (body['data'] ?? body['alerts'] ?? []) as List? ?? [] : []);
+      if (rawList.isNotEmpty) {
+        {
+          for (int i = 0; i < rawList.length; i++) {
+            final m = rawList[i] as Map;
             final curr = (m['current_stock'] ?? m['quantity'] ?? 0) as num;
             final min = (m['minimum_stock'] ?? m['alert_level'] ?? m['min_stock'] ?? 0) as num;
             items.add(_LowStockItem(

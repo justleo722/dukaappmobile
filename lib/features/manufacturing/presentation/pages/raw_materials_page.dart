@@ -236,7 +236,7 @@ class _RawMaterialsPageState extends ConsumerState<RawMaterialsPage> {
   Widget _buildActionButtons(BuildContext context) {
     final buttons = <Map<String, dynamic>>[
       {'icon': Icons.sort_rounded, 'label': 'Sort', 'color': AppColors.primary, 'onTap': () => _showSortDialog()},
-      {'icon': Icons.tune_rounded, 'label': 'Adjust', 'color': AppColors.primary, 'onTap': () => context.push('/adjust')},
+      {'icon': Icons.tune_rounded, 'label': 'Adjust', 'color': AppColors.primary, 'onTap': () async { await context.push('/manufacturing/adjust-raw-materials'); _loadMaterials(); }},
       {'icon': Icons.refresh_rounded, 'label': 'Restock', 'color': AppColors.primary, 'onTap': () async { await context.push('/manufacturing/raw-materials/restock'); _loadMaterials(); }},
       {'icon': Icons.filter_list_rounded, 'label': 'Filter', 'color': AppColors.primary, 'onTap': () => AppFilterDialog.show(context)},
     ];

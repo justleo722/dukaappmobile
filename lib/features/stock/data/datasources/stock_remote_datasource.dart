@@ -290,9 +290,12 @@ class StockRemoteDatasource {
       ApiEndpoints.postStockRegisterImport,
       // Send products as a JSON-encoded string so backend json_decode() can read it
       data: {'products': jsonEncode(mapped)},
-      options: _formOptions,
+      options: Options(
+        contentType: 'application/x-www-form-urlencoded',
+        responseType: ResponseType.plain,
+      ),
     );
-    return _json(res.data);
+    return _jsonFromPlain(res.data);
   }
 
   /// Import/purchase history records
