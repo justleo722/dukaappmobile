@@ -102,6 +102,102 @@ class _PurchaseReportPageState extends ConsumerState<PurchaseReportPage> {
             ];
           }).toList();
           break;
+        case 'total_purchase':
+          final res = await api.getReportPurchaseByMethod('totalPurchase', from: from, to: to);
+          final list = _unwrapList(res.data);
+          _apiHeaders = ['S/N', 'Date', 'Supplier', 'Total', 'Paid', 'Balance'];
+          _apiRows = list.asMap().entries.map((e) {
+            final j = e.value;
+            return [
+              '${e.key + 1}',
+              (j['record_date'] ?? j['date'] ?? '').toString(),
+              (j['supplier_name'] ?? j['supplier'] ?? '').toString(),
+              fmt.format(_d(j['total_amount'] ?? j['total'])),
+              fmt.format(_d(j['paid_amount'] ?? j['paid'])),
+              fmt.format(_d(j['balance_amount'] ?? j['balance'] ?? j['unpaid'])),
+            ];
+          }).toList();
+          break;
+        case 'cash_purchase':
+          final res = await api.getReportPurchaseByMethod('cashPurchase', from: from, to: to);
+          final list = _unwrapList(res.data);
+          _apiHeaders = ['S/N', 'Date', 'Supplier', 'Total', 'Paid', 'Balance'];
+          _apiRows = list.asMap().entries.map((e) {
+            final j = e.value;
+            return [
+              '${e.key + 1}',
+              (j['record_date'] ?? j['date'] ?? '').toString(),
+              (j['supplier_name'] ?? j['supplier'] ?? '').toString(),
+              fmt.format(_d(j['total_amount'] ?? j['total'])),
+              fmt.format(_d(j['paid_amount'] ?? j['paid'])),
+              fmt.format(_d(j['balance_amount'] ?? j['balance'] ?? j['unpaid'])),
+            ];
+          }).toList();
+          break;
+        case 'credit_purchase':
+          final res = await api.getReportPurchaseByMethod('creditPurchase', from: from, to: to);
+          final list = _unwrapList(res.data);
+          _apiHeaders = ['S/N', 'Date', 'Supplier', 'Total', 'Paid', 'Balance'];
+          _apiRows = list.asMap().entries.map((e) {
+            final j = e.value;
+            return [
+              '${e.key + 1}',
+              (j['record_date'] ?? j['date'] ?? '').toString(),
+              (j['supplier_name'] ?? j['supplier'] ?? '').toString(),
+              fmt.format(_d(j['total_amount'] ?? j['total'])),
+              fmt.format(_d(j['paid_amount'] ?? j['paid'])),
+              fmt.format(_d(j['balance_amount'] ?? j['balance'] ?? j['unpaid'])),
+            ];
+          }).toList();
+          break;
+        case 'by_category':
+          final res = await api.getReportPurchaseByMethod('purchaseByCategory', from: from, to: to);
+          final list = _unwrapList(res.data);
+          _apiHeaders = ['S/N', 'Category', 'Purchases', 'Total', 'Paid', 'Balance'];
+          _apiRows = list.asMap().entries.map((e) {
+            final j = e.value;
+            return [
+              '${e.key + 1}',
+              (j['category_name'] ?? j['category'] ?? '').toString(),
+              (j['purchase_count'] ?? j['count'] ?? '0').toString(),
+              fmt.format(_d(j['total_amount'] ?? j['total'])),
+              fmt.format(_d(j['paid_amount'] ?? j['paid'])),
+              fmt.format(_d(j['balance_amount'] ?? j['balance'] ?? j['unpaid'])),
+            ];
+          }).toList();
+          break;
+        case 'by_products':
+          final res = await api.getReportPurchaseByMethod('purchaseByProduct', from: from, to: to);
+          final list = _unwrapList(res.data);
+          _apiHeaders = ['S/N', 'Product', 'Qty', 'Total', 'Paid', 'Balance'];
+          _apiRows = list.asMap().entries.map((e) {
+            final j = e.value;
+            return [
+              '${e.key + 1}',
+              (j['product_name'] ?? j['name'] ?? '').toString(),
+              (j['quantity'] ?? j['qty'] ?? '0').toString(),
+              fmt.format(_d(j['total_amount'] ?? j['total'])),
+              fmt.format(_d(j['paid_amount'] ?? j['paid'])),
+              fmt.format(_d(j['balance_amount'] ?? j['balance'] ?? j['unpaid'])),
+            ];
+          }).toList();
+          break;
+        case 'stock_returned':
+          final res = await api.getReportPurchaseByMethod('stockReturnedToSuppliers', from: from, to: to);
+          final list = _unwrapList(res.data);
+          _apiHeaders = ['S/N', 'Date', 'Product', 'Supplier', 'Qty', 'Total'];
+          _apiRows = list.asMap().entries.map((e) {
+            final j = e.value;
+            return [
+              '${e.key + 1}',
+              (j['record_date'] ?? j['date'] ?? '').toString(),
+              (j['product_name'] ?? j['name'] ?? '').toString(),
+              (j['supplier_name'] ?? j['supplier'] ?? '').toString(),
+              (j['quantity'] ?? j['qty'] ?? '0').toString(),
+              fmt.format(_d(j['total_amount'] ?? j['total'])),
+            ];
+          }).toList();
+          break;
         default:
           _apiHeaders = [];
           _apiRows = [];

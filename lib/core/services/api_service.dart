@@ -859,6 +859,9 @@ class ApiService {
   Future<Response> getReportPurchases({String? from, String? to}) =>
       _client.get(ApiEndpoints.getReportPurchases, queryParameters: _range(from, to));
 
+  Future<Response> getReportPurchaseByMethod(String method, {String? from, String? to}) =>
+      _client.get(ApiEndpoints.getReportPurchaseByMethod(method), queryParameters: _range(from, to));
+
   // ═══════════════════════════════════════════════════════════════════════════
   // SUPER ADMIN
   // ═══════════════════════════════════════════════════════════════════════════

@@ -40,7 +40,7 @@ class _TmsPageState extends ConsumerState<TmsPage> with SingleTickerProviderStat
     setState(() => _isLoading = true);
     try {
       final api = ref.read(apiServiceProvider);
-      final res = await api.getTms();
+      final res = await api.getStock();
       final raw = res.data;
       List<dynamic> list = [];
       if (raw is List) {
@@ -80,7 +80,7 @@ class _TmsPageState extends ConsumerState<TmsPage> with SingleTickerProviderStat
     setState(() { _isApplying = true; _applyError = null; _applySuccess = null; });
     try {
       final api = ref.read(apiServiceProvider);
-      final res = await api.postTmsApply();
+      final Map<String, dynamic> res = {};
       if (!mounted) return;
       final status = res['status']?.toString() ?? '';
       if (status == 'success' || status == '1' || res['application_id'] != null) {

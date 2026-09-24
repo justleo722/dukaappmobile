@@ -342,6 +342,9 @@ abstract final class ApiEndpoints {
   /// salesWithVat, salesWithoutVat.
   static String getReportSalesByMethod(String method) => _r(method);
 
+  // ── Purchase sub-reports (getreport/{method}) ─────────────────────────────
+  static String getReportPurchaseByMethod(String method) => _r(method);
+
   // ═══════════════════════════════════════════════════════════════════════════
   // GET MAPPED  —  GET /api/v1/app/get/getdata/{path}
   // Controller-backed GET routes with typed parameters.
