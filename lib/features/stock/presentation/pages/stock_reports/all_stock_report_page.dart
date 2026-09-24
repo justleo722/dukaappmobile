@@ -39,7 +39,7 @@ class _StockItem {
     required this.expired,
   });
 
-  int get balance => inStock - sold - bad - lost - expired;
+  int get balance => inStock; // 'available' from backend already nets out all outflows
   double get stockValue => bp * balance;
   double get sales => sp * sold;
   double get profitEstimate => sales - (bp * sold);

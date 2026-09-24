@@ -52,7 +52,7 @@ class SalesSummaryCard extends StatelessWidget {
             icon: Icons.trending_up_rounded,
             iconColor: const Color(0xFF8B5CF6),
             iconBg: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
-            label: 'Profit',
+            label: 'Paid',
             value: profit,
           ),
         ],

@@ -247,9 +247,12 @@ class ApiService {
       _client.get(ApiEndpoints.getDataSales, queryParameters: _range(from, to));
 
   /// Sales filtered by customer ID.
+  /// Passes a broad date range by default so all customer history is returned,
+  /// not just today (which is the backend's default when no range is given).
   Future<Response> getCustomerSales(String customerId, {String? from, String? to}) =>
       _client.get(ApiEndpoints.getDataSales, queryParameters: {
-        ..._range(from, to),
+        'from': from ?? '1990-01-01',
+        'to': to ?? DateTime.now().toIso8601String().substring(0, 10),
         'customer_id': customerId,
       });
 

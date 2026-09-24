@@ -5,6 +5,7 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
+import 'package:dukaapp/core/providers.dart';
 
 class ReceiptWidget extends ConsumerWidget {
   final String title;
@@ -19,6 +20,7 @@ class ReceiptWidget extends ConsumerWidget {
   final double amountReceived;
   final double discount;
   final String? footerNote;
+  final String? customerName;
   final VoidCallback? onClose;
   final VoidCallback? onPrint;
 
@@ -36,6 +38,7 @@ class ReceiptWidget extends ConsumerWidget {
     required this.amountReceived,
     this.discount = 0,
     this.footerNote,
+    this.customerName,
     this.onClose,
     this.onPrint,
   });
@@ -54,6 +57,7 @@ class ReceiptWidget extends ConsumerWidget {
     required double amountReceived,
     double discount = 0,
     String? footerNote,
+    String? customerName,
   }) {
     showDialog(
       context: context,
@@ -74,6 +78,7 @@ class ReceiptWidget extends ConsumerWidget {
           amountReceived: amountReceived,
           discount: discount,
           footerNote: footerNote,
+          customerName: customerName,
           onClose: () => Navigator.pop(context),
           onPrint: () {
             Navigator.pop(context);
@@ -94,6 +99,11 @@ class ReceiptWidget extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final shopName = ref.read(authProvider).activeShop?.shopName ?? 'My Shop';
+    final cfg = ref.watch(shopConfigProvider).valueOrNull;
+    final shopAddress = cfg?.shopAddress ?? '';
+    final shopPhone = cfg?.shopPhone ?? '';
+    final shopTin = cfg?.shopTin ?? '';
+    final shopMessage = footerNote ?? cfg?.receiptMessage ?? '';
     return Container(
       width: 320,
       constraints: BoxConstraints(
@@ -112,7 +122,7 @@ class ReceiptWidget extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildStoreHeader(shopName),
+                  _buildStoreHeader(shopName, shopAddress, shopPhone, shopTin),
                   const SizedBox(height: 16),
                   _buildDashedDivider(),
                   const SizedBox(height: 12),
@@ -130,7 +140,7 @@ class ReceiptWidget extends ConsumerWidget {
                   const SizedBox(height: 16),
                   _buildDashedDivider(),
                   const SizedBox(height: 12),
-                  _buildFooter(),
+                  _buildFooter(shopMessage),
                 ],
               ),
             ),
@@ -141,7 +151,7 @@ class ReceiptWidget extends ConsumerWidget {
     );
   }
 
-  Widget _buildStoreHeader(String shopName) {
+  Widget _buildStoreHeader(String shopName, String shopAddress, String shopPhone, String shopTin) {
     return Column(
       children: [
         Center(
@@ -190,26 +200,32 @@ class ReceiptWidget extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 6),
+        if (shopAddress.isNotEmpty)
         Center(
           child: Text(
-            'Dar Es Salaam',
+            shopAddress,
             style: AppTypography.bodySmall.copyWith(
               color: AppColors.textSecondary,
             ),
             textAlign: TextAlign.center,
           ),
         ),
-        const SizedBox(height: 6),
-        Center(
-          child: Text(
-            'Tel: +255 123 456 789\nTIN: 123-456-789',
-            style: AppTypography.caption.copyWith(
-              color: AppColors.textHint,
-              height: 1.4,
+        if (shopPhone.isNotEmpty || shopTin.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Center(
+            child: Text(
+              [
+                if (shopPhone.isNotEmpty) 'Tel: $shopPhone',
+                if (shopTin.isNotEmpty) 'TIN: $shopTin',
+              ].join('\n'),
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textHint,
+                height: 1.4,
+              ),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
           ),
-        ),
+        ],
       ],
     );
   }
@@ -249,6 +265,10 @@ class ReceiptWidget extends ConsumerWidget {
   Widget _buildCashierInfo() {
     return Column(
       children: [
+        if (customerName != null && customerName!.isNotEmpty) ...[
+          _buildInfoRow('Customer:', customerName!),
+          const SizedBox(height: 4),
+        ],
         _buildInfoRow('Cashier:', cashier),
         const SizedBox(height: 4),
         _buildInfoRow('Payment:', paymentMode),
@@ -391,10 +411,11 @@ class ReceiptWidget extends ConsumerWidget {
     );
   }
 
-  Widget _buildFooter() {
+  Widget _buildFooter(String message) {
+    if (message.isEmpty) return const SizedBox.shrink();
     return Center(
       child: Text(
-        footerNote ?? 'LIPA VODA 12345',
+        message,
         style: AppTypography.caption.copyWith(
           color: AppColors.textHint,
           fontWeight: FontWeight.w500,

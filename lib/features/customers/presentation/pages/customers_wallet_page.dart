@@ -46,8 +46,8 @@ class _CustomersWalletPageState extends ConsumerState<CustomersWalletPage> {
       final customers = await repo.fetchCustomers();
       if (!mounted) return;
       final wallets = customers
-          .where((c) => c.creditBalance > 0 || c.totalSpent > 0)
-          .map((c) => _CustomerWallet(customer: c, walletBalance: c.creditBalance))
+          .where((c) => c.walletBalance > 0 || c.totalSpent > 0)
+          .map((c) => _CustomerWallet(customer: c, walletBalance: c.walletBalance))
           .toList();
       setState(() {
         _wallets = wallets;

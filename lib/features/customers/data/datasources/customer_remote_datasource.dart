@@ -33,8 +33,9 @@ class CustomerRemoteDatasource {
   }) {
     final body = <String, dynamic>{
       'customer_name': name,
-      'name': name,         // fallback alias
+      'name': name,
       'phone': phone,
+      'category_id': '11', // required so customer appears in the customers list
       if (email != null && email.isNotEmpty) 'email': email,
       if (tinNumber != null && tinNumber.isNotEmpty) 'customer_tin': tinNumber,
       if (address != null && address.isNotEmpty) 'address': address,

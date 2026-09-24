@@ -9,6 +9,7 @@ class Customer {
   final String? location;
   final double creditLimit;
   final double totalSpent;
+  final double walletBalance;
   final double creditBalance;
   final int totalPurchases;
   final DateTime createdAt;
@@ -22,6 +23,7 @@ class Customer {
     this.location,
     this.creditLimit = 0.0,
     this.totalSpent = 0.0,
+    this.walletBalance = 0.0,
     this.creditBalance = 0.0,
     this.totalPurchases = 0,
     required this.createdAt,
@@ -36,6 +38,7 @@ class Customer {
     String? location,
     double? creditLimit,
     double? totalSpent,
+    double? walletBalance,
     double? creditBalance,
     int? totalPurchases,
     DateTime? createdAt,
@@ -49,6 +52,7 @@ class Customer {
       location: location ?? this.location,
       creditLimit: creditLimit ?? this.creditLimit,
       totalSpent: totalSpent ?? this.totalSpent,
+      walletBalance: walletBalance ?? this.walletBalance,
       creditBalance: creditBalance ?? this.creditBalance,
       totalPurchases: totalPurchases ?? this.totalPurchases,
       createdAt: createdAt ?? this.createdAt,
@@ -63,7 +67,8 @@ class Customer {
   ///  - customer_tin → tinNumber
   ///  - address → location
   ///  - credit_limit → creditLimit
-  ///  - wallet_balance (attached by wallet_model) → creditBalance
+  ///  - wallet_balance (prepaid wallet) → walletBalance
+  ///  - credit_balance (amount owed) → creditBalance
   ///  - record_date → createdAt
   static Customer fromJson(Map<String, dynamic> j) {
     double _d(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
@@ -76,7 +81,8 @@ class Customer {
       location: j['address']?.toString(),
       creditLimit: _d(j['credit_limit']),
       totalSpent: _d(j['total_spent'] ?? j['totalSpent']),
-      creditBalance: _d(j['wallet_balance'] ?? j['credit_balance']),
+      walletBalance: _d(j['wallet_balance']),
+      creditBalance: _d(j['credit_balance']),
       totalPurchases: int.tryParse(j['total_purchases']?.toString() ?? '') ?? 0,
       createdAt: DateTime.tryParse(j['record_date']?.toString() ?? '') ?? DateTime.now(),
     );
@@ -91,7 +97,8 @@ class Customer {
     if (tinNumber != null) 'customer_tin': tinNumber,
     if (location != null) 'address': location,
     'credit_limit': creditLimit,
-    'wallet_balance': creditBalance,
+    'wallet_balance': walletBalance,
+    'credit_balance': creditBalance,
   };
 
   static List<Customer> sampleCustomers() {

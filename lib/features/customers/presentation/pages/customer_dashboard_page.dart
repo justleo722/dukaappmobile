@@ -74,9 +74,13 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
     return [];
   }
 
-  // Paid = total spent minus what's still owed (credit balance). Never negative.
-  double get _paid => (_customer.totalSpent - _customer.creditBalance).clamp(0.0, double.infinity);
-  double get _walletBalance => _customer.creditBalance;
+  // Paid = sum of paid_amount from loaded sales records.
+  double get _paid {
+    double _d(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
+    return _salesRecords.fold(0.0, (sum, s) => sum + _d(s['paid_amount'] ?? s['paid'] ?? s['amount_paid']));
+  }
+
+  double get _walletBalance => _customer.walletBalance;
 
   @override
   Widget build(BuildContext context) {

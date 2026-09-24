@@ -32,6 +32,12 @@ class ShopConfig {
   final bool enableQuickActions;
   final bool enableFinancialReports;
 
+  // Receipt / shop contact info
+  final String shopPhone;
+  final String shopAddress;
+  final String shopTin;
+  final String receiptMessage;
+
   const ShopConfig({
     this.shopName = '',
     this.currency = 'TZS',
@@ -58,6 +64,10 @@ class ShopConfig {
     this.useWholesalePrice = false,
     this.enableQuickActions = true,
     this.enableFinancialReports = true,
+    this.shopPhone = '',
+    this.shopAddress = '',
+    this.shopTin = '',
+    this.receiptMessage = '',
   });
 
   static bool _b(dynamic v, {bool fallback = true}) {
@@ -94,6 +104,10 @@ class ShopConfig {
       useWholesalePrice: _b(m['use_wholesale_price'], fallback: false),
       enableQuickActions: _b(m['enable_quick_actions']),
       enableFinancialReports: _b(m['enable_financial_reports']),
+      shopPhone: m['phone']?.toString() ?? '',
+      shopAddress: m['address']?.toString() ?? '',
+      shopTin: m['tin']?.toString() ?? '',
+      receiptMessage: m['message_template']?.toString() ?? '',
     );
   }
 

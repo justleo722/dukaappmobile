@@ -967,6 +967,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
       totalPaid: _toD(sale['paid']),
       amountReceived: _toD(sale['paid']),
       discount: _toD(sale['discount']),
+      customerName: sale['customer']?.toString(),
     );
   }
 }
