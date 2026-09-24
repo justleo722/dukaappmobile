@@ -83,6 +83,10 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
       _nameController.text = p['name'] ?? '';
       _buyingPriceController.text = (p['buyingPrice'] ?? 0).toString();
       _sellingPriceController.text = (p['sellingPrice'] ?? 0).toString();
+      _wholesalePriceController.text = (p['wholesalePrice'] ?? 0).toString();
+      _reorderLevelController.text = (p['reorderLevel'] ?? 0).toString();
+      _barcodeController.text = (p['barcode'] ?? '').toString();
+      _selectedUnit = p['unit']?.toString();
       _selectedCategory = p['category'];
     }
     // Load categories from cached stock state, and suppliers from API
@@ -186,6 +190,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
         if (expiryForApi != null && expiryForApi.isNotEmpty) 'expiry_date': expiryForApi,
         if (_selectedSupplierId != null) 'supplier_id': _selectedSupplierId,
         if (isEditing) 'product_id': widget.product!['product_id']?.toString() ?? '',
+        if (isEditing && widget.product!['stock_id'] != null) 'stock_id': widget.product!['stock_id']?.toString() ?? '',
       };
 
       final photos = _selectedPhotos.isNotEmpty ? _selectedPhotos : null;

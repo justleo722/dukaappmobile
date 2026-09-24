@@ -12,6 +12,7 @@ class PurchaseItem {
   final String createdBy;
   final String currency;
   final List<Map<String, dynamic>> items;
+  final List<dynamic> purchaseIds; // actual integer IDs for payment
 
   const PurchaseItem({
     required this.purchaseId,
@@ -25,10 +26,12 @@ class PurchaseItem {
     required this.createdBy,
     required this.currency,
     this.items = const [],
+    this.purchaseIds = const [],
   });
 
   factory PurchaseItem.fromJson(Map<String, dynamic> j) {
     final rawItems = j['items'] as List? ?? j['products'] as List? ?? [];
+    final rawIds = j['purchase_ids'] as List? ?? [];
     return PurchaseItem(
       purchaseId: j['purchase_id'] ?? j['id'],
       date: j['record_date']?.toString() ?? j['date']?.toString() ?? '',
@@ -50,6 +53,7 @@ class PurchaseItem {
         'product_id': item['product_id'] ?? item['id'],
         'stock_id': item['stock_id'],
       }).toList(),
+      purchaseIds: rawIds,
     );
   }
 
@@ -85,7 +89,7 @@ class PurchaseSummary {
   factory PurchaseSummary.fromJson(Map<String, dynamic> j) => PurchaseSummary(
         totalAmount: _toDouble(j['total_amount'] ?? j['total']),
         paidAmount: _toDouble(j['paid_amount'] ?? j['paid']),
-        balance: _toDouble(j['balance_amount'] ?? j['balance']),
+        balance: _toDouble(j['balance_amount'] ?? j['balance'] ?? j['unpaid']),
         count: (j['count'] as num?)?.toInt() ?? 0,
       );
 

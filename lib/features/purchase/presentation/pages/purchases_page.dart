@@ -93,6 +93,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
           'paid': p.paidAmount,
           'balance': p.balance,
           'paymentMode': p.purchaseType == 'credit' ? 'Credit' : 'Cash',
+          'purchase_ids': p.purchaseIds,
         }).toList();
         _isLoading = false;
       });
@@ -216,10 +217,10 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              final purchaseId = _purchases[index]['purchase_id']?.toString() ?? '';
+              final purchaseIds = (_purchases[index]['purchase_ids'] as List?) ?? [];
               try {
                 final repo = ref.read(purchaseRepositoryProvider);
-                if (purchaseId.isNotEmpty) await repo.bulkDelete({'purchase_ids': [purchaseId]});
+                if (purchaseIds.isNotEmpty) await repo.bulkDelete({'purchase_ids': purchaseIds.join(',')});
                 if (!mounted) return;
                 setState(() {
                   _purchases.removeAt(index);
@@ -280,10 +281,11 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
             onPressed: () async {
               Navigator.pop(context);
               final sorted = _selectedPurchases.toList()..sort((a, b) => b.compareTo(a));
-              final ids = sorted.map((i) => _purchases[i]['purchase_id']?.toString() ?? '').where((id) => id.isNotEmpty).toList();
+              final allIds = sorted.expand((i) => (_purchases[i]['purchase_ids'] as List?) ?? []).toList();
+              final idsStr = allIds.join(',');
               try {
                 final repo = ref.read(purchaseRepositoryProvider);
-                if (ids.isNotEmpty) await repo.bulkDelete({'purchase_ids': ids});
+                if (idsStr.isNotEmpty) await repo.bulkDelete({'purchase_ids': idsStr});
                 if (!mounted) return;
                 setState(() {
                   for (final i in sorted) { _purchases.removeAt(i); }
@@ -568,13 +570,14 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                               );
                               return;
                             }
-                            final purchaseId = _purchases[index]['purchase_id']?.toString() ?? '';
-                            if (purchaseId.isEmpty) return;
+                            final purchaseIds = (_purchases[index]['purchase_ids'] as List?) ?? [];
+                            final purchaseIdsStr = purchaseIds.join(',');
+                            if (purchaseIdsStr.isEmpty) return;
                             Navigator.pop(context);
                             try {
                               final repo = ref.read(purchaseRepositoryProvider);
                               await repo.addPayment({
-                                'purchase_ids': purchaseId,
+                                'purchase_ids': purchaseIdsStr,
                                 'amount': amount,
                                 'date': DateFormat('yyyy-MM-dd').format(selectedDate),
                                 if (selectedAccountId != null) 'from_account_id': selectedAccountId,
