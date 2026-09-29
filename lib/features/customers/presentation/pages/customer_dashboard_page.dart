@@ -528,14 +528,11 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
     }
     // Build from real API data
     final transactions = _walletTransactions.map((t) => <String, String>{
-      'date': t['created_at']?.toString() ?? t['date']?.toString() ?? '',
-      'direction': (t['type']?.toString() ?? '').toUpperCase().contains('IN') ||
-              (t['direction']?.toString() ?? '').toUpperCase() == 'IN'
-          ? 'IN'
-          : 'OUT',
-      'from': t['from']?.toString() ?? t['source']?.toString() ?? '-',
-      'to': t['to']?.toString() ?? t['destination']?.toString() ?? '-',
-      'title': t['title']?.toString() ?? t['note']?.toString() ?? '-',
+      'date': t['record_date']?.toString() ?? t['created_at']?.toString() ?? t['date']?.toString() ?? '',
+      'direction': (t['type']?.toString() ?? '').toUpperCase(),
+      'from': t['from_account_name']?.toString() ?? t['from']?.toString() ?? '-',
+      'to': t['to_account_name']?.toString() ?? t['to']?.toString() ?? '-',
+      'title': t['title']?.toString() ?? '-',
       'amount': 'TZS ${t['amount']?.toString() ?? '0'}',
       'balance': 'TZS ${t['balance']?.toString() ?? '0'}',
     }).toList();
@@ -605,7 +602,8 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
   }
 
   Widget _buildWalletRow(Map<String, String> transaction) {
-    final isCredit = transaction['direction'] == 'IN';
+    final directionRaw = (transaction['direction'] ?? '').toLowerCase();
+    final isCredit = directionRaw.contains('in') || directionRaw.contains('credit') || directionRaw == 'deposit';
     final amountColor = isCredit ? AppColors.success : AppColors.danger;
 
     return Container(

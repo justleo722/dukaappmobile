@@ -128,27 +128,27 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
         if (mounted) setState(() { _allProducts = products; _isLoadingProducts = false; });
         return;
       }
-      // Fallback: fetch directly from API
+      // Fallback: fetch stock directly from API (same endpoint as stockProvider)
       final api = ref.read(apiServiceProvider);
-      final res = await api.getProducts();
+      final res = await api.getStock();
       final body = res.data;
       List raw = [];
       if (body is List) {
         raw = body;
       } else if (body is Map) {
-        final data = body['data'] ?? body['products'] ?? body['stock'] ?? body;
+        final data = body['data'] ?? body['stock'] ?? body['products'] ?? body;
         if (data is List) raw = data;
       }
-      double _d(dynamic v) => num.tryParse(v?.toString() ?? '')?.toDouble() ?? 0.0;
+      double toD(dynamic v) => num.tryParse(v?.toString() ?? '')?.toDouble() ?? 0.0;
       final products = raw.whereType<Map>().map((e) {
         final m = Map<String, dynamic>.from(e);
         return {
           'name': (m['product_name'] ?? m['name'] ?? '').toString(),
           'product_id': (m['product_id'] ?? m['id'])?.toString() ?? '',
-          'stock': _d(m['available'] ?? m['quantity'] ?? m['stock'] ?? 0),
-          'buyingPrice': _d(m['bp'] ?? m['buying_price'] ?? m['cost_price']),
-          'sellingPrice': _d(m['sp'] ?? m['selling_price'] ?? m['price']),
-          'wholesalePrice': _d(m['wp'] ?? m['wholesale_price']),
+          'stock': toD(m['available'] ?? m['quantity'] ?? m['stock'] ?? 0),
+          'buyingPrice': toD(m['bp'] ?? m['buying_price'] ?? m['actual_bp'] ?? m['cost_price']),
+          'sellingPrice': toD(m['sp'] ?? m['selling_price'] ?? m['unit_price'] ?? m['price']),
+          'wholesalePrice': toD(m['wp'] ?? m['wholesale_price']),
         };
       }).where((p) => (p['name'] as String).isNotEmpty).toList();
       if (mounted) setState(() { _allProducts = products; _isLoadingProducts = false; });
