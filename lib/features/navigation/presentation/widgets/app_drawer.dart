@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:dukaapp/app/app.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/features/navigation/presentation/widgets/add_shop_bottom_sheet.dart';
@@ -51,24 +52,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       // Navigate to dashboard so user sees fresh data
       if (!mounted) return;
       final newShopName = ref.read(authProvider).activeShop?.shopName ?? shop['name']?.toString() ?? '';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Umebadilisha duka: $newShopName'),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
-        ),
-      );
       context.go('/dashboard');
+      showAppToast('Umebadilisha duka: $newShopName');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Imeshindwa kubadilisha duka: $e'),
-            backgroundColor: AppColors.danger,
-          ),
-        );
-      }
+      showAppToast('Imeshindwa kubadilisha duka: $e', isError: true);
     }
   }
 

@@ -3,6 +3,7 @@ class ApiConfig {
 
   // ── Base URL ────────────────────────────────────────────────────────────────
   // Production → https://dukaapp.com (root, no subfolder)
+  // Development → http://localhost/dukaapp (switch back before deploying)
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'https://dukaapp.com',

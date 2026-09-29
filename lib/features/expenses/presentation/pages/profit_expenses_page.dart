@@ -68,7 +68,8 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
           if (cachedCashbook.isNotEmpty) _cashbookAccounts = cachedCashbook;
         });
       }
-      _loadExpenses();
+      final f = ref.read(filterProvider);
+      _loadExpenses(from: f.from, to: f.to);
     });
   }
 
@@ -134,7 +135,8 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
 
   double get _totalExpenses => _expenses.fold(0, (s, e) => s + e.amount);
   double get _todayExpenses => _summary.todayExpenses;
-  double get _todayNetProfit => _summary.grossProfit - _todayExpenses;
+  double get _todaySales => _summary.todaySales;
+  double get _todayNetProfit => _todaySales - _todayExpenses;
 
   double get _totalSales => _summary.totalSales;
   double get _grossProfit => _summary.grossProfit;
@@ -805,11 +807,11 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
         children: [
           Expanded(
             child: _buildSummaryCard(
-              label: s.todayTotalExpenses,
-              amount: _fmt(_todayExpenses),
+              label: 'Leo Mauzo',
+              amount: _fmt(_todaySales),
               color: AppColors.primary,
               bgColor: const Color(0xFFEBF2FF),
-              icon: Icons.receipt_long_rounded,
+              icon: Icons.point_of_sale_rounded,
             ),
           ),
           const SizedBox(width: 12),
@@ -817,9 +819,9 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
             child: _buildSummaryCard(
               label: s.todayNetProfit,
               amount: _fmt(_todayNetProfit.abs()),
-              color: AppColors.primary,
-              bgColor: const Color(0xFFEBF2FF),
-              icon: Icons.trending_up_rounded,
+              color: _todayNetProfit >= 0 ? AppColors.success : AppColors.danger,
+              bgColor: _todayNetProfit >= 0 ? AppColors.successLight : AppColors.dangerLight,
+              icon: _todayNetProfit >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
             ),
           ),
         ],

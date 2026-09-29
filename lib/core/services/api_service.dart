@@ -800,6 +800,9 @@ class ApiService {
   Future<Map<String, dynamic>> postOnlineshopOrderUpdateStatus(Map<String, dynamic> body) =>
       _post(ApiEndpoints.postOnlineshopOrderUpdateStatus, body);
 
+  Future<Map<String, dynamic>> postOnlineshopProductToggleEcommerce(Map<String, dynamic> body) =>
+      _post(ApiEndpoints.postOnlineshopProductToggleEcommerce, body);
+
   Future<Map<String, dynamic>> postSubscriptionPackageList(Map<String, dynamic> body) =>
       _post(ApiEndpoints.postSubscriptionPackageList, body);
 

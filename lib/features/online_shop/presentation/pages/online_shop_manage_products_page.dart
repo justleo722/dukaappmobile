@@ -56,6 +56,7 @@ class _OnlineShopManageProductsPageState
             'status': m['status_label'] ?? (avail <= reorder ? 'Low Stock' : 'In Stock'),
             'category': m['category'] ?? '',
             'product_id': m['product_id'] ?? '',
+            'ecommerce_enabled': m['ecommerce_enabled'] == 1 || m['ecommerce_enabled'] == '1',
           };
         }).toList();
       });
@@ -63,6 +64,25 @@ class _OnlineShopManageProductsPageState
       if (mounted) setState(() => _products = []);
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _toggleEcommerce(int index, bool enabled) async {
+    final product = _products[index];
+    final productId = product['product_id']?.toString() ?? '';
+    if (productId.isEmpty) return;
+    setState(() => _products[index] = {...product, 'ecommerce_enabled': enabled});
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.postOnlineshopProductToggleEcommerce({
+        'product_id': productId,
+        'enabled': enabled ? '1' : '0',
+      });
+      if ((res['status'] ?? '') != 'success') {
+        if (mounted) setState(() => _products[index] = {...product, 'ecommerce_enabled': !enabled});
+      }
+    } catch (_) {
+      if (mounted) setState(() => _products[index] = {...product, 'ecommerce_enabled': !enabled});
     }
   }
 
@@ -271,6 +291,7 @@ class _OnlineShopManageProductsPageState
           return _ProductCard(
             product: product,
             onEdit: () => context.push('/stock/manage/add', extra: product),
+            onToggleEcommerce: (enabled) => _toggleEcommerce(index, enabled),
           );
         }),
       ),
@@ -321,16 +342,19 @@ class _OnlineShopManageProductsPageState
 class _ProductCard extends StatelessWidget {
   final Map<String, dynamic> product;
   final VoidCallback onEdit;
+  final ValueChanged<bool> onToggleEcommerce;
 
   const _ProductCard({
     required this.product,
     required this.onEdit,
+    required this.onToggleEcommerce,
   });
 
   @override
   Widget build(BuildContext context) {
     final status = product['status'] as String;
     final statusColor = _getStatusColor(status);
+    final ecommerceEnabled = product['ecommerce_enabled'] == true;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -413,6 +437,37 @@ class _ProductCard extends StatelessWidget {
                     color: statusColor,
                     fontSize: 10,
                   ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Divider(height: 1, color: AppColors.divider),
+          Row(
+            children: [
+              Icon(
+                Icons.storefront_rounded,
+                size: 14,
+                color: ecommerceEnabled ? AppColors.success : AppColors.textHint,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Onyesha kwenye Online Shop',
+                  style: AppTypography.caption.copyWith(
+                    fontSize: 11,
+                    color: ecommerceEnabled ? AppColors.textPrimary : AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              Transform.scale(
+                scale: 0.8,
+                child: Switch(
+                  value: ecommerceEnabled,
+                  onChanged: onToggleEcommerce,
+                  activeThumbColor: AppColors.success,
+                  activeTrackColor: AppColors.success.withValues(alpha: 0.4),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
             ],
