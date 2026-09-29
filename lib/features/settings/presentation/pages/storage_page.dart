@@ -66,7 +66,7 @@ class _StoragePageState extends ConsumerState<StoragePage> {
       if (attBody is List) {
         rawAtt = attBody;
       } else if (attBody is Map) {
-        final d = attBody['data'] ?? attBody['result'] ?? attBody['attendants'];
+        final d = attBody['rows'] ?? attBody['data'] ?? attBody['result'] ?? attBody['attendants'];
         if (d is List) rawAtt = d;
       }
       _attendants = rawAtt.whereType<Map<String, dynamic>>().toList();
@@ -191,8 +191,8 @@ class _StoragePageState extends ConsumerState<StoragePage> {
                     final api = ref.read(apiServiceProvider);
                     final result = await api.postSettingsAttendantSaveAccess({
                       'role_id': roleId,
-                      'lock_time': toHHMM(lockTime),
-                      'unlock_time': toHHMM(unlockTime),
+                      'auto_lock_time': toHHMM(lockTime),
+                      'auto_unlock_time': toHHMM(unlockTime),
                     });
                     if (!ctx.mounted) return;
                     Navigator.of(ctx).pop();

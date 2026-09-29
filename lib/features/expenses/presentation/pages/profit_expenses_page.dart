@@ -693,11 +693,14 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
       appBar: _buildAppBar(context),
       body: SafeArea(
         top: false,
-        child: SingleChildScrollView(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: Column(
+        child: RefreshIndicator(
+          onRefresh: () => _loadExpenses(),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: Column(
             children: [
               const SizedBox(height: 12),
               _buildTodaySummary(),
@@ -715,6 +718,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
                   : _buildExpensesList(expenses),
               const SizedBox(height: 24),
             ],
+            ),
           ),
         ),
       ),

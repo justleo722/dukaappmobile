@@ -49,7 +49,17 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       ref.invalidate(customerProvider);
 
       // Navigate to dashboard so user sees fresh data
-      if (mounted) context.go('/dashboard');
+      if (!mounted) return;
+      context.go('/dashboard');
+      final newShopName = ref.read(authProvider).activeShop?.shopName ?? shop['name']?.toString() ?? '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Umebadilisha duka: $newShopName'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
