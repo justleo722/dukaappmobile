@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:dukaapp/core/storage/secure_storage_service.dart';
 import 'package:dukaapp/core/config/api_config.dart';
@@ -22,6 +23,7 @@ class ApiClient {
       ),
     );
 
+    _dio.transformer = _TrimTransformer();
     _dio.interceptors.addAll([
       _AuthInterceptor(secureStorage: secureStorage),
       if (ApiConfig.enableLogging) _LoggingInterceptor(),
@@ -265,5 +267,30 @@ class _ErrorInterceptor extends Interceptor {
       onUnauthorized();
     }
     handler.next(err);
+  }
+}
+
+/// Strips leading/trailing whitespace from the response body before JSON
+/// decoding. The production server prepends newlines/spaces to every response.
+class _TrimTransformer extends BackgroundTransformer {
+  @override
+  Future<dynamic> transformResponse(
+    RequestOptions options,
+    ResponseBody responseBody,
+  ) async {
+    final result = await super.transformResponse(options, responseBody);
+    if (result is String) {
+      final trimmed = result.trim();
+      if (trimmed.isEmpty) return result;
+      final first = trimmed[0];
+      if (first == '{' || first == '[') {
+        try {
+          return jsonDecode(trimmed);
+        } catch (_) {
+          return trimmed;
+        }
+      }
+    }
+    return result;
   }
 }

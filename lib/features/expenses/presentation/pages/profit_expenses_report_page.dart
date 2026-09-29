@@ -14,6 +14,7 @@ import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
 import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 
 class ProfitExpensesReportPage extends ConsumerStatefulWidget {
   final String reportKey;
@@ -211,7 +212,7 @@ class _ProfitExpensesReportPageState extends ConsumerState<ProfitExpensesReportP
           children: [
             pw.Text(widget.title, style: pw.TextStyle(font: pw.Font.helveticaBold(), fontSize: 16)),
             pw.SizedBox(height: 2),
-            pw.Text('SON COLLECTION  \u2022  $now',
+            pw.Text('${ref.read(authProvider).activeShop?.shopName ?? 'DukaApp'}  \u2022  $now',
                 style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
             pw.SizedBox(height: 4),
             pw.Divider(),
@@ -380,7 +381,7 @@ class _ProfitExpensesReportPageState extends ConsumerState<ProfitExpensesReportP
           ),
           const SizedBox(height: 2),
           Text(
-            'SON COLLECTION',
+            ref.read(authProvider).activeShop?.shopName ?? 'DukaApp',
             style: AppTypography.caption.copyWith(
               color: AppColors.textSecondary,
               fontSize: 10,
@@ -413,7 +414,7 @@ class _ProfitExpensesReportPageState extends ConsumerState<ProfitExpensesReportP
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'SON COLLECTION',
+                  ref.read(authProvider).activeShop?.shopName ?? 'DukaApp',
                   style: AppTypography.bodyMedium.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,

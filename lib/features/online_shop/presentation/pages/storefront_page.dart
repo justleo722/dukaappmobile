@@ -104,26 +104,47 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
       // Map products
       final rawProducts = pub['products'];
       final productList = rawProducts is List ? rawProducts : [];
-      _products = productList.whereType<Map<String, dynamic>>().map((p) {
-        final catName = p['category']?.toString() ?? '';
-        final imagePath = p['image_path']?.toString() ?? p['image']?.toString();
-        final imageUrl = (imagePath != null && imagePath.isNotEmpty)
-            ? (imagePath.startsWith('http') ? imagePath : 'http://192.168.0.107/dukaapp/$imagePath')
-            : null;
+      _products = productList.map((p) {
+        String name, priceRaw, shopName, icon, color, productId, category, imageUrl;
+        if (p is List) {
+          name      = p.length > 0 ? p[0].toString() : '';
+          priceRaw  = p.length > 2 ? p[2].toString() : '0';
+          shopName  = p.length > 3 ? p[3].toString() : '';
+          icon      = p.length > 4 ? p[4].toString() : '';
+          color     = p.length > 5 ? p[5].toString() : '';
+          productId = p.length > 6 ? p[6].toString() : '';
+          category  = p.length > 8 ? p[8].toString() : '';
+          imageUrl  = p.length > 10 ? p[10].toString() : '';
+        } else if (p is Map<String, dynamic>) {
+          name      = p['product_name']?.toString() ?? p['name']?.toString() ?? '';
+          priceRaw  = (p['ecommerce_price'] ?? p['selling_price'])?.toString() ?? '0';
+          shopName  = p['shop_name']?.toString() ?? '';
+          icon      = p['icon']?.toString() ?? '';
+          color     = p['color']?.toString() ?? '';
+          productId = p['product_id']?.toString() ?? '';
+          category  = p['category']?.toString() ?? '';
+          final imgPath = p['image_path']?.toString() ?? p['image']?.toString() ?? '';
+          imageUrl  = imgPath.startsWith('http') ? imgPath : '';
+        } else {
+          return null;
+        }
+        final catName = category;
+        final validImage = imageUrl.isNotEmpty ? imageUrl : null;
         return {
-          'product_id': p['product_id']?.toString() ?? '',
-          'name': p['product_name']?.toString() ?? p['name']?.toString() ?? '',
-          'price': _fmtPrice(p['ecommerce_price'] ?? p['selling_price'], currency),
-          'seller': p['shop_name']?.toString() ?? _shopName ?? '',
+          'product_id': productId,
+          'name': name,
+          'price': _fmtPrice(double.tryParse(priceRaw) ?? 0, currency),
+          'seller': shopName.isNotEmpty ? shopName : (_shopName ?? ''),
           'icon': _iconForCategory(catName),
+          'color': color,
           'collection': catName.isNotEmpty ? catName.toUpperCase() : 'GENERAL',
-          'description': p['description']?.toString() ?? p['notes']?.toString() ?? '',
-          'images': imageUrl != null ? [imageUrl] : <String>[],
-          'quantity': p['quantity'] ?? p['qty'],
-          'code': p['code']?.toString() ?? p['barcode']?.toString() ?? '',
+          'description': '',
+          'images': validImage != null ? [validImage] : <String>[],
+          'quantity': null,
+          'code': '',
           '_raw': p,
         };
-      }).toList();
+      }).whereType<Map<String, dynamic>>().toList();
 
       // Map categories
       final rawCats = pub['categories'];

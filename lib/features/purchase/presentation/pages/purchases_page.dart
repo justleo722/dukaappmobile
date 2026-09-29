@@ -1030,7 +1030,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
           crossAxisAlignment: pw.CrossAxisAlignment.center,
           children: [
             pw.Text(
-              'SON COLLECTION',
+              ref.read(authProvider).activeShop?.shopName ?? 'DukaApp',
               style: pw.TextStyle(
                 fontSize: 20,
                 fontWeight: pw.FontWeight.bold,
@@ -1275,7 +1275,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
             ),
           ),
           Text(
-            'SON COLLECTION',
+            ref.read(authProvider).activeShop?.shopName ?? 'DukaApp',
             style: AppTypography.caption.copyWith(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w500,

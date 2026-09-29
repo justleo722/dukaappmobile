@@ -14,6 +14,7 @@ import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
 import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:go_router/go_router.dart';
 
 class PurchaseReportPage extends ConsumerStatefulWidget {
@@ -293,7 +294,7 @@ class _PurchaseReportPageState extends ConsumerState<PurchaseReportPage> {
           children: [
             pw.Text(widget.title, style: pw.TextStyle(font: pw.Font.helveticaBold(), fontSize: 16)),
             pw.SizedBox(height: 2),
-            pw.Text('SON COLLECTION  •  $now',
+            pw.Text('${ref.read(authProvider).activeShop?.shopName ?? 'DukaApp'}  •  $now',
                 style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
             pw.SizedBox(height: 4),
             pw.Divider(),
@@ -474,7 +475,7 @@ class _PurchaseReportPageState extends ConsumerState<PurchaseReportPage> {
           ),
           const SizedBox(height: 2),
           Text(
-            'SON COLLECTION',
+            ref.read(authProvider).activeShop?.shopName ?? 'DukaApp',
             style: AppTypography.caption.copyWith(
               color: AppColors.textSecondary,
               fontSize: 10,
@@ -507,7 +508,7 @@ class _PurchaseReportPageState extends ConsumerState<PurchaseReportPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'SON COLLECTION',
+                  ref.read(authProvider).activeShop?.shopName ?? 'DukaApp',
                   style: AppTypography.bodyMedium.copyWith(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,

@@ -19,6 +19,7 @@ import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/features/purchase/presentation/providers/purchase_provider.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
 import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 
 class PurchaseOrdersPage extends ConsumerStatefulWidget {
   const PurchaseOrdersPage({super.key});
@@ -631,7 +632,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
           crossAxisAlignment: pw.CrossAxisAlignment.center,
           children: [
             pw.Text(
-              'SON COLLECTION',
+              ref.read(authProvider).activeShop?.shopName ?? 'DukaApp',
               style: pw.TextStyle(
                 fontSize: 20,
                 fontWeight: pw.FontWeight.bold,
@@ -862,7 +863,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
             ),
           ),
           Text(
-            'SON COLLECTION',
+            ref.read(authProvider).activeShop?.shopName ?? 'DukaApp',
             style: AppTypography.caption.copyWith(
               color: AppColors.textSecondary,
               fontWeight: FontWeight.w500,
