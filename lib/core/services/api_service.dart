@@ -682,8 +682,8 @@ class ApiService {
   Future<Response> getMfSummary({String? from, String? to}) =>
       _client.get(ApiEndpoints.getDataMfSummary, queryParameters: _range(from, to));
 
-  Future<Response> getMfRawMaterials() =>
-      _client.get(ApiEndpoints.getDataMfRawMaterials);
+  Future<Response> getMfRawMaterials({String? from, String? to}) =>
+      _client.get(ApiEndpoints.getDataMfRawMaterials, queryParameters: _range(from, to));
 
   Future<Response> getMfRecipes() =>
       _client.get(ApiEndpoints.getDataMfRecipes);

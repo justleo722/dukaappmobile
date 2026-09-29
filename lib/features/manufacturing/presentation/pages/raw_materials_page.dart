@@ -6,6 +6,7 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 import 'package:dukaapp/features/manufacturing/presentation/dialogs/sort_raw_materials_dialog.dart';
 
 class _RawMaterial {
@@ -31,7 +32,7 @@ class _RawMaterial {
     double _d(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
     final statusLabel = j['status_label']?.toString() ?? j['status']?.toString() ?? '';
     return _RawMaterial(
-      materialId: j['material_id']?.toString() ?? '',
+      materialId: (j['raw_material_id'] ?? j['material_id'])?.toString() ?? '',
       name: j['material_name']?.toString() ?? '',
       unit: j['unit']?.toString() ?? '',
       currentStock: _d(j['current_stock'] ?? j['stock']),
@@ -63,12 +64,12 @@ class _RawMaterialsPageState extends ConsumerState<RawMaterialsPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadMaterials());
   }
 
-  Future<void> _loadMaterials() async {
+  Future<void> _loadMaterials({String? from, String? to}) async {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final api = ref.read(apiServiceProvider);
-      final res = await api.getMfRawMaterials();
+      final res = await api.getMfRawMaterials(from: from, to: to);
       final body = res.data;
       List raw = [];
       if (body is List) {
@@ -129,6 +130,7 @@ class _RawMaterialsPageState extends ConsumerState<RawMaterialsPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<FilterState>(filterProvider, (_, f) => _loadMaterials(from: f.from, to: f.to));
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: _buildAppBar(context),
