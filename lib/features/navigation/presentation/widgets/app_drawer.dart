@@ -50,7 +50,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
 
       // Navigate to dashboard so user sees fresh data
       if (!mounted) return;
-      context.go('/dashboard');
       final newShopName = ref.read(authProvider).activeShop?.shopName ?? shop['name']?.toString() ?? '';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -60,6 +59,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           duration: const Duration(seconds: 2),
         ),
       );
+      context.go('/dashboard');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
