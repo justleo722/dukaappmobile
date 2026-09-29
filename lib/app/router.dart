@@ -66,6 +66,7 @@ import 'package:dukaapp/features/customers/presentation/pages/customers_page.dar
 import 'package:dukaapp/features/customers/presentation/pages/add_customer_page.dart';
 import 'package:dukaapp/features/customers/presentation/pages/customer_dashboard_page.dart';
 import 'package:dukaapp/features/customers/presentation/pages/customers_wallet_page.dart';
+import 'package:dukaapp/features/customers/presentation/pages/customer_report_page.dart';
 import 'package:dukaapp/features/customers/data/models/customer_model.dart';
 import 'package:dukaapp/features/suppliers/presentation/pages/suppliers_page.dart';
 import 'package:dukaapp/features/suppliers/presentation/pages/add_supplier_page.dart';
@@ -736,6 +737,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: 'wallet',
             name: 'customers-wallet',
             builder: (context, state) => const CustomersWalletPage(),
+          ),
+          GoRoute(
+            path: ':customerId/wallet-statement',
+            name: 'customer-wallet-statement',
+            builder: (context, state) {
+              final customer = state.extra as Customer;
+              return CustomerReportPage(customer: customer, reportType: 'wallet_statement');
+            },
+          ),
+          GoRoute(
+            path: ':customerId/wallet-sales',
+            name: 'customer-wallet-sales',
+            builder: (context, state) {
+              final customer = state.extra as Customer;
+              return CustomerReportPage(customer: customer, reportType: 'wallet_sales');
+            },
+          ),
+          GoRoute(
+            path: ':customerId/statement',
+            name: 'customer-statement',
+            builder: (context, state) {
+              final customer = state.extra as Customer;
+              return CustomerReportPage(customer: customer, reportType: 'statement');
+            },
           ),
         ],
       ),

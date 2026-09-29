@@ -129,8 +129,13 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
           _categories.add(c.name);
           _categoryIds[c.name] = c.categoryId;
         }
-        // Keep selected category valid
-        if (_selectedCategory != null && !_categories.contains(_selectedCategory)) {
+        // When editing, restore category from product data if not yet set
+        if (_isEditing && _selectedCategory == null) {
+          final cat = widget.product!['category']?.toString();
+          if (cat != null && _categories.contains(cat)) _selectedCategory = cat;
+        }
+        // Only clear if categories loaded AND category genuinely not in list
+        if (_categories.isNotEmpty && _selectedCategory != null && !_categories.contains(_selectedCategory)) {
           _selectedCategory = null;
         }
       });

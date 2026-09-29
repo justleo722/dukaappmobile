@@ -46,15 +46,19 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   Future<void> _loadInvoices({String? from, String? to}) async {
     if (!mounted) return;
     setState(() => _isLoading = true);
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final effectiveFrom = from ?? '1990-01-01';
+    final effectiveTo = to ?? today;
     try {
       final repo = ref.read(salesRepositoryProvider);
       final results = await Future.wait([
-        repo.fetchInvoices(from: from, to: to),
-        repo.fetchInvoiceSummary(from: from, to: to),
+        repo.fetchInvoices(from: effectiveFrom, to: effectiveTo),
+        repo.fetchInvoiceSummary(from: effectiveFrom, to: effectiveTo),
       ]);
       if (!mounted) return;
       final records = results[0] as List<SaleRecord>;
       setState(() {
+        _isLoading = false;
         _invoiceSummary = results[1] as InvoiceSummary;
         _invoices = records.map((r) => {
           'sale_id': r.saleId,
@@ -108,9 +112,9 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   List<Map<String, dynamic>> get _filteredInvoices {
     if (_searchQuery.isEmpty) return _invoices;
     return _invoices.where((inv) {
-      final customer = (inv['customer'] as String).toLowerCase();
+      final customer = (inv['customer']?.toString() ?? '').toLowerCase();
       final products = (inv['products'] as List)
-          .map((p) => (p['name'] as String).toLowerCase())
+          .map((p) => (p['name']?.toString() ?? '').toLowerCase())
           .join(' ');
       final query = _searchQuery.toLowerCase();
       return customer.contains(query) || products.contains(query);
@@ -525,7 +529,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   void _showBackdateDialog(int invoiceIndex) async {
     final s = ref.read(stringsProvider);
     final invoice = _invoices[invoiceIndex];
-    final dateStr = invoice['date'] as String;
+    final dateStr = (invoice['date']?.toString() ?? '');
     final parts = dateStr.split(' ');
     DateTime parsedDate;
     try {
@@ -1036,7 +1040,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
             ],
           ),
           const SizedBox(height: 8),
-          _buildTotalRow(s.paymentMode, invoice['paymentMode'] as String),
+          _buildTotalRow(s.paymentMode, (invoice['paymentMethod'] ?? invoice['paymentMode'] ?? '').toString()),
         ],
       ),
     );
@@ -1755,7 +1759,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                   ),
                   const SizedBox(height: 8),
                   PaymentSummaryCard(
-                    paymentMethod: invoice['paymentMode'],
+                    paymentMethod: (invoice['paymentMethod'] ?? invoice['paymentMode'] ?? '').toString(),
                     paid: invoice['paid'],
                     discount: invoice['discount'],
                     balance: invoice['balance'],
