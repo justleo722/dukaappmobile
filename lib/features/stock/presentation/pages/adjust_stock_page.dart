@@ -150,17 +150,22 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
     final adjustedItems = _items
         .where((item) =>
             item.productId != null &&
-            item.status != AdjustmentStatus.none)
-        .map((item) => {
-              'product_id': item.productId,
-              'stock_id': item.stockId, // may be null — backend handles it
-              'quantity': item.adjustQuantity.abs(),
-              'opening_quantity': item.currentStock,
-              // Map Flutter status → PHP movement_type
-              'movement_type': item.status == AdjustmentStatus.balancing
-                  ? 'balanced'
-                  : item.status.name, // bad, expired, lost
-            })
+            item.status != AdjustmentStatus.none &&
+            item.adjustQuantity != 0)
+        .map((item) {
+          final isBalancing = item.status == AdjustmentStatus.balancing;
+          return {
+            'product_id': item.productId,
+            'stock_id': item.stockId,
+            'opening_quantity': item.currentStock,
+            // balanced: send TARGET quantity (currentStock + delta) so backend computes correct delta
+            // outflow (bad/lost/expired): send the amount directly
+            'quantity': isBalancing
+                ? (item.currentStock + item.adjustQuantity).abs()
+                : item.adjustQuantity.abs(),
+            'movement_type': isBalancing ? 'balanced' : item.status.name,
+          };
+        })
         .toList();
 
     if (adjustedItems.isEmpty) {
