@@ -151,17 +151,17 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
         .where((item) =>
             item.productId != null &&
             item.status != AdjustmentStatus.none &&
-            item.adjustQuantity != 0)
+            (item.status == AdjustmentStatus.balancing || item.adjustQuantity != 0))
         .map((item) {
           final isBalancing = item.status == AdjustmentStatus.balancing;
           return {
             'product_id': item.productId,
             'stock_id': item.stockId,
             'opening_quantity': item.currentStock,
-            // balanced: send TARGET quantity (currentStock + delta) so backend computes correct delta
-            // outflow (bad/lost/expired): send the amount directly
+            // balanced: adjustQuantity IS the target (stepper initialized to currentStock)
+            // outflow (bad/lost/stolen/expired): adjustQuantity is the amount to remove
             'quantity': isBalancing
-                ? (item.currentStock + item.adjustQuantity).abs()
+                ? item.adjustQuantity.abs()
                 : item.adjustQuantity.abs(),
             'movement_type': isBalancing ? 'balanced' : item.status.name,
           };
@@ -200,8 +200,8 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
         ),
       );
       if (ok) {
-        ref.read(stockProvider.notifier).refresh();
-        context.pop();
+        await ref.read(stockProvider.notifier).refresh();
+        if (mounted) context.pop();
       }
     } catch (e) {
       if (!mounted) return;
@@ -524,7 +524,18 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
           adjustQuantity: item.adjustQuantity,
           onQuantityChanged: (v) => setState(() => item.adjustQuantity = v),
           status: item.status,
-          onStatusChanged: (v) => setState(() => item.status = v ?? AdjustmentStatus.none),
+          onStatusChanged: (v) {
+            final newStatus = v ?? AdjustmentStatus.none;
+            setState(() {
+              item.status = newStatus;
+              // For balancing: start stepper at current stock so user enters target directly
+              if (newStatus == AdjustmentStatus.balancing) {
+                item.adjustQuantity = item.currentStock;
+              } else {
+                item.adjustQuantity = 0;
+              }
+            });
+          },
         );
       }),
     );

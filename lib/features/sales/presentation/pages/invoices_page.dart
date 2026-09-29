@@ -95,7 +95,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
     double total = 0;
     for (final inv in _invoices) {
       if (inv['status'] == 'PAID') {
-        total += (inv['paid'] as double);
+        total += (inv['paid'] as double? ?? 0.0);
       }
     }
     return total;
@@ -104,7 +104,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   double get _unpaidTotal {
     double total = 0;
     for (final inv in _invoices) {
-      total += inv['balance'] as double;
+      total += (inv['balance'] as double? ?? 0.0);
     }
     return total;
   }
@@ -282,7 +282,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   void _showPayDialog(int invoiceIndex) {
     final s = ref.read(stringsProvider);
     final invoice = _invoices[invoiceIndex];
-    final balance = invoice['balance'] as double;
+    final balance = (invoice['balance'] as double? ?? 0.0);
     final amountController = TextEditingController(text: balance.toStringAsFixed(0));
     DateTime selectedDate = DateTime.now();
     String selectedAccount = 'Cash';
@@ -467,9 +467,9 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                           });
                           if (!mounted) return;
                           setState(() {
-                            _invoices[invoiceIndex]['paid'] = (_invoices[invoiceIndex]['paid'] as double) + amount;
+                            _invoices[invoiceIndex]['paid'] = (_invoices[invoiceIndex]['paid'] as double? ?? 0.0) + amount;
                             _invoices[invoiceIndex]['balance'] = balance - amount;
-                            if ((_invoices[invoiceIndex]['balance'] as double) <= 0) {
+                            if ((_invoices[invoiceIndex]['balance'] as double? ?? 0.0) <= 0) {
                               _invoices[invoiceIndex]['status'] = 'PAID';
                               _invoices[invoiceIndex]['balance'] = 0.0;
                             }
@@ -678,7 +678,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
     final products = List<Map<String, dynamic>>.from(invoice['products']);
     final totalAmount = products.fold<double>(
       0,
-      (sum, p) => sum + (p['price'] as double) * (p['quantity'] as int),
+      (sum, p) => sum + (p['price'] as double? ?? 0.0) * (p['quantity'] as int? ?? 0),
     );
 
     showDialog(
@@ -1007,9 +1007,9 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
         children: [
           _buildTotalRow(s.subtotal, _formatCurrency(totalAmount)),
           const SizedBox(height: 8),
-          _buildTotalRow('Discount', '- ${_formatCurrency(invoice['discount'] as double)}'),
+          _buildTotalRow('Discount', '- ${_formatCurrency((invoice['discount'] as double? ?? 0.0))}'),
           const SizedBox(height: 8),
-          _buildTotalRow(s.paidAmount, _formatCurrency(invoice['paid'] as double)),
+          _buildTotalRow(s.paidAmount, _formatCurrency((invoice['paid'] as double? ?? 0.0))),
           const Divider(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1030,7 +1030,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  _formatCurrency(invoice['balance'] as double),
+                  _formatCurrency((invoice['balance'] as double? ?? 0.0)),
                   style: AppTypography.bodyMedium.copyWith(
                     color: isPaid ? AppColors.success : AppColors.danger,
                     fontWeight: FontWeight.w700,
@@ -1526,7 +1526,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
     final isPaid = invoice['status'] == 'PAID';
     final totalAmount = products.fold<double>(
       0,
-      (sum, p) => sum + (p['price'] as double) * (p['quantity'] as int),
+      (sum, p) => sum + (p['price'] as double? ?? 0.0) * (p['quantity'] as int? ?? 0),
     );
 
     return Container(
@@ -1760,9 +1760,9 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                   const SizedBox(height: 8),
                   PaymentSummaryCard(
                     paymentMethod: (invoice['paymentMethod'] ?? invoice['paymentMode'] ?? '').toString(),
-                    paid: invoice['paid'],
-                    discount: invoice['discount'],
-                    balance: invoice['balance'],
+                    paid: (invoice['paid'] as double? ?? 0.0),
+                    discount: (invoice['discount'] as double? ?? 0.0),
+                    balance: (invoice['balance'] as double? ?? 0.0),
                   ),
                   const SizedBox(height: 12),
                   SalesBottomActions(

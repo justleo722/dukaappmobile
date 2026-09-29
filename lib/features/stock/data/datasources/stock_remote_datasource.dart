@@ -202,6 +202,7 @@ class StockRemoteDatasource {
         'stock_id': m['stock_id']?.toString() ?? '',
         'quantity': m['quantity']?.toString() ?? '0',
         'movement_type': type,
+        if (m['opening_quantity'] != null) 'opening_quantity': m['opening_quantity'].toString(),
       };
       lastResult = await _formPost(ApiEndpoints.postStockRestockBalance, flat);
       if ((lastResult['status'] ?? '') == 'error') return lastResult;
