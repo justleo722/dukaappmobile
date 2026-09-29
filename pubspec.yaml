@@ -1,7 +1,7 @@
 name: dukaapp
 description: "DukaApp - POS"
 publish_to: 'none'
-version: 1.0.0+109
+version: 1.0.0+110
 
 environment:
   sdk: ^3.12.2
@@ -38,6 +38,7 @@ dependencies:
 
   # Offline-first local database (unique DB per role+shop)
   sqflite: ^2.3.3+1
+  sqflite_common_ffi: ^2.3.4+4
 
   # App version info
   package_info_plus: ^8.0.0
