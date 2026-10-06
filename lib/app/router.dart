@@ -93,6 +93,7 @@ import 'package:dukaapp/features/manufacturing/presentation/pages/manage_recipes
 import 'package:dukaapp/features/manufacturing/presentation/pages/create_recipe_page.dart';
 import 'package:dukaapp/features/manufacturing/presentation/pages/edit_recipe_page.dart';
 import 'package:dukaapp/features/manufacturing/presentation/pages/add_manufactured_product_page.dart';
+import 'package:dukaapp/features/manufacturing/presentation/pages/edit_manufactured_product_page.dart';
 import 'package:dukaapp/features/manufacturing/presentation/pages/manufacturing_reports_page.dart';
 import 'package:dukaapp/features/manufacturing/presentation/pages/stock_reports/daily_production_report_page.dart';
 import 'package:dukaapp/features/manufacturing/presentation/pages/stock_reports/raw_material_consumption_report_page.dart';
@@ -550,7 +551,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             name: 'edit-manufactured-product',
             builder: (context, state) {
               final data = state.extra as Map<String, dynamic>? ?? {};
-              return AddManufacturedProductPage(productData: data);
+              return EditManufacturedProductPage(productData: data);
             },
           ),
           GoRoute(

@@ -738,6 +738,9 @@ class ApiService {
   Future<Map<String, dynamic>> postMfProductionAdjust(Map<String, dynamic> body) =>
       _post(ApiEndpoints.postMfProductionAdjust, body);
 
+  Future<Map<String, dynamic>> postMfProductionUpdate(Map<String, dynamic> body) =>
+      _post(ApiEndpoints.postMfProductionUpdate, body);
+
   Future<Map<String, dynamic>> postMfProductionDelete(Map<String, dynamic> body) =>
       _post(ApiEndpoints.postMfProductionDelete, body);
 
@@ -904,10 +907,14 @@ class ApiService {
     String path,
     Map<String, dynamic> body,
   ) async {
+    // Keys are programmer-defined identifiers that may include PHP array
+    // notation like `product_id[0]` or `quantity[123]`. We must NOT
+    // percent-encode `[` and `]` in keys — PHP only recognises unencoded
+    // brackets as array syntax. Values are still fully encoded.
     final encoded = body.entries
         .where((e) => e.value != null)
         .map((e) =>
-            '${Uri.encodeQueryComponent(e.key)}='
+            '${_encodeKey(e.key)}='
             '${Uri.encodeQueryComponent(e.value.toString())}')
         .join('&');
 
@@ -921,6 +928,12 @@ class ApiService {
     );
     return _body(response);
   }
+
+  /// Encodes a form key for `application/x-www-form-urlencoded`.
+  /// Percent-encodes everything EXCEPT `[` and `]` so that PHP's built-in
+  /// parser can recognise array notation like `product_id[0]` or `qty[123]`.
+  static String _encodeKey(String key) =>
+      Uri.encodeQueryComponent(key).replaceAll('%5B', '[').replaceAll('%5D', ']');
 
   /// Extract the JSON body from a [Response] as [Map<String,dynamic>].
   /// Handles plain text, pre-decoded maps, and strips any PHP noise before JSON.

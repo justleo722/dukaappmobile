@@ -264,12 +264,10 @@ class _ManufacturingPageState extends ConsumerState<ManufacturingPage> {
           _infoChip('Selling', _fmt(sellingPrice.toDouble())),
           const Spacer(),
           GestureDetector(
-            onTap: () => context.push('/manufacturing/edit-product', extra: {
-              'name': name, 'recipe': recipe, 'quantity': qty.toInt(),
-              'unitCost': unitCost.toDouble(), 'sellingPrice': sellingPrice.toDouble(),
-              'wholesalePrice': sellingPrice.toDouble() * 0.85, 'alertLevel': 10,
-              ...p,
-            }),
+            onTap: () async {
+              final result = await context.push('/manufacturing/edit-product', extra: Map<String, dynamic>.from(p));
+              if (result == true && mounted) _loadData();
+            },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
