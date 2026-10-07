@@ -33,27 +33,30 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   void _onShopSelected(Map<String, dynamic> shop) async {
     final shopId = shop['id']?.toString() ?? '';
     if (shopId.isEmpty) return;
+    // Closing the drawer disposes this widget, so `ref`/`context` can't be used
+    // after the await — grab the container and router first.
+    final container = ProviderScope.containerOf(context, listen: false);
+    final router = GoRouter.of(context);
     Navigator.pop(context);
     try {
-      await ref.read(authProvider.notifier).switchShop(shopId);
+      await container.read(authProvider.notifier).switchShop(shopId);
 
       // Reset filter to today for the new shop
-      ref.read(filterProvider.notifier).reset();
+      container.read(filterProvider.notifier).reset();
 
       // Invalidate all data providers so they reload with new shop's data
-      ref.invalidate(dashboardProvider);
-      ref.read(shopConfigProvider.notifier).invalidate().ignore();
-      ref.invalidate(stockProvider);
-      ref.invalidate(salesProvider);
-      ref.invalidate(ordersProvider);
-      ref.invalidate(invoicesProvider);
-      ref.invalidate(customerProvider);
-      ref.invalidate(shopNameProvider);
+      container.invalidate(dashboardProvider);
+      container.read(shopConfigProvider.notifier).invalidate().ignore();
+      container.invalidate(stockProvider);
+      container.invalidate(salesProvider);
+      container.invalidate(ordersProvider);
+      container.invalidate(invoicesProvider);
+      container.invalidate(customerProvider);
+      container.invalidate(shopNameProvider);
 
       // Navigate to dashboard so user sees fresh data
-      if (!mounted) return;
-      final newShopName = ref.read(authProvider).activeShop?.shopName ?? shop['name']?.toString() ?? '';
-      context.go('/dashboard');
+      final newShopName = container.read(authProvider).activeShop?.shopName ?? shop['name']?.toString() ?? '';
+      router.go('/dashboard');
       showAppToast('Umebadilisha duka: $newShopName');
     } catch (e) {
       final msg = e.toString()
