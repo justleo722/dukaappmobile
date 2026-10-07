@@ -121,7 +121,7 @@ class _SalesByCustomerReportPageState extends ConsumerState<SalesByCustomerRepor
           children: [
             pw.Text('Sales by Customer Report', style: pw.TextStyle(font: pw.Font.helveticaBold(), fontSize: 16)),
             pw.SizedBox(height: 2),
-            pw.Text('\$_shopName  •  \$now',
+            pw.Text('$_shopName  •  $now',
                 style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 9, color: PdfColors.grey600)),
             pw.SizedBox(height: 4),
             pw.Divider(),

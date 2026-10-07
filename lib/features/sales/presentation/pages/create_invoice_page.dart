@@ -432,7 +432,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
         final price = item['sellingPrice'] ?? item['price'] ?? 0.0;
         final discount = item['discount'] ?? 0.0;
         final subtotal = (price * qty) - discount;
-        return '\$productId|\$stockId|\$qty|\$price|\$discount|\$subtotal|0|\$subtotal';
+        return '$productId|$stockId|$qty|$price|$discount|$subtotal|0|$subtotal';
       }).toList();
 
       final total = _items.fold<double>(0, (s, i) {
@@ -464,7 +464,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
       if (ok) context.pop();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: \$e'), backgroundColor: AppColors.danger),
+        SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
