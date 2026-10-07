@@ -107,9 +107,12 @@ class StockRemoteDatasource {
     final params = <String, dynamic>{};
     if (from != null) params['from'] = from;
     if (to != null) params['to'] = to;
-    final res = await _client.get(ApiEndpoints.getDataStockValueSummary,
-        queryParameters: params.isEmpty ? null : params);
-    final raw = _list(res.data);
+    final res = await _client.get(
+      ApiEndpoints.getDataStockValueSummary,
+      queryParameters: params.isEmpty ? null : params,
+      options: Options(responseType: ResponseType.plain),
+    );
+    final raw = _listFromPlain(res.data);
     if (raw.isNotEmpty) return StockValueSummary.fromJson(raw.first);
     return StockValueSummary.empty;
   }
@@ -322,6 +325,25 @@ class StockRemoteDatasource {
       final v = body['data'] ?? body['result'] ?? body['items'];
       if (v is List) return v.whereType<Map<String, dynamic>>().toList();
     }
+    return [];
+  }
+
+  /// Parse a plain-text response that contains a JSON array `[...]`, tolerating
+  /// PHP warnings/notices that may appear before or after the JSON.
+  List<Map<String, dynamic>> _listFromPlain(dynamic data) {
+    if (data is List) return data.whereType<Map<String, dynamic>>().toList();
+    final raw = data?.toString() ?? '';
+    if (raw.isEmpty) return [];
+    try {
+      final start = raw.indexOf('[');
+      final end = raw.lastIndexOf(']');
+      if (start != -1 && end != -1 && end > start) {
+        final decoded = jsonDecode(raw.substring(start, end + 1));
+        if (decoded is List) {
+          return decoded.whereType<Map<String, dynamic>>().toList();
+        }
+      }
+    } catch (_) {}
     return [];
   }
 
