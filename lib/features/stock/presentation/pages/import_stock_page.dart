@@ -27,6 +27,7 @@ class _ImportStockPageState extends State<ImportStockPage> {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
+        withData: true,
       );
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;

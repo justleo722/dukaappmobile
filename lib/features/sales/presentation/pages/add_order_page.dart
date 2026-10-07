@@ -39,7 +39,34 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCustomers());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCustomers();
+      _ensureProductsLoaded();
+    });
+  }
+
+  /// Ensure we have unfiltered stock (available quantities) for the product
+  /// search. The stockProvider may have been refreshed with a date range filter
+  /// by the stock page, which makes available=0 for most products. For order
+  /// creation we always need the real current stock.
+  Future<void> _ensureProductsLoaded() async {
+    final current = ref.read(stockProvider);
+    // If data is already available and has products, use it as-is.
+    if (current is AsyncData && (current.value?.products.isNotEmpty ?? false)) return;
+    // Otherwise trigger a fresh unfiltered load.
+    try {
+      final repo = ref.read(stockRepositoryProvider);
+      final fresh = await repo.refresh();
+      if (mounted) setState(() => _cachedAllProducts = fresh.products.map((p) => {
+        'product_id': p.productId,
+        'stock_id': p.stockId,
+        'name': p.name,
+        'sellingPrice': p.sellingPrice,
+        'wholesalePrice': p.wholesalePrice,
+        'stock': p.type == 'service' ? 9999 : p.available.toInt(),
+        'type': p.type ?? 'product',
+      }).toList());
+    } catch (_) {}
   }
 
   @override
@@ -474,7 +501,7 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
                     NumberFormat('#,###').format(p['sellingPrice']),
                     style: AppTypography.bodyMedium.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
                   ),
-                  onTap: stock > 0 || p['type'] == 'service' ? () => _addProduct(p) : null,
+                  onTap: () => _addProduct(p),
                 );
               }).toList(),
             ),
