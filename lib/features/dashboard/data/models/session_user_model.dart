@@ -46,7 +46,8 @@ class SessionUserModel {
   final Map<String, bool> permissions;
 
   bool get isOwner => role == 'owner';
-  bool get isActive => subscriptionStatus == 1;
+  // Active if server says so, OR if remaining_days > 0 (handles timezone off-by-one)
+  bool get isActive => subscriptionStatus == 1 || remainingDays > 0;
 
   bool can(String permission) => isOwner || (permissions[permission] ?? false);
 
