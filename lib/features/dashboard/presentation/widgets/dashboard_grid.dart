@@ -8,9 +8,11 @@ import 'package:dukaapp/features/dashboard/presentation/constants/dashboard_cons
 import 'package:dukaapp/features/dashboard/presentation/widgets/dashboard_module_card.dart';
 
 class DashboardGrid extends ConsumerWidget {
-  const DashboardGrid({super.key, required this.sessionUser});
+  const DashboardGrid({super.key, required this.sessionUser, this.subscriptionExpired = false});
 
   final SessionUserModel sessionUser;
+  /// When true every module except Renew is shown faded and disabled.
+  final bool subscriptionExpired;
 
   void _handleModuleTap(BuildContext context, String key) {
     switch (key) {
@@ -85,14 +87,18 @@ class DashboardGrid extends ConsumerWidget {
       physics: const NeverScrollableScrollPhysics(),
       itemBuilder: (context, index) {
         final module = modules[index];
-        return DashboardModuleCard(
+        final locked = subscriptionExpired && module['key'] != 'renew';
+        final card = DashboardModuleCard(
           title: module['title'],
           description: module['description'],
           icon: module['icon'],
           color: module['color'],
           bgColor: module['bgColor'],
-          onTap: () => _handleModuleTap(context, module['key']),
+          onTap: locked
+              ? () => context.push('/renew')
+              : () => _handleModuleTap(context, module['key']),
         );
+        return locked ? Opacity(opacity: 0.35, child: card) : card;
       },
     );
   }
