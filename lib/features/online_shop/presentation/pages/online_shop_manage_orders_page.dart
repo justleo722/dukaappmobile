@@ -67,13 +67,29 @@ class _OnlineShopManageOrdersPageState
           } catch (_) {}
           return {
             'orderId': (m['order_code'] ?? m['invoice_no'] ?? 'ORD-${m['sale_id'] ?? ''}').toString(),
-            'customer': m['customer'] ?? 'Unknown',
+            'sale_id': m['sale_id']?.toString() ?? '',
+            'customer': (m['customer'] ?? 'Unknown').toString(),
             'items': int.tryParse(m['items_count']?.toString() ?? '') ?? 0,
             'total': 'Tsh ${fmt.format(total.round())}',
-            'payment': m['payment_method'] ?? '-',
+            'payment': (m['payment_method'] ?? '-').toString(),
             'date': displayDate,
-            'status': _normalizeStatus(m['status']?.toString() ?? 'Pending'),
+            'status': _normalizeStatus((m['status_label'] ?? m['status'] ?? 'Processing').toString()),
             '_rawDate': dateStr,
+            // Fields read by OnlineShopOrderDetailsPage (adminOrders() keys).
+            'address': (m['address'] ?? '-').toString(),
+            'subtotal': 'Tsh ${fmt.format((double.tryParse(m['subtotal']?.toString() ?? '') ?? total).round())}',
+            'delivery': 'Tsh ${fmt.format((double.tryParse(m['delivery_cost']?.toString() ?? '') ?? 0).round())}',
+            'discount': 'Tsh ${fmt.format((double.tryParse(m['discount_amount']?.toString() ?? '') ?? 0).round())}',
+            'finalTotal': 'Tsh ${fmt.format(total.round())}',
+            'products': ((m['items'] is List) ? m['items'] as List : const [])
+                .whereType<Map>()
+                .map((it) => {
+                      'name': (it['name'] ?? it['product_name'] ?? '').toString(),
+                      'qty': (double.tryParse(it['qty']?.toString() ?? '') ?? 0).round(),
+                      'price': (double.tryParse(it['price']?.toString() ?? '') ?? 0).round(),
+                      'total': (double.tryParse(it['total']?.toString() ?? '') ?? 0).round(),
+                    })
+                .toList(),
           };
         }).toList();
       });
@@ -93,7 +109,8 @@ class _OnlineShopManageOrdersPageState
       case 'cancelled':
       case 'canceled':
       case 'decline order': return 'Cancelled';
-      default: return 'Received';
+      // Matches Onlineshop_model::normalizeOrderStatus (PENDING → Processing).
+      default: return 'Processing';
     }
   }
 

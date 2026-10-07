@@ -60,7 +60,7 @@ class _AdjustRawMaterialsPageState extends ConsumerState<AdjustRawMaterialsPage>
         return {
           'raw_material_id': (m['raw_material_id'] ?? m['id'] ?? '').toString(),
           'name': (m['material_name'] ?? m['name'] ?? '').toString(),
-          'stock': (m['current_stock'] ?? m['quantity'] ?? m['stock'] ?? 0) as num,
+          'stock': num.tryParse((m['current_stock'] ?? m['quantity'] ?? m['stock'] ?? 0).toString()) ?? 0,
         };
       }).toList();
       setState(() => _allMaterials = materials);

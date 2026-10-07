@@ -63,17 +63,18 @@ class _ProductByRecipeReportPageState extends ConsumerState<ProductByRecipeRepor
         {
           for (int i = 0; i < rawList.length; i++) {
             final m = rawList[i] as Map;
-            final qty = (m['total_qty_produced'] ?? m['total_quantity'] ?? 0) as num;
-            final costUnit = (m['estimated_cost_per_unit'] ?? m['cost_per_unit'] ?? 0.0) as num;
+            num n(dynamic v) => num.tryParse(v?.toString() ?? '') ?? 0;
+            final qty = n(m['total_qty_produced'] ?? m['total_quantity']);
+            final costUnit = n(m['estimated_cost_per_unit'] ?? m['cost_per_unit']);
             items.add(_RecipeProductItem(
               sn: i + 1,
               recipeName: (m['recipe_name'] ?? m['recipe'] ?? '').toString(),
               productName: (m['product_name'] ?? m['name'] ?? '').toString(),
-              totalProductions: (m['total_productions'] ?? m['total_batches'] ?? 0) as int? ?? 0,
+              totalProductions: n(m['total_productions'] ?? m['total_batches']).toInt(),
               totalQtyProduced: qty.toInt(),
               estimatedCostPerUnit: costUnit.toDouble(),
-              totalProductionCost: ((m['total_production_cost'] ?? costUnit * qty) as num).toDouble(),
-              avgDailyProduction: ((m['avg_daily_production'] ?? 0.0) as num).toDouble(),
+              totalProductionCost: (m['total_production_cost'] != null ? n(m['total_production_cost']) : costUnit * qty).toDouble(),
+              avgDailyProduction: n(m['average_daily_production'] ?? m['avg_daily_production']).toDouble(),
             ));
           }
         }

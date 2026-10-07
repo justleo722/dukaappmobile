@@ -60,7 +60,7 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
         return {
           'product_id': (m['product_id'] ?? m['id'] ?? '').toString(),
           'name': m['product_name'] ?? m['name'] ?? '',
-          'stock': (m['quantity'] ?? m['stock'] ?? 0) as num,
+          'stock': num.tryParse((m['quantity'] ?? m['stock'] ?? 0).toString()) ?? 0,
         };
       }).toList();
       setState(() => _allProducts = products);
@@ -287,7 +287,7 @@ class _AdjustManufacturedProductsPageState extends ConsumerState<AdjustManufactu
         final index = entry.key;
         final product = entry.value;
         final name = product['name'] as String;
-        final stock = product['stock'] as int;
+        final stock = (product['stock'] as num).toInt();
         final isAlreadyAdded = _items.any((item) => item.name == name);
         final isSelected = _selectedProducts.contains(index);
 

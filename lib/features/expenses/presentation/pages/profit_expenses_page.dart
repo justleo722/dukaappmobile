@@ -94,13 +94,26 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
         .catchError((_) => <ExpenseAccount>[]);
     final cashbookFuture = repo.fetchCashbookAccounts()
         .catchError((_) => <ExpenseAccount>[]);
+    final profitFuture = repo.fetchProfitSummary(from: from, to: to)
+        .catchError((_) => null);
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final todayProfitFuture = repo.fetchProfitSummary(from: today, to: today)
+        .catchError((_) => null);
 
     final results = await Future.wait([
       summaryFuture, expensesFuture, accountsFuture, cashbookFuture,
+      profitFuture, todayProfitFuture,
     ]);
     if (!mounted) return;
 
-    final summary = results[0] as ExpenseSummary;
+    final profit = results[4] as Map<String, dynamic>?;
+    final todayProfit = results[5] as Map<String, dynamic>?;
+    final baseSummary = results[0] as ExpenseSummary;
+    final summary = profit != null ? baseSummary.withProfitSummary(profit) : baseSummary;
+    _hasProfitSummary = profit != null;
+    _todayProfitValue = todayProfit != null
+        ? (double.tryParse(todayProfit['net_profit']?.toString() ?? '') ?? 0)
+        : null;
     final freshExpenses = results[1] as List<ExpenseItem>;
     final fetchedCategories = results[2] as List<ExpenseAccount>;
     final fetchedCashbook = results[3] as List<ExpenseAccount>;
@@ -133,15 +146,20 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
         .toList();
   }
 
-  double get _totalExpenses => _expenses.fold(0, (s, e) => s + e.amount);
+  bool _hasProfitSummary = false;
+  double? _todayProfitValue;
+
+  double get _totalExpenses => _hasProfitSummary
+      ? _summary.totalExpenses
+      : _expenses.fold(0, (s, e) => s + e.amount);
   double get _todayExpenses => _summary.todayExpenses;
   double get _todaySales => _summary.todaySales;
-  double get _todayNetProfit => _todaySales - _todayExpenses;
+  double get _todayNetProfit => _todayProfitValue ?? (_todaySales - _todayExpenses);
 
   double get _totalSales => _summary.totalSales;
   double get _grossProfit => _summary.grossProfit;
   double get _badStock => _summary.badStock;
-  double get _netProfit => _summary.netProfit > 0 ? _summary.netProfit : (_totalSales - _totalExpenses);
+  double get _netProfit => _summary.netProfit;
   double get _cashInHand => _summary.cashInHand;
 
   String _fmt(double v) {

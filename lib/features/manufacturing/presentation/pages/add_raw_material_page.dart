@@ -33,7 +33,10 @@ class _AddRawMaterialPageState extends ConsumerState<AddRawMaterialPage> {
   ];
   final List<String> _accounts = ['Cash', 'Bank', 'Mobile Money'];
 
+  // Must produce the same codes as the web MF_UNITS list (manufacture.php).
   String _unitShort(String full) {
+    const overrides = {'Items': 'item', 'Cups': 'cup'};
+    if (overrides.containsKey(full)) return overrides[full]!;
     final m = RegExp(r'\(([^)]+)\)').firstMatch(full);
     return m != null ? m.group(1)! : full.toLowerCase().split(' ').first;
   }

@@ -117,18 +117,17 @@ class _EditRecipePageState extends ConsumerState<EditRecipePage> {
     setState(() => _isSaving = true);
     try {
       final api = ref.read(apiServiceProvider);
-      final ingredientsData = validIngredients.map((i) => {
-        'raw_material_id': i.materialId,
-        'quantity_required': i.quantity,
-        'unit': i.unit,
-      }).toList();
-
-      final body = {
+      final body = <String, dynamic>{
         'recipe_id': (widget.recipeData['recipe_id'] ?? '').toString(),
         'recipe_name': name,
         'yield_quantity': _yieldController.text.trim().isEmpty ? '1' : _yieldController.text.trim(),
-        'ingredients': ingredientsData,
       };
+      for (int i = 0; i < validIngredients.length; i++) {
+        final ing = validIngredients[i];
+        body['raw_material_id[$i]'] = ing.materialId.toString();
+        body['quantity_required[$i]'] = ing.quantity.toString();
+        body['unit[$i]'] = ing.unit.toString();
+      }
 
       final result = await api.postMfRecipeSave(body);
       if (!mounted) return;

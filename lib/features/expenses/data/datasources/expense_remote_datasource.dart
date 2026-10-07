@@ -31,6 +31,20 @@ class ExpenseRemoteDatasource {
     return ExpenseSummary.empty;
   }
 
+  /// profit_summary (same source as the web Profit & Expenses page). Returns
+  /// null when the user lacks can_view_profit or the response is not a summary.
+  Future<Map<String, dynamic>?> fetchProfitSummary({String? from, String? to}) async {
+    final res = await _api.getProfitSummary(from: from, to: to);
+    dynamic raw = res.data;
+    if (raw is List && raw.isNotEmpty) raw = raw.first;
+    if (raw is Map && raw['data'] is Map) raw = raw['data'];
+    if (raw is! Map) return null;
+    final map = Map<String, dynamic>.from(raw);
+    if (map['status'] == 'error' || map['status'] == 'warning') return null;
+    if (!map.containsKey('gross_profit') && !map.containsKey('net_profit')) return null;
+    return map;
+  }
+
   /// Fetch expense account categories.
   Future<List<ExpenseAccount>> fetchExpenseAccounts() async {
     final res = await _api.getExpenseAccounts();

@@ -48,6 +48,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       ref.invalidate(ordersProvider);
       ref.invalidate(invoicesProvider);
       ref.invalidate(customerProvider);
+      ref.invalidate(shopNameProvider);
 
       // Navigate to dashboard so user sees fresh data
       if (!mounted) return;

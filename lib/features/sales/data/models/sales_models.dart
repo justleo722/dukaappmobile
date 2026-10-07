@@ -415,8 +415,8 @@ class CombinedTotalSaleItem {
         attendantId: (j['attendant_id'] ?? j['role_id'] ?? '').toString(),
         staff: (j['staff'] ?? j['username'] ?? '').toString(),
         shop: (j['shop'] ?? j['shop_name'] ?? '').toString(),
-        sales: _d(j['sales'] ?? j['count']),
-        total: _d(j['total']),
+        sales: _d(j['sale_count'] ?? j['sales'] ?? j['count']),
+        total: _d(j['total_amount'] ?? j['total']),
       );
 }
 
@@ -447,9 +447,9 @@ class CombinedStaffSale {
         shop: (j['shop'] ?? j['shop_name'] ?? '').toString(),
         attendantId: (j['attendant_id'] ?? j['role_id'] ?? '').toString(),
         staff: (j['staff'] ?? j['username'] ?? '').toString(),
-        sales: _d(j['sales'] ?? j['count']),
-        total: _d(j['total']),
-        paid: _d(j['paid']),
+        sales: _d(j['sale_count'] ?? j['sales'] ?? j['count']),
+        total: _d(j['total_amount'] ?? j['total']),
+        paid: _d(j['paid_amount'] ?? j['paid']),
         balance: _d(j['balance']),
       );
 }

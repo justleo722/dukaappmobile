@@ -12,6 +12,8 @@ class EditRawMaterialPage extends ConsumerStatefulWidget {
   final String unit;
   final double unitCost;
   final String status;
+  final double? alertLevel;
+  final String? expiryDate;
 
   const EditRawMaterialPage({
     super.key,
@@ -20,6 +22,8 @@ class EditRawMaterialPage extends ConsumerStatefulWidget {
     required this.unit,
     required this.unitCost,
     required this.status,
+    this.alertLevel,
+    this.expiryDate,
   });
 
   @override
@@ -35,6 +39,8 @@ class _EditRawMaterialPageState extends ConsumerState<EditRawMaterialPage> {
   late String _selectedUnit;
   String _selectedAccount = 'Cash';
   DateTime _expiryDate = DateTime.now().add(const Duration(days: 365));
+  // Only send a changed expiry; otherwise keep what is stored (possibly none).
+  bool _expiryTouched = false;
   bool _isSaving = false;
 
   final List<String> _units = [
@@ -46,7 +52,10 @@ class _EditRawMaterialPageState extends ConsumerState<EditRawMaterialPage> {
   ];
   final List<String> _accounts = ['Cash', 'Bank', 'Mobile Money'];
 
+  // Must produce the same codes as the web MF_UNITS list (manufacture.php).
   String _unitShort(String full) {
+    const overrides = {'Items': 'item', 'Cups': 'cup'};
+    if (overrides.containsKey(full)) return overrides[full]!;
     final m = RegExp(r'\(([^)]+)\)').firstMatch(full);
     return m != null ? m.group(1)! : full.toLowerCase().split(' ').first;
   }
@@ -57,32 +66,30 @@ class _EditRawMaterialPageState extends ConsumerState<EditRawMaterialPage> {
     _nameController = TextEditingController(text: widget.name);
     _unitCostController = TextEditingController(text: widget.unitCost.toStringAsFixed(0));
     _initialStockController = TextEditingController();
-    _alertLevelController = TextEditingController(text: '10');
+    final alert = widget.alertLevel ?? 0;
+    _alertLevelController = TextEditingController(
+      text: alert == alert.roundToDouble() ? alert.toInt().toString() : alert.toString(),
+    );
+    final parsedExpiry = DateTime.tryParse(widget.expiryDate ?? '');
+    if (parsedExpiry != null) _expiryDate = parsedExpiry;
     _selectedUnit = _mapUnit(widget.unit);
   }
 
+  // Match by unit code; units created on web that aren't in the list are added
+  // so the dropdown always contains its current value.
   String _mapUnit(String unit) {
-    switch (unit) {
-      case 'kg': return 'Kilograms (kg)';
-      case 'g': return 'Grams (g)';
-      case 'mg': return 'Milligrams (mg)';
-      case 'lb': return 'Pounds (lb)';
-      case 'oz': return 'Ounces (oz)';
-      case 'ltr': return 'Liters (ltr)';
-      case 'ml': return 'Milliliters (ml)';
-      case 'gal': return 'Gallons (gal)';
-      case 'pt': return 'Pints (pt)';
-      case 'qt': return 'Quarts (qt)';
-      case 'item': return 'Items';
-      case 'roll': return 'Roll';
-      case 'pack': return 'Pack';
-      default:
-        final match = _units.firstWhere(
-          (u) => u.toLowerCase().contains(unit.toLowerCase()),
-          orElse: () => unit,
-        );
-        return match;
+    final u = unit.trim();
+    if (u.isEmpty) return _units.first;
+    for (final label in _units) {
+      if (_unitShort(label).toLowerCase() == u.toLowerCase()) return label;
     }
+    _units.add(u);
+    return u;
+  }
+
+  String _expiryForSave() {
+    if (!_expiryTouched) return widget.expiryDate ?? '';
+    return '${_expiryDate.year}-${_expiryDate.month.toString().padLeft(2, '0')}-${_expiryDate.day.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -98,7 +105,7 @@ class _EditRawMaterialPageState extends ConsumerState<EditRawMaterialPage> {
     final picked = await showDatePicker(
       context: context,
       initialDate: _expiryDate,
-      firstDate: DateTime.now(),
+      firstDate: DateTime(2000),
       lastDate: DateTime(2100),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(colorScheme: ColorScheme.light(
@@ -108,7 +115,12 @@ class _EditRawMaterialPageState extends ConsumerState<EditRawMaterialPage> {
         child: child!,
       ),
     );
-    if (picked != null) setState(() => _expiryDate = picked);
+    if (picked != null) {
+      setState(() {
+        _expiryDate = picked;
+        _expiryTouched = true;
+      });
+    }
   }
 
   Future<void> _save() async {
@@ -123,7 +135,7 @@ class _EditRawMaterialPageState extends ConsumerState<EditRawMaterialPage> {
         'unit_cost': _unitCostController.text.trim(),
         'initial_stock': _initialStockController.text.trim(),
         'alert_level': _alertLevelController.text.trim(),
-        'expiry_date': '${_expiryDate.year}-${_expiryDate.month.toString().padLeft(2, '0')}-${_expiryDate.day.toString().padLeft(2, '0')}',
+        'expiry_date': _expiryForSave(),
       });
       if (!mounted) return;
       final status = result['status']?.toString() ?? '';

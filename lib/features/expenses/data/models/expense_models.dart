@@ -79,6 +79,21 @@ class ExpenseSummary {
     );
   }
 
+  /// Overlays the web's profit_summary figures (Stock_model::stock_sales_and_profit_summary),
+  /// where net profit = gross profit − loss − expense.
+  ExpenseSummary withProfitSummary(Map<String, dynamic> p) {
+    return ExpenseSummary(
+      totalExpenses: _toDouble(p['expense']),
+      todayExpenses: todayExpenses,
+      todaySales: todaySales,
+      totalSales: _toDouble(p['sales']),
+      grossProfit: _toDouble(p['gross_profit']),
+      netProfit: _toDouble(p['net_profit']),
+      badStock: _toDouble(p['loss']),
+      cashInHand: _toDouble(p['cash_in_hand']),
+    );
+  }
+
   static double _toDouble(dynamic v) {
     if (v == null) return 0.0;
     if (v is num) return v.toDouble();

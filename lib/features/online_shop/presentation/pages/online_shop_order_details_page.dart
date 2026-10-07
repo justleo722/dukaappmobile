@@ -74,7 +74,7 @@ class _OnlineShopOrderDetailsPageState
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     final order = widget.order;
-    final products = order['products'] as List;
+    final products = (order['products'] as List?) ?? const [];
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
@@ -510,6 +510,7 @@ class _OnlineShopOrderDetailsPageState
                       try {
                         final api = ref.read(apiServiceProvider);
                         final result = await api.postOnlineshopOrderUpdateStatus({
+                          'sale_id': widget.order['sale_id']?.toString() ?? '',
                           'order_code': widget.order['orderId']?.toString() ?? '',
                           'status': _currentStatus,
                         });

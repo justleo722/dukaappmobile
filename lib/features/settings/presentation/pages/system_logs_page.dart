@@ -24,6 +24,19 @@ class _SystemLogsPageState extends ConsumerState<SystemLogsPage> {
     return ['All', ...cats];
   }
 
+  // log_type → [table, key] for Settings::deleterecord, as in the web shopsettings.php.
+  static const Map<String, List<String>> _restoreTargets = {
+    'sales': ['sales', 'sale_id'],
+    'products': ['products', 'product_id'],
+    'purchases': ['purchases', 'purchase_id'],
+    'stockins': ['purchases', 'purchase_id'],
+    'cashflow': ['cashflow', 'flow_id'],
+    'expenses': ['cashflow', 'flow_id'],
+    'suppliers': ['suppliers', 'supplier_id'],
+    'customers': ['customers', 'customer_id'],
+    'users': ['roles', 'role_id'],
+  };
+
   List<Map<String, dynamic>> get _filteredLogs =>
       _selectedFilter == 'All' ? _logs : _logs.where((l) => l['category'] == _selectedFilter).toList();
 
@@ -48,24 +61,64 @@ class _SystemLogsPageState extends ConsumerState<SystemLogsPage> {
         if (d is List) list = d;
       }
       final mapped = list.whereType<Map<String, dynamic>>().map((row) {
-        final type = row['type']?.toString() ?? row['category']?.toString() ?? 'Other';
+        // Keys from Logs_model::logs().
+        final type = (row['log_type'] ?? row['type'] ?? row['category'] ?? 'Other').toString();
         final cat = _capitalize(type);
+        final deletedAt = (row['deleted_at_label'] ?? row['deleted_at'] ?? '').toString();
+        final deletedBy = (row['deleted_by'] ?? '').toString();
         return {
           'category': cat,
-          'title': row['action']?.toString() ?? row['title']?.toString() ?? 'Log entry',
-          'subject': row['name']?.toString() ?? row['subject']?.toString() ?? '',
+          'title': row['title']?.toString() ?? row['action']?.toString() ?? 'Log entry',
+          'subject': row['subject']?.toString() ?? row['name']?.toString() ?? '',
           'details': row['details']?.toString() ?? row['description']?.toString() ?? '',
-          'date': row['date_created']?.toString() ?? row['date']?.toString() ?? '',
+          'date': (row['original_date_label'] ?? row['original_date'] ?? row['date'] ?? '').toString(),
           'amount': row['amount']?.toString() ?? '-',
-          'created': row['created_at']?.toString() ?? row['date_created']?.toString() ?? '-',
-          'deleted': row['deleted_at']?.toString() ?? row['date']?.toString() ?? '-',
+          'created': (row['created_by'] ?? '-').toString(),
+          'deleted': [deletedAt, if (deletedBy.isNotEmpty) 'by $deletedBy'].where((v) => v.isNotEmpty).join(' ').ifEmpty('-'),
           'log_id': row['log_id']?.toString() ?? row['id']?.toString() ?? '',
-          'type': type,
+          'reference_id': row['reference_id']?.toString() ?? '',
+          'type': type.toLowerCase(),
         };
       }).toList();
       if (mounted) setState(() { _logs = mapped; _isLoading = false; });
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _restore(Map<String, dynamic> log) async {
+    final target = _restoreTargets[log['type']];
+    final refId = (log['reference_id'] ?? '').toString();
+    if (target == null || refId.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restore record'),
+        content: Text('Restore "${log['subject'].toString().isNotEmpty ? log['subject'] : log['title']}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Restore')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      final res = await ref.read(apiServiceProvider).postSettingsRecordDelete({
+        'method': 'active',
+        'table': target[0],
+        'key': target[1],
+        'row_id': refId,
+      });
+      if (!mounted) return;
+      final ok = res['status']?.toString() == 'success';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok ? 'Record restored' : (res['message']?.toString() ?? 'Restore failed')),
+        backgroundColor: ok ? AppColors.success : AppColors.danger,
+      ));
+      if (ok) _loadLogs();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger));
     }
   }
 
@@ -182,8 +235,24 @@ class _SystemLogsPageState extends ConsumerState<SystemLogsPage> {
           Row(children: [
             Text('Created: ${log['created']}', style: AppTypography.caption.copyWith(fontSize: 10, color: AppColors.textHint)),
             const SizedBox(width: 12),
-            Text('Deleted: ${log['deleted']}', style: AppTypography.caption.copyWith(fontSize: 10, color: AppColors.textHint)),
+            Expanded(child: Text('Deleted: ${log['deleted']}', style: AppTypography.caption.copyWith(fontSize: 10, color: AppColors.textHint))),
           ]),
+        ],
+        if (_restoreTargets.containsKey(log['type']) && (log['reference_id'] as String).isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              onPressed: () => _restore(log),
+              icon: const Icon(Icons.restore_rounded, size: 16),
+              label: const Text('Restore'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.success,
+                side: const BorderSide(color: AppColors.success),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ),
         ],
       ])),
     );
@@ -193,4 +262,8 @@ class _SystemLogsPageState extends ConsumerState<SystemLogsPage> {
     Icon(icon, size: 12, color: AppColors.textHint), const SizedBox(width: 4),
     Text(text, style: AppTypography.caption.copyWith(fontSize: 10, color: AppColors.textSecondary)),
   ]);
+}
+
+extension on String {
+  String ifEmpty(String fallback) => isEmpty ? fallback : this;
 }

@@ -27,6 +27,7 @@ class _StoragePageState extends ConsumerState<StoragePage> {
 
   // Attendants from storage_summary API
   List<Map<String, dynamic>> _attendants = [];
+  String? _attendantsMessage;
 
   @override
   void initState() {
@@ -37,15 +38,11 @@ class _StoragePageState extends ConsumerState<StoragePage> {
   Future<void> _loadData() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
-    try {
-      final api = ref.read(apiServiceProvider);
-      final results = await Future.wait([
-        api.getStorageUsage(),
-        api.getAttendantSettings(),
-      ]);
+    final api = ref.read(apiServiceProvider);
 
-      // --- storage_usage ---
-      final usageBody = results[0].data;
+    // Loaded independently so a storage failure doesn't hide the attendants.
+    try {
+      final usageBody = (await api.getStorageUsage()).data;
       Map<String, dynamic>? usage;
       if (usageBody is Map<String, dynamic>) {
         usage = usageBody['data'] is Map ? usageBody['data'] as Map<String, dynamic> : usageBody;
@@ -59,18 +56,30 @@ class _StoragePageState extends ConsumerState<StoragePage> {
         _customers = _toInt(usage['customers']);
         _suppliers = _toInt(usage['suppliers']);
       }
+    } catch (e) {
+      debugPrint('[Storage] storage usage failed: $e');
+    }
 
-      // --- attendant_settings ---
-      final attBody = results[1].data;
+    _attendantsMessage = null;
+    try {
+      final attBody = (await api.getAttendantSettings()).data;
       List rawAtt = [];
       if (attBody is List) {
         rawAtt = attBody;
       } else if (attBody is Map) {
         final d = attBody['rows'] ?? attBody['data'] ?? attBody['result'] ?? attBody['attendants'];
         if (d is List) rawAtt = d;
+        // Settings::attendantSettings returns {status:'warning', message} for non-managers.
+        final status = attBody['status']?.toString();
+        if (d == null && (status == 'warning' || status == 'error')) {
+          _attendantsMessage = attBody['message']?.toString();
+        }
       }
-      _attendants = rawAtt.whereType<Map<String, dynamic>>().toList();
-    } catch (_) {}
+      _attendants = rawAtt.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+    } catch (e) {
+      debugPrint('[Storage] attendant settings failed: $e');
+      _attendantsMessage = 'Failed to load attendants';
+    }
     if (mounted) setState(() => _isLoading = false);
   }
 
@@ -303,9 +312,9 @@ class _StoragePageState extends ConsumerState<StoragePage> {
                 _buildSectionTitle('Attendant Settings', Icons.people_alt_rounded, const Color(0xFF9333EA)),
                 const SizedBox(height: 12),
                 _attendants.isEmpty
-                    ? _buildCard(child: const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Center(child: Text('No attendants found', style: TextStyle(color: AppColors.textHint))),
+                    ? _buildCard(child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Center(child: Text(_attendantsMessage ?? 'No attendants found', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textHint))),
                       ))
                     : _buildCard(child: Column(children: _attendants.asMap().entries.map((entry) {
                         final i   = entry.key;

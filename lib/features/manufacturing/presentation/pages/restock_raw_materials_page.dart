@@ -45,11 +45,51 @@ class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPag
   DateTime _restockDate = DateTime.now();
   final List<_RestockItem> _items = [];
   List<Map<String, dynamic>> _allMaterials = [];
+  List<String> _accounts = [];
+  Map<String, String> _accountIdMap = {};
 
   @override
   void initState() {
     super.initState();
     _loadMaterials();
+    _loadAccounts();
+  }
+
+  Future<void> _loadAccounts() async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.getCashbookAccounts();
+      final body = res.data;
+      List rawList = [];
+      if (body is List) {
+        rawList = body;
+      } else if (body is Map) {
+        final data = body['data'] ?? body['accounts'] ?? body;
+        if (data is List) rawList = data;
+      }
+      final names = <String>[];
+      final idMap = <String, String>{};
+      for (final e in rawList) {
+        if (e is! Map) continue;
+        final name = (e['account_name'] ?? e['name'] ?? '').toString();
+        final id = (e['account_id'] ?? e['id'] ?? '').toString();
+        if (name.isNotEmpty && id.isNotEmpty && !idMap.containsKey(name)) {
+          names.add(name);
+          idMap[name] = id;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _accounts = names;
+        _accountIdMap = idMap;
+        if (_selectedAccount == null && names.isNotEmpty) {
+          _selectedAccount = names.firstWhere(
+            (a) => a.toLowerCase() == 'cash',
+            orElse: () => names.first,
+          );
+        }
+      });
+    } catch (_) {}
   }
 
   Future<void> _loadMaterials() async {
@@ -69,9 +109,9 @@ class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPag
         final m = Map<String, dynamic>.from(e as Map);
         return {
           'raw_material_id': (m['raw_material_id'] ?? m['id'] ?? '').toString(),
-          'name': m['material_name'] ?? m['name'] ?? '',
-          'stock': (m['current_stock'] ?? m['quantity'] ?? m['stock'] ?? 0) as num,
-          'unitCost': (m['unit_cost'] ?? m['cost'] ?? 0.0) as num,
+          'name': (m['material_name'] ?? m['name'] ?? '').toString(),
+          'stock': num.tryParse((m['current_stock'] ?? m['quantity'] ?? m['stock'] ?? 0).toString()) ?? 0,
+          'unitCost': num.tryParse((m['unit_cost'] ?? m['cost'] ?? 0).toString()) ?? 0,
         };
       }).toList();
       setState(() => _allMaterials = materials);
@@ -285,7 +325,7 @@ class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPag
                                 itemBuilder: (context, index) {
                                   final material = filtered[index];
                                   final name = material['name'] as String;
-                                  final stock = material['stock'] as int;
+                                  final stock = (material['stock'] as num).toInt();
                                   final isAlreadyAdded = _items.any((item) => item.name == name);
                                   final isSelected = selectedIndices.contains(index);
 
@@ -389,6 +429,7 @@ class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPag
                     const SizedBox(height: 16),
                     PurchaseInformationCard(
                       onSearchTap: _showSearchSheet,
+                      accounts: _accounts,
                       selectedAccount: _selectedAccount,
                       onAccountChanged: (v) => setState(() => _selectedAccount = v),
                       selectedSupplier: _selectedSupplier,
@@ -426,7 +467,8 @@ class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPag
                         final api = ref.read(apiServiceProvider);
                         final body = <String, dynamic>{
                           'record_date': '${_restockDate.year}-${_restockDate.month.toString().padLeft(2,'0')}-${_restockDate.day.toString().padLeft(2,'0')}',
-                          if (_selectedAccount != null) 'account_id': _selectedAccount!,
+                          if (_selectedAccount != null && _accountIdMap[_selectedAccount] != null)
+                            'account_id': _accountIdMap[_selectedAccount]!,
                         };
                         for (int i = 0; i < _items.length; i++) {
                           final item = _items[i];

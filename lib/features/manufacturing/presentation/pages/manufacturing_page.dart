@@ -72,9 +72,9 @@ class _ManufacturingPageState extends ConsumerState<ManufacturingPage> {
   }
 
   double get _totalRawMaterialValue => _products.fold(0.0, (sum, p) {
-    final cost = (p['unit_cost'] ?? p['buying_price'] ?? p['cost_price'] ?? 0);
-    final qty = (p['quantity'] ?? p['stock'] ?? 0);
-    return sum + ((cost as num).toDouble() * (qty as num).toDouble());
+    final cost = double.tryParse((p['unit_cost'] ?? p['buying_price'] ?? p['cost_price'] ?? 0).toString()) ?? 0;
+    final qty = double.tryParse((p['quantity'] ?? p['stock'] ?? 0).toString()) ?? 0;
+    return sum + cost * qty;
   });
 
   @override
@@ -225,11 +225,11 @@ class _ManufacturingPageState extends ConsumerState<ManufacturingPage> {
   Widget _buildProductCard(Map<String, dynamic> p) {
     final name = p['product_name'] ?? p['name'] ?? 'Unknown';
     final recipe = p['recipe_name'] ?? p['recipe'] ?? '—';
-    final qty = (p['quantity'] ?? p['stock'] ?? 0) as num;
-    final unitCost = (p['unit_cost'] ?? p['buying_price'] ?? p['cost_price'] ?? 0) as num;
-    final sellingPrice = (p['selling_price'] ?? p['price'] ?? 0) as num;
+    final qty = num.tryParse((p['quantity'] ?? p['stock'] ?? 0).toString()) ?? 0;
+    final unitCost = num.tryParse((p['unit_cost'] ?? p['buying_price'] ?? p['cost_price'] ?? 0).toString()) ?? 0;
+    final sellingPrice = num.tryParse((p['selling_price'] ?? p['price'] ?? 0).toString()) ?? 0;
     final totalValue = unitCost.toDouble() * qty.toDouble();
-    final rawStatus = (p['status'] ?? 'In Stock').toString();
+    final rawStatus = (p['status_label'] ?? p['status'] ?? (qty <= 0 ? 'Out of Stock' : 'In Stock')).toString();
     final status = rawStatus.isEmpty ? 'In Stock' : rawStatus;
     final statusColor = _statusColor(status);
     final statusBg = _statusBg(status);

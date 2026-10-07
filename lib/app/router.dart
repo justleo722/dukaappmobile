@@ -518,6 +518,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     unit: data['unit'] ?? 'item',
                     unitCost: (data['unitCost'] as num?)?.toDouble() ?? 0,
                     status: data['status'] ?? 'In Stock',
+                    alertLevel: (data['alertLevel'] as num?)?.toDouble(),
+                    expiryDate: data['expiryDate']?.toString(),
                   );
                 },
               ),

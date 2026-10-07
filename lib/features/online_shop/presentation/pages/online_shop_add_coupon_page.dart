@@ -62,7 +62,8 @@ class _OnlineShopAddCouponPageState extends ConsumerState<OnlineShopAddCouponPag
     _maxUsesController.text = extra['maxUses'] == 'Unlimited' ? '' : (extra['maxUses']?.toString() ?? '');
     _status = extra['status']?.toString() ?? 'Active';
 
-    final expiryDateValue = extra['expiryDate'];
+    // expiryDate is the display label ("Jan 05, 2026"); the raw Y-m-d is in expiryDateRaw.
+    final expiryDateValue = extra['expiryDateRaw'] ?? extra['expiryDate'];
     if (expiryDateValue != null) {
       final parsedDate = DateTime.tryParse(expiryDateValue.toString());
       if (parsedDate != null) {
@@ -117,7 +118,7 @@ class _OnlineShopAddCouponPageState extends ConsumerState<OnlineShopAddCouponPag
     try {
       final api = ref.read(apiServiceProvider);
       String discountTypeKey = 'percentage';
-      if (_discountType == 'Fixed Amount') discountTypeKey = 'fixed';
+      if (_discountType == 'Fixed' || _discountType == 'Fixed Amount') discountTypeKey = 'fixed';
       if (_discountType == 'Free Shipping') discountTypeKey = 'free_shipping';
       final body = <String, dynamic>{
         'code': _codeController.text.trim().toUpperCase(),

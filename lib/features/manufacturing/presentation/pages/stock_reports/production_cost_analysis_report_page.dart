@@ -64,13 +64,14 @@ class _ProductionCostAnalysisReportPageState extends ConsumerState<ProductionCos
         {
           for (int i = 0; i < rawList.length; i++) {
             final m = rawList[i] as Map;
-            final qty = (m['quantity'] ?? m['qty_produced'] ?? 0) as num;
-            final costUnit = (m['cost_per_unit'] ?? m['unit_cost'] ?? 0.0) as num;
-            final totalCost = (m['total_cost'] ?? m['total_production_cost'] ?? costUnit * qty) as num;
-            final selling = (m['selling_price'] ?? m['price'] ?? 0.0) as num;
-            final revenue = (m['expected_revenue'] ?? selling * qty) as num;
-            final profit = (m['expected_profit'] ?? revenue - totalCost) as num;
-            final margin = totalCost > 0 ? (profit / revenue * 100) : 0.0;
+            num n(dynamic v) => num.tryParse(v?.toString() ?? '') ?? 0;
+            final qty = n(m['quantity_produced'] ?? m['quantity'] ?? m['qty_produced']);
+            final costUnit = n(m['cost_per_unit'] ?? m['unit_cost']);
+            final totalCost = m['total_cost'] != null ? n(m['total_cost']) : costUnit * qty;
+            final selling = n(m['selling_price'] ?? m['price']);
+            final revenue = m['expected_revenue'] != null ? n(m['expected_revenue']) : selling * qty;
+            final profit = m['expected_profit'] != null ? n(m['expected_profit']) : revenue - totalCost;
+            final margin = revenue > 0 ? (profit / revenue * 100) : 0.0;
             items.add(_CostItem(
               sn: i + 1,
               productName: (m['product_name'] ?? m['name'] ?? '').toString(),

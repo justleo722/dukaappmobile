@@ -74,11 +74,11 @@ class _ReproduceProductsPageState extends ConsumerState<ReproduceProductsPage> {
         return {
           'product_id': (m['product_id'] ?? m['id'] ?? '').toString(),
           'recipe_id': (m['recipe_id'] ?? '').toString(),
-          'name': m['product_name'] ?? m['name'] ?? '',
-          'recipe': m['recipe_name'] ?? m['recipe'] ?? '',
-          'productionCost': (m['unit_cost'] ?? m['cost_price'] ?? 0.0) as num,
-          'sellingPrice': (m['selling_price'] ?? m['price'] ?? 0.0) as num,
-          'wholesalePrice': (m['wholesale_price'] ?? 0.0) as num,
+          'name': (m['product_name'] ?? m['name'] ?? '').toString(),
+          'recipe': (m['recipe_name'] ?? m['recipe'] ?? '').toString(),
+          'productionCost': num.tryParse((m['unit_cost'] ?? m['cost_price'] ?? 0).toString()) ?? 0,
+          'sellingPrice': num.tryParse((m['selling_price'] ?? m['price'] ?? 0).toString()) ?? 0,
+          'wholesalePrice': num.tryParse((m['wholesale_price'] ?? 0).toString()) ?? 0,
         };
       }).toList();
       setState(() => _allProducts = products);

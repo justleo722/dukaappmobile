@@ -58,7 +58,7 @@ class _TransferProductsPageState extends ConsumerState<TransferProductsPage> {
         return {
           'product_id': (m['product_id'] ?? m['id'] ?? '').toString(),
           'name': m['product_name'] ?? m['name'] ?? '',
-          'stock': (m['quantity'] ?? m['stock'] ?? 0) as num,
+          'stock': num.tryParse((m['quantity'] ?? m['stock'] ?? 0).toString()) ?? 0,
         };
       }).toList();
       setState(() { _allProducts = products; _isLoadingProducts = false; });
@@ -101,8 +101,23 @@ class _TransferProductsPageState extends ConsumerState<TransferProductsPage> {
     }
   }
 
+  // TransferShopDropdown values look like "Shop Name (shop_id)".
+  String? _extractShopId(String? label) {
+    if (label == null) return null;
+    final match = RegExp(r'\(([^)]+)\)$').firstMatch(label);
+    return match?.group(1);
+  }
+
   Future<void> _save() async {
     if (_selectedShop == null || _items.isEmpty) return;
+    final toShopId = _extractShopId(_selectedShop);
+    if (toShopId == null || toShopId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Select a valid destination shop.', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
+        backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
+      return;
+    }
     final itemsWithQty = _items.where((i) => i.transferQuantity > 0).toList();
     if (itemsWithQty.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -115,7 +130,7 @@ class _TransferProductsPageState extends ConsumerState<TransferProductsPage> {
     try {
       final api = ref.read(apiServiceProvider);
       // Backend reads: to_shop_id, product_id[], quantity[product_id]
-      final body = <String, dynamic>{'to_shop_id': _selectedShop!};
+      final body = <String, dynamic>{'to_shop_id': toShopId};
       for (int i = 0; i < itemsWithQty.length; i++) {
         final item = itemsWithQty[i];
         body['product_id[$i]'] = item.productId;

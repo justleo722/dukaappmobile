@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dukaapp/core/providers.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/online_shop/presentation/widgets/online_shop_sidebar.dart';
 
-class OnlineShopSettingsPage extends StatefulWidget {
+class OnlineShopSettingsPage extends ConsumerStatefulWidget {
   const OnlineShopSettingsPage({super.key});
 
   @override
-  State<OnlineShopSettingsPage> createState() => _OnlineShopSettingsPageState();
+  ConsumerState<OnlineShopSettingsPage> createState() => _OnlineShopSettingsPageState();
 }
 
-class _OnlineShopSettingsPageState extends State<OnlineShopSettingsPage> {
+class _OnlineShopSettingsPageState extends ConsumerState<OnlineShopSettingsPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final String _activeSidebarItem = 'Settings';
 
@@ -21,7 +24,33 @@ class _OnlineShopSettingsPageState extends State<OnlineShopSettingsPage> {
   final _whatsappController = TextEditingController();
   final _emailController = TextEditingController();
 
-  final String _shopUrl = 'https://dukaapp.com/shop/son-collection';
+  // Same storage keys as the web admin (onlineshop.php loadAdminSettings), which
+  // also keeps these only on the device.
+  static const _kWhatsapp = 'duka_whatsapp';
+  static const _kEmail = 'duka_shop_email';
+
+  String _shopUrl = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      _whatsappController.text = prefs.getString(_kWhatsapp) ?? '';
+      _emailController.text = prefs.getString(_kEmail) ?? '';
+    } catch (_) {}
+    try {
+      final res = await ref.read(apiServiceProvider).getOnlineShopAdmin();
+      final data = res.data;
+      final url = data is Map ? (data['public_url'] ?? '').toString() : '';
+      if (mounted && url.isNotEmpty) setState(() => _shopUrl = url);
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -69,14 +98,12 @@ class _OnlineShopSettingsPageState extends State<OnlineShopSettingsPage> {
     }
   }
 
-  void _saveSettings() {
+  Future<void> _saveSettings() async {
     if (_formKey.currentState!.validate()) {
-      final settings = {
-        'whatsapp': _whatsappController.text.trim(),
-        'email': _emailController.text.trim(),
-        'shopUrl': _shopUrl,
-      };
-      debugPrint('Settings saved: $settings');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kWhatsapp, _whatsappController.text.trim());
+      await prefs.setString(_kEmail, _emailController.text.trim());
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Settings saved successfully'),

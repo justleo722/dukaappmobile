@@ -28,6 +28,23 @@ class Attendant {
 
   bool get isActive => status == 'active' || status == '1';
 
+  // Port of staffIdentifier() in the web staffPage.php.
+  String get displayId {
+    String nonEmpty(dynamic v) => (v?.toString() ?? '').trim();
+    if (isManager) {
+      final id = nonEmpty(userId).isNotEmpty ? nonEmpty(userId) : nonEmpty(roleId);
+      return id.isEmpty ? '-' : id;
+    }
+    final text = [attendantId, roleId, userId]
+        .map(nonEmpty)
+        .firstWhere((v) => v.isNotEmpty, orElse: () => '');
+    if (text.isEmpty) return '-';
+    if (RegExp(r'^a\w+', caseSensitive: false).hasMatch(text)) return text;
+    final digits = text.replaceAll(RegExp(r'\D+'), '');
+    if (digits.isEmpty) return 'A$text';
+    return 'A${digits.padLeft(3, '0')}';
+  }
+
   factory Attendant.fromJson(Map<String, dynamic> j) {
     return Attendant(
       roleId: j['role_id'],

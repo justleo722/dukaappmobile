@@ -62,8 +62,8 @@ class _LowStockAlertReportPageState extends ConsumerState<LowStockAlertReportPag
         {
           for (int i = 0; i < rawList.length; i++) {
             final m = rawList[i] as Map;
-            final curr = (m['current_stock'] ?? m['quantity'] ?? 0) as num;
-            final min = (m['minimum_stock'] ?? m['alert_level'] ?? m['min_stock'] ?? 0) as num;
+            final curr = num.tryParse((m['current_stock'] ?? m['quantity'] ?? 0).toString()) ?? 0;
+            final min = num.tryParse((m['minimum_stock'] ?? m['alert_level'] ?? m['min_stock'] ?? 0).toString()) ?? 0;
             items.add(_LowStockItem(
               sn: i + 1,
               rawMaterial: (m['material_name'] ?? m['name'] ?? '').toString(),
@@ -71,8 +71,8 @@ class _LowStockAlertReportPageState extends ConsumerState<LowStockAlertReportPag
               currentStock: curr.toInt(),
               minimumStock: min.toInt(),
               difference: (curr - min).toInt(),
-              lastPurchaseDate: (m['last_purchase_date'] ?? m['date'] ?? '').toString(),
-              status: (m['status'] ?? (curr < min ? 'Critical' : 'Low')).toString(),
+              lastPurchaseDate: (m['last_purchase_date'] ?? m['record_date'] ?? m['date'] ?? '').toString(),
+              status: (m['status_label'] ?? m['status'] ?? (curr < min ? 'Critical' : 'Low')).toString(),
             ));
           }
         }
@@ -231,7 +231,8 @@ class _LowStockAlertReportPageState extends ConsumerState<LowStockAlertReportPag
 
   Widget _buildTableRow(_LowStockItem item, int idx) {
     final isEven = idx % 2 == 0;
-    final statusColor = item.status == 'Critical' ? AppColors.danger : AppColors.warning;
+    final isWarning = item.status == 'Low' || item.status == 'Running Low';
+    final statusColor = isWarning ? AppColors.warning : AppColors.danger;
     return Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(color: isEven ? AppColors.card : AppColors.background),
       child: Row(children: [

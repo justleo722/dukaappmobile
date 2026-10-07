@@ -49,7 +49,13 @@ class _OnlineShopCouponCodesPageState extends ConsumerState<OnlineShopCouponCode
           final maxUses = m['max_uses']?.toString() ?? '';
           final usedCount = int.tryParse(m['used_count']?.toString() ?? '') ?? 0;
           final expiryDate = m['expiry_date']?.toString() ?? '';
-          final isActive = (m['record_status'] ?? 'active').toString().toLowerCase() == 'active';
+          final rawStatus = (m['status'] ?? 'active').toString().toLowerCase();
+          final statusLabel = switch (rawStatus) {
+            'active' => 'Active',
+            'scheduled' => 'Scheduled',
+            'expired' => 'Expired',
+            _ => 'Inactive',
+          };
           return {
             'coupon_id': m['coupon_id']?.toString() ?? '',
             'code': m['code'] ?? '',
@@ -58,8 +64,9 @@ class _OnlineShopCouponCodesPageState extends ConsumerState<OnlineShopCouponCode
             'minOrder': minAmt > 0 ? 'Tsh ${fmt.format(minAmt.round())}' : 'Tsh 0',
             'maxUses': maxUses.isNotEmpty && maxUses != '0' ? maxUses : 'Unlimited',
             'usedCount': usedCount,
-            'expiryDate': m['expiry_display'] ?? expiryDate,
-            'status': isActive ? 'Active' : 'Inactive',
+            'expiryDate': (m['expiry_display'] ?? expiryDate).toString(),
+            'expiryDateRaw': expiryDate,
+            'status': statusLabel,
           };
         }).toList();
       });
@@ -119,9 +126,24 @@ class _OnlineShopCouponCodesPageState extends ConsumerState<OnlineShopCouponCode
     if (couponId.isNotEmpty) {
       try {
         final api = ref.read(apiServiceProvider);
-        await api.postOnlineshopCouponDelete({'coupon_id': couponId});
-      } catch (_) {}
+        final res = await api.postOnlineshopCouponDelete({'coupon_id': couponId});
+        if (res['status']?.toString() != 'success') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(res['message']?.toString() ?? 'Failed to delete coupon'),
+              backgroundColor: AppColors.danger,
+            ));
+          }
+          return;
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger));
+        }
+        return;
+      }
     }
+    if (!mounted) return;
     setState(() => coupons.removeAt(index));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

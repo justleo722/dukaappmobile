@@ -80,7 +80,7 @@ class _DailyProductionReportPageState extends ConsumerState<DailyProductionRepor
           date: m['production_date']?.toString() ?? '',
           productName: m['product_name']?.toString() ?? '',
           recipeUsed: m['recipe_name']?.toString() ?? '',
-          qtyProduced: int.tryParse((m['quantity_produced'] ?? 0).toString()) ?? 0,
+          qtyProduced: num.tryParse((m['quantity_produced'] ?? 0).toString())?.toInt() ?? 0,
           unit: m['unit']?.toString() ?? '',
           costPerUnit: costUnit.toDouble(),
           totalCost: totalCost.toDouble(),

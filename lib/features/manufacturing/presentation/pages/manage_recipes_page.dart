@@ -249,8 +249,13 @@ class _ManageRecipesPageState extends ConsumerState<ManageRecipesPage> {
 
   Widget _buildRecipeCard(Map<String, dynamic> recipe) {
     final name = (recipe['recipe_name'] ?? recipe['name'] ?? 'Unknown').toString();
-    final yieldStr = (recipe['yield_amount'] ?? recipe['yield'] ?? '').toString();
-    final cost = (recipe['estimated_cost'] ?? recipe['cost'] ?? 0) as num;
+    final yieldQty = recipe['yield_quantity'] ?? recipe['yield_amount'] ?? recipe['yield'];
+    final yieldNum = num.tryParse(yieldQty?.toString() ?? '');
+    final yieldUnit = (recipe['yield_unit'] ?? '').toString();
+    final yieldStr = yieldQty == null
+        ? ''
+        : '${yieldNum != null && yieldNum == yieldNum.roundToDouble() ? yieldNum.toInt() : yieldQty} $yieldUnit'.trim();
+    final cost = num.tryParse((recipe['estimated_cost'] ?? recipe['cost'] ?? 0).toString()) ?? 0;
     // ingredients can be a List or a comma-separated string
     List<String> ingredients = [];
     final ingRaw = recipe['ingredients'] ?? recipe['raw_materials'];
@@ -380,9 +385,20 @@ class _ManageRecipesPageState extends ConsumerState<ManageRecipesPage> {
               Navigator.pop(ctx);
               try {
                 final api = ref.read(apiServiceProvider);
-                await api.postMfRecipeDelete({'recipe_id': recipe['id'] ?? recipe['recipe_id'] ?? ''});
+                final res = await api.postMfRecipeDelete({'recipe_id': (recipe['recipe_id'] ?? recipe['id'] ?? '').toString()});
+                if (!mounted) return;
+                if (res['status']?.toString() != 'success') {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(res['message']?.toString() ?? 'Failed to delete recipe'),
+                    backgroundColor: AppColors.danger,
+                  ));
+                }
                 _loadRecipes();
-              } catch (_) {}
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger));
+                }
+              }
             },
             style: TextButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: AppColors.textWhite,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),

@@ -16,6 +16,8 @@ class _RawMaterial {
   final double currentStock;
   final double unitCost;
   final String status;
+  final double alertLevel;
+  final String expiryDate;
 
   const _RawMaterial({
     required this.materialId,
@@ -24,6 +26,8 @@ class _RawMaterial {
     required this.currentStock,
     required this.unitCost,
     required this.status,
+    required this.alertLevel,
+    required this.expiryDate,
   });
 
   double get totalValue => unitCost * currentStock;
@@ -38,6 +42,8 @@ class _RawMaterial {
       currentStock: _d(j['current_stock'] ?? j['stock']),
       unitCost: _d(j['unit_cost']),
       status: statusLabel.isNotEmpty ? statusLabel : 'In Stock',
+      alertLevel: _d(j['alert_level']),
+      expiryDate: (j['expiry_date'] ?? '').toString(),
     );
   }
 }
@@ -99,11 +105,7 @@ class _RawMaterialsPageState extends ConsumerState<RawMaterialsPage> {
       list = list.where((m) => m.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
     }
     if (_selectedStatusLabel != 'All') {
-      if (_selectedStatusLabel == 'Out of Stock') {
-        list = list.where((m) => m.currentStock == 0).toList();
-      } else {
-        list = list.where((m) => m.status == _selectedStatusLabel).toList();
-      }
+      list = list.where((m) => m.status == _selectedStatusLabel).toList();
     }
     list.sort((a, b) {
       int cmp;
@@ -113,8 +115,8 @@ class _RawMaterialsPageState extends ConsumerState<RawMaterialsPage> {
         case SortField.unitCost: cmp = a.unitCost.compareTo(b.unitCost); break;
         case SortField.totalValue: cmp = a.totalValue.compareTo(b.totalValue); break;
         case SortField.status:
-          const order = {'In Stock': 0, 'Running Low': 1, 'Expired': 2};
-          cmp = (order[a.status] ?? 3).compareTo(order[b.status] ?? 3);
+          const order = {'In Stock': 0, 'Running Low': 1, 'Out of Stock': 2, 'Expired': 3};
+          cmp = (order[a.status] ?? 4).compareTo(order[b.status] ?? 4);
           break;
       }
       return _sortOrder == SortOrder.desc ? -cmp : cmp;
@@ -385,6 +387,7 @@ class _RawMaterialsPageState extends ConsumerState<RawMaterialsPage> {
                     'materialId': material.materialId,
                     'name': material.name, 'unit': material.unit,
                     'unitCost': material.unitCost, 'status': material.status,
+                    'alertLevel': material.alertLevel, 'expiryDate': material.expiryDate,
                   });
                   _loadMaterials();
                 },
@@ -479,7 +482,7 @@ class _RawMaterialsPageState extends ConsumerState<RawMaterialsPage> {
               Navigator.pop(ctx);
               try {
                 final api = ref.read(apiServiceProvider);
-                final res = await api.postMfRawMaterialDelete({'material_id': material.materialId});
+                final res = await api.postMfRawMaterialDelete({'raw_material_id': material.materialId});
                 if (!mounted) return;
                 if (res['status'] == true || res['status'] == 'success') {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deleted successfully')));
@@ -504,7 +507,8 @@ class _RawMaterialsPageState extends ConsumerState<RawMaterialsPage> {
     switch (status) {
       case 'In Stock': return AppColors.success;
       case 'Running Low': return const Color(0xFFF59E0B);
-      case 'Expired': return AppColors.danger;
+      case 'Expired':
+      case 'Out of Stock': return AppColors.danger;
       default: return AppColors.textSecondary;
     }
   }
@@ -513,7 +517,8 @@ class _RawMaterialsPageState extends ConsumerState<RawMaterialsPage> {
     switch (status) {
       case 'In Stock': return AppColors.successLight;
       case 'Running Low': return const Color(0xFFFEF3C7);
-      case 'Expired': return AppColors.dangerLight;
+      case 'Expired':
+      case 'Out of Stock': return AppColors.dangerLight;
       default: return const Color(0xFFF1F5F9);
     }
   }

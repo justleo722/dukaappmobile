@@ -12,6 +12,9 @@ class ExpenseRepository {
   Future<ExpenseSummary> fetchExpenseSummary({String? from, String? to}) =>
       _remote.fetchExpenseSummary(from: from, to: to);
 
+  Future<Map<String, dynamic>?> fetchProfitSummary({String? from, String? to}) =>
+      _remote.fetchProfitSummary(from: from, to: to);
+
   Future<List<ExpenseAccount>> fetchExpenseAccounts() =>
       _remote.fetchExpenseAccounts();
 

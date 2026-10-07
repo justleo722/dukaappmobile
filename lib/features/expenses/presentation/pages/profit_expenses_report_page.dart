@@ -60,8 +60,9 @@ class _ProfitExpensesReportPageState extends ConsumerState<ProfitExpensesReportP
       double _d(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0;
 
       switch (widget.reportKey) {
+        // Report keys map to Reports_model methods via reports_helper getreport().
         case 'all-expenses':
-          final res = await api.getExpenses(from: from, to: to);
+          final res = await api.getReportSalesByMethod('allExpenses', from: from, to: to);
           final list = _unwrapList(res.data);
           _apiHeaders = ['S/N', 'Date', 'Title', 'Category', 'Amount', 'Status'];
           _apiRows = list.asMap().entries.map((e) {
@@ -70,9 +71,9 @@ class _ProfitExpensesReportPageState extends ConsumerState<ProfitExpensesReportP
               '${e.key + 1}',
               (j['record_date'] ?? j['date'] ?? '').toString(),
               (j['title'] ?? j['description'] ?? j['note'] ?? '').toString(),
-              (j['category'] ?? j['account_name'] ?? '').toString(),
+              (j['account_name'] ?? j['category'] ?? '').toString(),
               fmt.format(_d(j['amount'])),
-              (j['status'] ?? 'Paid').toString(),
+              (j['status'] ?? '').toString(),
             ];
           }).toList();
           break;
@@ -86,13 +87,13 @@ class _ProfitExpensesReportPageState extends ConsumerState<ProfitExpensesReportP
               '${e.key + 1}',
               (j['product_name'] ?? j['name'] ?? '').toString(),
               fmt.format(_d(j['sold'] ?? j['quantity_sold'])),
-              fmt.format(_d(j['total_sales'] ?? j['sales'])),
+              fmt.format(_d(j['total_revenue'] ?? j['total_sales'] ?? j['sales'])),
               fmt.format(_d(j['profit'] ?? j['gross_profit'])),
             ];
           }).toList();
           break;
         case 'loss':
-          final res = await api.getReportProfit(from: from, to: to);
+          final res = await api.getReportSalesByMethod('loss', from: from, to: to);
           final list = _unwrapList(res.data);
           _apiHeaders = ['S/N', 'Item Name', 'Bad', 'Lost', 'Expired', 'Loss'];
           _apiRows = list.asMap().entries.map((e) {
@@ -108,18 +109,20 @@ class _ProfitExpensesReportPageState extends ConsumerState<ProfitExpensesReportP
           }).toList();
           break;
         case 'daily-profit':
-          final res = await api.getReportProfit(from: from, to: to);
+          final res = await api.getReportSalesByMethod('dailyProfit', from: from, to: to);
           final list = _unwrapList(res.data);
-          _apiHeaders = ['S/N', 'Item Name', 'Sold', 'Sales', 'Cost', 'Profit'];
+          _apiHeaders = ['S/N', 'Date', 'Sales', 'Gross Profit', 'Stock Loss', 'Expenses', 'Net Profit', 'Cash In Hand'];
           _apiRows = list.asMap().entries.map((e) {
             final j = e.value;
             return [
               '${e.key + 1}',
-              (j['product_name'] ?? j['name'] ?? '').toString(),
-              fmt.format(_d(j['sold'] ?? j['quantity_sold'])),
-              fmt.format(_d(j['total_sales'] ?? j['sales'])),
-              fmt.format(_d(j['total_cost'] ?? j['cost'])),
-              fmt.format(_d(j['profit'] ?? j['gross_profit'])),
+              (j['record_date'] ?? j['date'] ?? '').toString(),
+              fmt.format(_d(j['total_sales'])),
+              fmt.format(_d(j['gross_profit'])),
+              fmt.format(_d(j['stock_loss'])),
+              fmt.format(_d(j['expenses'])),
+              fmt.format(_d(j['net_profit'])),
+              fmt.format(_d(j['cash_in_hand'])),
             ];
           }).toList();
           break;

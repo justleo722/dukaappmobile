@@ -7,6 +7,7 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/features/online_shop/presentation/widgets/track_order_bottom_sheet.dart';
 import 'package:dukaapp/features/online_shop/presentation/widgets/shop_by_id_bottom_sheet.dart';
 
@@ -75,20 +76,26 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
     setState(() => _isLoading = true);
     try {
       final api = ref.read(apiServiceProvider);
-      // Use admin data to get encoded shop_id + shop name; then fetch public data
-      final adminRes = await api.getOnlineShopAdmin();
-      final adminRaw = adminRes.data;
-      Map<String, dynamic> admin = {};
-      if (adminRaw is Map<String, dynamic>) {
-        admin = adminRaw['data'] is Map ? adminRaw['data'] as Map<String, dynamic> : adminRaw;
+      // Admin data only supplies the share link; a failure here must not block products.
+      try {
+        final adminRes = await api.getOnlineShopAdmin();
+        final adminRaw = adminRes.data;
+        Map<String, dynamic> admin = {};
+        if (adminRaw is Map<String, dynamic>) {
+          admin = adminRaw['data'] is Map ? adminRaw['data'] as Map<String, dynamic> : adminRaw;
+        }
+        final publicUrl = admin['public_url']?.toString() ?? '';
+        final uri = Uri.tryParse(publicUrl);
+        _encodedShopId = uri?.pathSegments.isNotEmpty == true ? uri!.pathSegments.last : null;
+      } catch (e) {
+        debugPrint('[Storefront] admin data failed: $e');
       }
-      final publicUrl = admin['public_url']?.toString() ?? '';
-      // Extract encoded shop id from public_url (last path segment)
-      final uri = Uri.tryParse(publicUrl);
-      _encodedShopId = uri?.pathSegments.isNotEmpty == true ? uri!.pathSegments.last : null;
 
-      // Now fetch public storefront data
-      final pubRes = await api.getOnlineShopPublic();
+      // The public endpoint has no session, so pass the shop explicitly.
+      final shopId = ref.read(authProvider).activeShop?.id?.toString();
+      final pubRes = await api.getOnlineShopPublic(
+        shopId: (shopId != null && shopId.isNotEmpty) ? shopId : null,
+      );
       final pubRaw = pubRes.data;
       Map<String, dynamic> pub = {};
       if (pubRaw is Map<String, dynamic>) {
@@ -112,7 +119,7 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
           shopName  = p.length > 3 ? p[3].toString() : '';
           icon      = p.length > 4 ? p[4].toString() : '';
           color     = p.length > 5 ? p[5].toString() : '';
-          productId = p.length > 6 ? p[6].toString() : '';
+          productId = p.length > 9 ? p[9].toString() : '';
           category  = p.length > 8 ? p[8].toString() : '';
           imageUrl  = p.length > 10 ? p[10].toString() : '';
         } else if (p is Map<String, dynamic>) {
@@ -161,7 +168,8 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
       } else {
         _categories = _fallbackCategories;
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[Storefront] load failed: $e');
       _categories = _fallbackCategories;
     }
     if (mounted) setState(() => _isLoading = false);

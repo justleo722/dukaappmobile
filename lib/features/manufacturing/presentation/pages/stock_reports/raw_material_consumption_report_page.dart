@@ -66,14 +66,14 @@ class _RawMaterialConsumptionReportPageState extends ConsumerState<RawMaterialCo
             final m = rawList[i] as Map;
             items.add(_ConsumptionItem(
               sn: i + 1,
-              date: (m['date'] ?? '').toString(),
+              date: (m['record_date'] ?? m['date'] ?? '').toString(),
               rawMaterial: (m['material_name'] ?? m['raw_material'] ?? m['name'] ?? '').toString(),
               unit: (m['unit'] ?? '').toString(),
-              openingStock: (m['opening_stock'] ?? 0) as int? ?? 0,
-              consumedQty: (m['consumed_qty'] ?? m['consumed'] ?? 0) as int? ?? 0,
-              closingStock: (m['closing_stock'] ?? 0) as int? ?? 0,
-              unitCost: ((m['unit_cost'] ?? 0) as num).toDouble(),
-              consumptionCost: ((m['consumption_cost'] ?? m['total_cost'] ?? 0) as num).toDouble(),
+              openingStock: num.tryParse((m['opening_stock'] ?? 0).toString())?.toInt() ?? 0,
+              consumedQty: num.tryParse((m['quantity_consumed'] ?? m['consumed_qty'] ?? 0).toString())?.toInt() ?? 0,
+              closingStock: num.tryParse((m['closing_stock'] ?? 0).toString())?.toInt() ?? 0,
+              unitCost: double.tryParse((m['unit_cost'] ?? 0).toString()) ?? 0,
+              consumptionCost: double.tryParse((m['total_cost'] ?? m['consumption_cost'] ?? 0).toString()) ?? 0,
               relatedProduction: (m['related_production'] ?? m['product_name'] ?? '').toString(),
             ));
           }

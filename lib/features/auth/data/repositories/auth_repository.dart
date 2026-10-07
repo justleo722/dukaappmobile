@@ -301,10 +301,12 @@ class AuthRepository {
 
     final result = response.data!;
 
-    // Save new token (backend generates one with new shop_id in JWT payload)
-    if (result.token != null && result.token!.isNotEmpty) {
-      await _secureStorage.saveToken(result.token!);
+    // The token carries the shop (role_id); keeping the old one would keep loading
+    // the old shop's data, so treat a missing token as a failed switch.
+    if (result.token == null || result.token!.isEmpty) {
+      throw Exception('Server did not return a session for the new shop.');
     }
+    await _secureStorage.saveToken(result.token!);
 
     // Persist the new active shop
     if (result.shop != null) {
