@@ -967,6 +967,7 @@ class ApiService {
     return {
       if (from != null) 'from': from,
       if (to != null) 'to': to,
+      if (from != null || to != null) 'filter': '1',
     };
   }
 }

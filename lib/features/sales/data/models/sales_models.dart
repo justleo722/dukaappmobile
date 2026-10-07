@@ -186,7 +186,10 @@ class SaleRecord {
       saleId: (j['sale_id'] ?? j['id'] ?? '').toString(),
       date: (j['date'] ?? j['record_date'] ?? j['created_at'] ?? '').toString(),
       paymentStatus: paymentStatus,
-      soldBy: (j['sold_by'] ?? j['username'] ?? j['created_by_name'] ?? '').toString(),
+      soldBy: (() {
+        final v = (j['sold_by'] ?? j['username'] ?? j['created_by_name'] ?? '').toString().trim();
+        return (v.isEmpty || v.toLowerCase() == 'null') ? 'Online Shop' : v;
+      })(),
       total: '$currency ${_formatNumber(totalRaw)}',
       totalRaw: totalRaw,
       products: prods,

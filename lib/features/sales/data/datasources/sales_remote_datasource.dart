@@ -47,7 +47,7 @@ class SalesRemoteDatasource {
   }
 
   Future<List<SaleRecord>> fetchOrders({String? from, String? to}) async {
-    final res = await _api.getOrders(from: from, to: to);
+    final res = await _api.getSalesOrders(from: from, to: to);
     return _parseList(res.data, SaleRecord.fromJson);
   }
 
