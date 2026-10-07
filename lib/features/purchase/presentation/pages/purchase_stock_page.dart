@@ -185,6 +185,14 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
           accountIdMap[name] = id;
         }
       }
+      // Mirrors the web UI (footer.php fillSelectOptions): a synthetic
+      // "Supplier Credit" option with account_id 11, which the backend's
+      // isCreditPurchaseAccount() treats as a credit (unpaid) purchase.
+      const creditLabel = 'Supplier Credit';
+      if (!accountIdMap.containsKey(creditLabel)) {
+        accounts.insert(0, creditLabel);
+        accountIdMap[creditLabel] = '11';
+      }
 
       // Load suppliers — same shape flexibility
       final suppRes = await api.getSuppliers();

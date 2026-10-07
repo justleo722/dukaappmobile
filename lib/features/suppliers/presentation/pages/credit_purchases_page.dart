@@ -162,11 +162,25 @@ class _CreditPurchasesPageState extends ConsumerState<CreditPurchasesPage> {
                 Navigator.of(ctx).pop();
                 try {
                   final api = ref.read(apiServiceProvider);
-                  await api.postSupplierClearCreditBalance({
-                    'supplier_id': s['supplier_id']?.toString() ?? '',
-                    'amount': amt,
-                    'date': DateFormat('yyyy-MM-dd').format(selectedDate),
-                  });
+                  final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
+                  var remaining = amt;
+                  final unpaid = _purchasesFor(s).where((p) {
+                    final bal = double.tryParse(p['balance']?.toString() ?? '') ?? 0.0;
+                    return bal > 0;
+                  }).toList();
+                  for (final p in unpaid) {
+                    if (remaining <= 0) break;
+                    final purchaseId = p['purchase_id']?.toString() ?? '';
+                    if (purchaseId.isEmpty) continue;
+                    final bal = double.tryParse(p['balance']?.toString() ?? '') ?? 0.0;
+                    final pay = remaining >= bal ? bal : remaining;
+                    await api.postSupplierClearCreditBalance({
+                      'purchase_id': purchaseId,
+                      'amount': pay,
+                      'date': dateStr,
+                    });
+                    remaining -= pay;
+                  }
                   if (!mounted) return;
                   await _loadData();
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(

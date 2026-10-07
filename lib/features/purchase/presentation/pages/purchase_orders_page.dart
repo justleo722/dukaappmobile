@@ -367,18 +367,32 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
                               return;
                             }
                             final purchaseId = _orders[index]['purchase_id']?.toString() ?? '';
+                            final isCash = selectedStatus == 'Paid (Cash)';
+                            if (isCash && (selectedAccount == null || selectedAccount!.isEmpty)) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Please select an account')),
+                              );
+                              return;
+                            }
                             Navigator.pop(context);
                             try {
                               final repo = ref.read(purchaseRepositoryProvider);
-                              await repo.updateOrderStatus({
-                                'purchase_id': purchaseId,
-                                'status': selectedStatus == 'Paid (Cash)' ? 'paid' : 'credit',
-                                'date': DateFormat('yyyy-MM-dd').format(selectedDate),
-                                if (selectedAccount != null) 'account': selectedAccount,
+                              final res = await repo.updateOrderStatus({
+                                'purchase_ids': purchaseId,
+                                'status': isCash ? 'cash' : 'credit',
+                                'record_date': DateFormat('yyyy-MM-dd').format(selectedDate),
+                                if (selectedAccount != null) 'from_account_id': selectedAccount,
                               });
+                              final ok = res['status']?.toString() == 'success';
                               if (!mounted) return;
+                              if (!ok) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(res['message']?.toString() ?? 'Update failed'), backgroundColor: AppColors.danger),
+                                );
+                                return;
+                              }
                               setState(() {
-                                if (selectedStatus == 'Paid (Cash)') {
+                                if (isCash) {
                                   _orders[index]['status'] = 'PAID';
                                   _orders[index]['balance'] = 0.0;
                                   _orders[index]['paymentMode'] = 'Cash';
