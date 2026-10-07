@@ -68,16 +68,16 @@ class _ImportHistoryReportPageState extends ConsumerState<ImportHistoryReportPag
       final items = records.asMap().entries.map((e) {
         final r = e.value;
         DateTime? date;
-        try { date = DateTime.parse(r['date']?.toString() ?? ''); } catch (_) {}
+        try { date = DateTime.parse((r['record_date'] ?? r['date'])?.toString() ?? ''); } catch (_) {}
         return _ImportRecord(
           sn: e.key + 1,
-          purchaseId: r['purchase_id'] ?? r['id'],
+          purchaseId: r['id'] ?? r['purchase_id'],
           date: date ?? DateTime.now(),
           title: r['title']?.toString() ?? r['description']?.toString() ?? 'Import',
           category: r['category']?.toString() ?? '',
-          importedBy: r['imported_by']?.toString() ?? r['created_by']?.toString() ?? '',
-          items: int.tryParse(r['items']?.toString() ?? r['item_count']?.toString() ?? '0') ?? 0,
-          qty: int.tryParse(r['qty']?.toString() ?? r['quantity']?.toString() ?? '0') ?? 0,
+          importedBy: r['username']?.toString() ?? r['imported_by']?.toString() ?? r['created_by']?.toString() ?? '',
+          items: int.tryParse(r['items_count']?.toString() ?? r['items']?.toString() ?? r['item_count']?.toString() ?? '0') ?? 0,
+          qty: int.tryParse(r['total_qty']?.toString() ?? r['qty']?.toString() ?? r['quantity']?.toString() ?? '0') ?? 0,
           stockValue: double.tryParse(r['stock_value']?.toString() ?? r['total_value']?.toString() ?? '0') ?? 0.0,
         );
       }).toList();

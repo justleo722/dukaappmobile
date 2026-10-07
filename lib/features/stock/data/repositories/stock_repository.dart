@@ -32,6 +32,7 @@ class StockRepository {
   Future<List<StockCategory>> fetchCategories() => _remote.fetchCategories();
   Future<List<StockProduct>> fetchLowStock() => _remote.fetchLowStock();
   Future<List<StockProduct>> fetchExpiredStock() => _remote.fetchExpiredStock();
+  Future<List<StockProduct>> fetchAboutToExpireStock() => _remote.fetchAboutToExpireStock();
 
   // ── WRITE ────────────────────────────────────────────────────────────────
 

@@ -51,7 +51,7 @@ class _BadStockReportPageState extends ConsumerState<BadStockReportPage> {
     try {
       final stockState = ref.read(stockProvider);
       final products = stockState.whenOrNull(
-            data: (s) => s.products.where((p) => (p.status ?? '') == 'bad').toList(),
+            data: (s) => s.products.where((p) => p.bad > 0).toList(),
           ) ??
           [];
       final items = products.asMap().entries.map((e) {

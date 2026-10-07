@@ -60,8 +60,10 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
           'paid': r.paid,
           'balance': r.balance,
           'total': r.totalRaw,
+          'discount': r.discount,
           'customer': r.customer,
           'soldBy': r.soldBy,
+          'createdBy': r.soldBy,
           'products': r.products.map((p) => {
             'name': p.name,
             'quantity': p.quantity,
@@ -1598,10 +1600,8 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   void _showReceiptPreview(Map<String, dynamic> order) {
     final s = ref.read(stringsProvider);
     final products = List<Map<String, dynamic>>.from(order['products']);
-    final totalAmount = products.fold<double>(
-      0,
-      (sum, p) => sum + (p['price'] as double) * (p['quantity'] as int),
-    );
+    final totalAmount = (order['total'] as double?) ??
+        products.fold<double>(0, (sum, p) => sum + (p['price'] as double) * (p['quantity'] as int));
 
     ReceiptWidget.show(
       context,
@@ -1609,12 +1609,14 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
       receiptNumber: 'RCP-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
       date: order['date'].split(' ').take(2).join(' '),
       time: order['date'].split(' ').last,
-      cashier: order['createdBy'],
-      paymentMode: order['paymentMode'],
+      cashier: order['createdBy'] ?? order['soldBy'],
+      paymentMode: order['paymentMethod'] ?? order['paymentMode'],
       items: products,
       subtotal: totalAmount,
-      totalPaid: order['paid'],
-      amountReceived: order['paid'],
+      discount: (order['discount'] as double?) ?? 0.0,
+      totalPaid: (order['paid'] as double?) ?? 0.0,
+      amountReceived: (order['paid'] as double?) ?? 0.0,
+      customerName: order['customer']?.toString(),
     );
   }
 

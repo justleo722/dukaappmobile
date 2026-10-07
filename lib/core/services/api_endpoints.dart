@@ -114,6 +114,9 @@ abstract final class ApiEndpoints {
   /// Products whose expiry date has passed.
   static final getDataExpiredStock = _g('expired_stock');
 
+  /// Products expiring soon (within the reorder window).
+  static final getDataAboutToExpireStock = _g('about_to_expire');
+
   /// Soft-deleted products.
   static final getDataDeletedStock = _g('deleted_stock');
 

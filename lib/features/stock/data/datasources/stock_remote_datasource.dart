@@ -149,6 +149,12 @@ class StockRemoteDatasource {
     return _list(res.data).map(StockProduct.fromJson).toList();
   }
 
+  /// Products expiring soon
+  Future<List<StockProduct>> fetchAboutToExpireStock() async {
+    final res = await _client.get(ApiEndpoints.getDataAboutToExpireStock);
+    return _list(res.data).map(StockProduct.fromJson).toList();
+  }
+
   // ── POST ─────────────────────────────────────────────────────────────────
 
   static final _formOptions = Options(contentType: 'application/x-www-form-urlencoded');
@@ -274,7 +280,6 @@ class StockRemoteDatasource {
   /// Bulk import products from parsed spreadsheet rows (stock/register/import).
   /// Backend reads 'products' as a JSON string from form post.
   Future<Map<String, dynamic>> importProducts(List<Map<String, dynamic>> products) async {
-    // Map Flutter field names → backend field names
     final mapped = products.map((p) => {
       'name': p['name'],
       'bp': p['buyingPrice'] ?? 0,
@@ -286,22 +291,14 @@ class StockRemoteDatasource {
       if (p['expiryDate'] != null && (p['expiryDate'] as String).isNotEmpty) 'expiry_date': p['expiryDate'],
       if (p['unit'] != null) 'unit': p['unit'],
     }).toList();
-
-    final res = await _client.post(
-      ApiEndpoints.postStockRegisterImport,
-      // Send products as a JSON-encoded string so backend json_decode() can read it
-      data: {'products': jsonEncode(mapped)},
-      options: Options(
-        contentType: 'application/x-www-form-urlencoded',
-        responseType: ResponseType.plain,
-      ),
-    );
-    return _jsonFromPlain(res.data);
+    // Use _formPost so encoding is consistent with other endpoints.
+    // JSON string is URL-encoded as a single form field so PHP can json_decode() it.
+    return _formPost(ApiEndpoints.postStockRegisterImport, {'products': jsonEncode(mapped)});
   }
 
   /// Import/purchase history records
   Future<List<Map<String, dynamic>>> fetchImportHistory() async {
-    final res = await _client.get(ApiEndpoints.getDataPurchaseHistory);
+    final res = await _client.get(ApiEndpoints.getDataImportHistory);
     return _list(res.data);
   }
 

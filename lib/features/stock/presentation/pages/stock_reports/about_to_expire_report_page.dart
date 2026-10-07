@@ -49,7 +49,7 @@ class _AboutToExpireReportPageState extends ConsumerState<AboutToExpireReportPag
     setState(() => _isLoading = true);
     try {
       final repo = ref.read(stockRepositoryProvider);
-      final products = await repo.fetchExpiredStock();
+      final products = await repo.fetchAboutToExpireStock();
       final items = products.asMap().entries.map((e) {
         final p = e.value;
         return _ExpiryItem(sn: e.key + 1, name: p.name, quantity: p.available.toInt(), stockValue: p.buyingPrice * p.available);
