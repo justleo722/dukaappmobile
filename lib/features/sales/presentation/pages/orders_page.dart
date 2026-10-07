@@ -87,9 +87,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   double get _paidTotal {
     double total = 0;
     for (final order in _orders) {
-      if (order['status'] == 'PAID') {
-        total += order['paid'] as double;
-      }
+      total += order['paid'] as double;
     }
     return total;
   }

@@ -48,8 +48,10 @@ class PaymentSummaryCard extends StatelessWidget {
           _buildRow('Payment Method', paymentMethod),
           const SizedBox(height: 6),
           _buildRow('Paid', _formatCurrency(paid)),
-          const SizedBox(height: 6),
-          _buildRow('Discount', _formatCurrency(discount)),
+          if (discount > 0) ...[
+            const SizedBox(height: 6),
+            _buildRow('Discount', '- ${_formatCurrency(discount)}'),
+          ],
           const SizedBox(height: 6),
           _buildRow('Balance', _formatCurrency(balance)),
         ],

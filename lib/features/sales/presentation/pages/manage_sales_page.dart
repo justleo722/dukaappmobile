@@ -307,7 +307,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                   children: [
                     const SizedBox(height: 12),
                     SalesSummaryCard(
-                      totalSales: _isLoading ? '...' : '${_summary.currency} ${_fmt(_summary.total)}',
+                      totalSales: _isLoading ? '...' : '${_summary.currency} ${_fmt(_summary.paid + _summary.unpaid)}',
                       totalCredits: _isLoading ? '...' : '${_summary.currency} ${_fmt(_summary.unpaid)}',
                       totalOrders: _isLoading ? 0 : _sales.length,
                       profit: _isLoading ? '...' : '${_summary.currency} ${_fmt(_summary.paid)}',

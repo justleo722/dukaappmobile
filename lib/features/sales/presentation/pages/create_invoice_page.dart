@@ -25,19 +25,15 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   final TextEditingController _discountController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   DateTime _dueDate = DateTime.now().add(const Duration(days: 14));
-  String? _selectedCustomer;
+  String? _selectedCustomerId;   // actual ID sent to backend
+  String? _selectedCustomerName; // display value shown in dropdown
   String _selectedPaymentType = 'Credit';
 
   static const String _addNewCustomerValue = '__add_new_customer__';
   static const String _addNewPaymentValue = '__add_new_payment__';
 
-  final List<String> _customers = [
-    'HASSAN ALI',
-    'AMINA HASSAN',
-    'FATIMA OSMAN',
-    'JUMA JUMA',
-    'NEEMA KIMARO',
-  ];
+  // Each entry: {'id': String?, 'name': String}
+  final List<Map<String, String?>> _customers = [];
 
   final List<String> _paymentTypes = [
     'Cash',
@@ -62,13 +58,15 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
       final list = raw is List ? raw : (raw is Map ? (raw['data'] ?? raw['customers'] ?? []) : []);
       if (!mounted) return;
       setState(() {
-        _customers
-          ..clear()
-          ..add('Walk-in');
+        _customers.clear();
+        _customers.add({'id': null, 'name': 'Walk-in'});
         for (final c in list) {
           if (c is Map) {
+            final id = (c['customer_id'] ?? c['id'] ?? '').toString();
             final name = (c['customer_name'] ?? c['name'] ?? '').toString();
-            if (name.isNotEmpty) _customers.add(name);
+            if (name.isNotEmpty) {
+              _customers.add({'id': id.isEmpty ? null : id, 'name': name});
+            }
           }
         }
       });
@@ -418,7 +416,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
       );
       return;
     }
-    if (_selectedCustomer == null) {
+    if (_selectedCustomerName == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a customer')),
       );
@@ -448,7 +446,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
       final body = <String, dynamic>{
         for (int i = 0; i < itemStrings.length; i++) 'items[$i]': itemStrings[i],
         'payment_mode': 'invoice',
-        'customer_id': _selectedCustomer ?? '',
+        'customer_id': _selectedCustomerId ?? '',
         'total_amount': total,
         'paid_amount': 0,
         'discount': 0.0,
@@ -681,7 +679,6 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   }
 
   Widget _buildCustomerDropdown() {
-    final allOptions = [..._customers, _addNewCustomerValue];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -691,88 +688,65 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
           style: AppTypography.label.copyWith(color: AppColors.textPrimary),
         ),
         const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          initialValue: _selectedCustomer,
-          isExpanded: true,
-          hint: Text(
-            'Select Customer',
-            style: AppTypography.bodyMedium.copyWith(
-              color: AppColors.textHint,
+        DropdownButtonHideUnderline(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+              border: Border.all(color: AppColors.inputBorder),
             ),
-          ),
-          icon: const Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: AppColors.textHint,
-          ),
-          style: AppTypography.bodyMedium,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: AppColors.card,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
+            child: DropdownButton<String>(
+              value: _selectedCustomerName,
+              isExpanded: true,
+              hint: Text(
+                'Select Customer',
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
               ),
-              borderSide: const BorderSide(color: AppColors.inputBorder),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
-              ),
-              borderSide: const BorderSide(color: AppColors.inputBorder),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(
-                AppConstants.textFieldRadius,
-              ),
-              borderSide: const BorderSide(
-                color: AppColors.inputFocusBorder,
-                width: 1.5,
-              ),
-            ),
-          ),
-          items: allOptions.map((customer) {
-            if (customer == _addNewCustomerValue) {
-              return DropdownMenuItem(
-                value: customer,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.add_rounded,
-                      size: 18,
-                      color: AppColors.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        'Add New Customer',
-                        style: AppTypography.bodyMedium.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textHint),
+              style: AppTypography.bodyMedium,
+              items: [
+                ..._customers.map((c) => DropdownMenuItem<String>(
+                      value: c['name'],
+                      child: Text(c['name'] ?? ''),
+                    )),
+                DropdownMenuItem<String>(
+                  value: _addNewCustomerValue,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.add_rounded, size: 18, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'Add New Customer',
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              );
-            }
-            return DropdownMenuItem(
-              value: customer,
-              child: Text(customer),
-            );
-          }).toList(),
-          onChanged: (value) {
-            if (value == _addNewCustomerValue) {
-              _showAddNewCustomerSheet();
-            } else {
-              setState(() => _selectedCustomer = value);
-            }
-          },
+              ],
+              onChanged: (value) {
+                if (value == _addNewCustomerValue) {
+                  _showAddNewCustomerSheet();
+                } else {
+                  final match = _customers.firstWhere(
+                    (c) => c['name'] == value,
+                    orElse: () => {'id': null, 'name': value},
+                  );
+                  setState(() {
+                    _selectedCustomerName = value;
+                    _selectedCustomerId = match['id'];
+                  });
+                }
+              },
+            ),
+          ),
         ),
       ],
     );
