@@ -623,6 +623,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
 
     context.push('/purchase', extra: {
       'editMode': true,
+      'purchaseId': order['purchase_id']?.toString(),
       'poNumber': order['poNumber'],
       'supplier': order['supplier'],
       'products': products,

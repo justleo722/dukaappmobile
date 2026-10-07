@@ -202,6 +202,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final editMode = extra?['editMode'] as bool? ?? false;
           final createMode = extra?['createMode'] as bool? ?? false;
           final poNumber = extra?['poNumber'] as String?;
+          final purchaseId = extra?['purchaseId'] as String?;
           final supplier = extra?['supplier'] as String?;
           final products = extra?['products'] as List<Map<String, dynamic>>?;
           final initialProduct = extra?['initialProduct'] as Map<String, dynamic>?;
@@ -210,6 +211,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             editMode: editMode,
             createMode: createMode,
             poNumber: poNumber,
+            purchaseId: purchaseId,
             initialSupplier: supplier,
             editProducts: products,
           );
@@ -831,6 +833,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final editMode = extra?['editMode'] as bool? ?? false;
               final createMode = extra?['createMode'] as bool? ?? false;
               final poNumber = extra?['poNumber'] as String?;
+              final purchaseId = extra?['purchaseId'] as String?;
               final supplier = extra?['supplier'] as String?;
               final products = extra?['products'] as List<Map<String, dynamic>>?;
               final initialProduct = extra?['initialProduct'] as Map<String, dynamic>?;
@@ -839,6 +842,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 editMode: editMode,
                 createMode: createMode,
                 poNumber: poNumber,
+                purchaseId: purchaseId,
                 initialSupplier: supplier,
                 editProducts: products,
               );

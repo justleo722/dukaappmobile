@@ -1193,6 +1193,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
 
     context.push('/purchase', extra: {
       'editMode': true,
+      'purchaseId': purchase['purchase_id']?.toString(),
       'poNumber': 'PUR-${purchase['purchase_id'] ?? (index + 1)}',
       'supplier': purchase['supplier'],
       'products': products,

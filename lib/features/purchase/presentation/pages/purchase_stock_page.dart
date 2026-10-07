@@ -48,6 +48,7 @@ class PurchaseStockPage extends ConsumerStatefulWidget {
   final bool editMode;
   final bool createMode;
   final String? poNumber;
+  final String? purchaseId;
   final String? initialSupplier;
   final List<Map<String, dynamic>>? editProducts;
 
@@ -57,6 +58,7 @@ class PurchaseStockPage extends ConsumerStatefulWidget {
     this.editMode = false,
     this.createMode = false,
     this.poNumber,
+    this.purchaseId,
     this.initialSupplier,
     this.editProducts,
   });
@@ -813,6 +815,9 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                         purchaseBody['payment_mode'] = _accountIdMap[_selectedAccount ?? ''] ?? (_selectedAccount ?? '');
                         purchaseBody['record_date']  = DateFormat('yyyy-MM-dd').format(_purchaseDate);
                         purchaseBody['type']         = widget.createMode ? 'order' : 'restock';
+                        if (widget.editMode && widget.purchaseId != null && widget.purchaseId!.isNotEmpty) {
+                          purchaseBody['purchase_id'] = widget.purchaseId;
+                        }
                         final res = await repo.createPurchase(purchaseBody);
                         if (!mounted) return;
                         final ok = res['status']?.toString() == 'success' ||
