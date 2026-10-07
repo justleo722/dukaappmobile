@@ -116,7 +116,9 @@ class SessionUserModel {
       username: json['username']?.toString() ?? '',
       name: json['name']?.toString() ?? json['username']?.toString() ?? '',
       currency: json['currency']?.toString() ?? 'Tsh',
-      subscriptionStatus: int.tryParse(json['subscription_status']?.toString() ?? '0') ?? 0,
+      subscriptionStatus: json['subscription_status'] != null
+          ? (int.tryParse(json['subscription_status'].toString()) ?? 1)
+          : 1,
       remainingDays: int.tryParse(json['remaining_days']?.toString() ?? '0') ?? 0,
       permissions: permissions,
     );

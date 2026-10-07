@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/core/models/shop_config.dart';
 import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/dashboard/presentation/widgets/dashboard_appbar.dart';
@@ -35,26 +37,34 @@ class DashboardPage extends ConsumerWidget {
             child: dashboardAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, _) => _ErrorView(error: error, onRetry: onRefresh),
-              data: (state) => RefreshIndicator(
-                onRefresh: onRefresh,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 8),
-                      if (cfg.enableHomepageLiveSummary)
-                        SummaryCarousel(
-                          dashboard: state.dashboard,
-                          sessionUser: state.sessionUser,
-                        ),
-                      if (cfg.enableHomepageLiveSummary) const SizedBox(height: 8),
-                      DashboardGrid(sessionUser: state.sessionUser),
-                      SizedBox(height: 100 + bottomPadding),
-                    ],
+              data: (state) {
+                if (!state.sessionUser.isActive) {
+                  return _SubscriptionExpiredView(
+                    remainingDays: state.sessionUser.remainingDays,
+                    onRefresh: onRefresh,
+                  );
+                }
+                return RefreshIndicator(
+                  onRefresh: onRefresh,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 8),
+                        if (cfg.enableHomepageLiveSummary)
+                          SummaryCarousel(
+                            dashboard: state.dashboard,
+                            sessionUser: state.sessionUser,
+                          ),
+                        if (cfg.enableHomepageLiveSummary) const SizedBox(height: 8),
+                        DashboardGrid(sessionUser: state.sessionUser),
+                        SizedBox(height: 100 + bottomPadding),
+                      ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         ],
@@ -67,6 +77,59 @@ class DashboardPage extends ConsumerWidget {
         ),
         child: const FloatingActionBar(),
       ) : null,
+    );
+  }
+}
+
+class _SubscriptionExpiredView extends StatelessWidget {
+  const _SubscriptionExpiredView({required this.remainingDays, required this.onRefresh});
+
+  final int remainingDays;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.workspace_premium_rounded, size: 72, color: AppColors.danger),
+            const SizedBox(height: 20),
+            Text(
+              'Usajili Umekwisha',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Usajili wa duka lako umekwisha. Tafadhali fanya malipo ili kuendelea kutumia mfumo.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            FilledButton.icon(
+              onPressed: () => context.push('/renew'),
+              icon: const Icon(Icons.payment_rounded),
+              label: const Text('Fanya Malipo'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                minimumSize: const Size(double.infinity, 48),
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: onRefresh,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Angalia Tena'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

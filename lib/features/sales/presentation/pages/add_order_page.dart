@@ -497,7 +497,7 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
 
   Widget _buildItemsList() {
     return Column(
-      children: _items.asMap().entries.map((entry) {
+      children: _items.asMap().entries.map<Widget>((entry) {
         final index = entry.key;
         final item = entry.value;
         final price = _isWholesale
@@ -505,11 +505,11 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
             : (item['sellingPrice'] as double? ?? 0.0);
         return AddSaleItemTile(
           name: item['name'] as String,
-          price: price,
+          sellingPrice: price,
           quantity: (item['quantity'] as num?)?.toInt() ?? 1,
-          maxStock: (item['stock'] as num?)?.toInt() ?? 9999,
+          stock: (item['stock'] as num?)?.toInt() ?? 9999,
           discount: item['discount'] as double? ?? 0.0,
-          isService: item['type'] == 'service',
+          isWholesale: _isWholesale,
           onQuantityChanged: (v) => setState(() => _items[index]['quantity'] = v),
           onDiscountChanged: (v) => setState(() => _items[index]['discount'] = v),
           onRemove: () => setState(() => _items.removeAt(index)),
