@@ -41,32 +41,44 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadCustomers();
-      _ensureProductsLoaded();
+      _loadProducts();
     });
   }
 
-  /// Ensure we have unfiltered stock (available quantities) for the product
-  /// search. The stockProvider may have been refreshed with a date range filter
-  /// by the stock page, which makes available=0 for most products. For order
-  /// creation we always need the real current stock.
-  Future<void> _ensureProductsLoaded() async {
-    final current = ref.read(stockProvider);
-    // If data is already available and has products, use it as-is.
-    if (current is AsyncData && (current.value?.products.isNotEmpty ?? false)) return;
-    // Otherwise trigger a fresh unfiltered load.
+  Future<void> _loadProducts() async {
     try {
-      final repo = ref.read(stockRepositoryProvider);
-      final fresh = await repo.refresh();
-      if (mounted) setState(() => _cachedAllProducts = fresh.products.map((p) => {
-        'product_id': p.productId,
-        'stock_id': p.stockId,
-        'name': p.name,
-        'sellingPrice': p.sellingPrice,
-        'wholesalePrice': p.wholesalePrice,
-        'stock': p.type == 'service' ? 9999 : p.available.toInt(),
-        'type': p.type ?? 'product',
-      }).toList());
-    } catch (_) {}
+      final ds = ref.read(stockRemoteDatasourceProvider);
+      // Always fetch unfiltered — ignore any active date range so all products appear.
+      final products = await ds.fetchStock();
+      if (!mounted) return;
+      setState(() {
+        _cachedAllProducts = products.map((p) => {
+          'product_id': p.productId,
+          'stock_id': p.stockId,
+          'name': p.name,
+          'sellingPrice': p.sellingPrice,
+          'wholesalePrice': p.wholesalePrice,
+          'stock': p.type == 'service' ? 9999 : p.available.toInt(),
+          'type': p.type ?? 'product',
+        }).toList();
+      });
+    } catch (_) {
+      // Fallback: use whatever stockProvider already has
+      final current = ref.read(stockProvider);
+      if (current is AsyncData && mounted) {
+        setState(() {
+          _cachedAllProducts = current.value!.products.map((p) => {
+            'product_id': p.productId,
+            'stock_id': p.stockId,
+            'name': p.name,
+            'sellingPrice': p.sellingPrice,
+            'wholesalePrice': p.wholesalePrice,
+            'stock': p.type == 'service' ? 9999 : p.available.toInt(),
+            'type': p.type ?? 'product',
+          }).toList();
+        });
+      }
+    }
   }
 
   @override

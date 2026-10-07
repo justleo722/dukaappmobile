@@ -390,7 +390,10 @@ class _CustomersWalletPageState extends ConsumerState<CustomersWalletPage> {
                   icon: Icons.receipt_long_rounded,
                   label: 'Statement',
                   color: AppColors.secondary,
-                  onTap: () => _showComingSoon('Statement'),
+                  onTap: () => context.push(
+                    '/customers/${wallet.customer.id}/wallet-statement',
+                    extra: wallet.customer,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 _buildActionButton(
