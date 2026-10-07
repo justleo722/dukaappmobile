@@ -55,7 +55,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
       context.go('/dashboard');
       showAppToast('Umebadilisha duka: $newShopName');
     } catch (e) {
-      showAppToast('Imeshindwa kubadilisha duka: $e', isError: true);
+      final msg = e.toString()
+          .replaceFirst(RegExp(r'^Exception:\s*'), '')
+          .replaceFirst(RegExp(r'^ApiException:\s*'), '');
+      showAppToast('Imeshindwa kubadilisha duka: $msg', isError: true);
     }
   }
 

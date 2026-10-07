@@ -6,10 +6,14 @@ class DashboardState {
   const DashboardState({
     required this.dashboard,
     required this.sessionUser,
+    this.fromCache = false,
   });
 
   final DashboardModel    dashboard;
   final SessionUserModel  sessionUser;
+  /// true = served from local cache; false = fresh from API.
+  /// Subscription expiry is only enforced on fresh API data.
+  final bool fromCache;
 
   // ── Cache serialisation ─────────────────────────────────────────────────
 
@@ -24,6 +28,7 @@ class DashboardState {
           json['dashboard']    as Map<String, dynamic>? ?? {}),
       sessionUser: SessionUserModel.fromJson(
           json['session_user'] as Map<String, dynamic>? ?? {}),
+      fromCache: true,
     );
   }
 }

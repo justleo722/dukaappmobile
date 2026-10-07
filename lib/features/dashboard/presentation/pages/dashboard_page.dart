@@ -38,7 +38,9 @@ class DashboardPage extends ConsumerWidget {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, _) => _ErrorView(error: error, onRetry: onRefresh),
               data: (state) {
-                if (!state.sessionUser.isActive) {
+                // Only block on fresh API data — never on cached data
+                // to avoid false-positives from stale cache.
+                if (!state.fromCache && !state.sessionUser.isActive) {
                   return _SubscriptionExpiredView(
                     remainingDays: state.sessionUser.remainingDays,
                     onRefresh: onRefresh,
