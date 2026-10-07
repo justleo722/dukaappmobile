@@ -324,7 +324,7 @@ class SaleByCategory {
         sn: sn,
         category: (j['category'] ?? j['category_name'] ?? '').toString(),
         lastSale: (j['last_sale'] ?? j['date'] ?? '').toString(),
-        total: _d(j['total']),
+        total: _d(j['total_amount'] ?? j['total']),
         profit: _d(j['profit']),
       );
 }
@@ -342,8 +342,8 @@ class SaleByPayment {
 
   factory SaleByPayment.fromJson(int sn, Map<String, dynamic> j) => SaleByPayment(
         sn: sn,
-        mode: (j['payment_mode'] ?? j['mode'] ?? j['name'] ?? '').toString(),
-        total: _d(j['total']),
+        mode: (j['sale_group'] ?? j['payment_mode'] ?? j['mode'] ?? j['name'] ?? '').toString(),
+        total: _d(j['total_amount'] ?? j['total']),
       );
 }
 
@@ -367,8 +367,8 @@ class SaleByCustomer {
   factory SaleByCustomer.fromJson(int sn, Map<String, dynamic> j) => SaleByCustomer(
         sn: sn,
         customer: (j['customer'] ?? j['customer_name'] ?? '').toString(),
-        total: _d(j['total']),
-        paid: _d(j['paid']),
+        total: _d(j['total_amount'] ?? j['total']),
+        paid: _d(j['paid_amount'] ?? j['paid']),
         salesBalance: _d(j['sales_balance'] ?? j['balance']),
         creditBalance: _d(j['credit_balance'] ?? j['wallet_balance'] ?? 0),
       );
@@ -388,7 +388,7 @@ class SaleByStaff {
   factory SaleByStaff.fromJson(int sn, Map<String, dynamic> j) => SaleByStaff(
         sn: sn,
         staff: (j['staff'] ?? j['username'] ?? j['name'] ?? '').toString(),
-        total: _d(j['total']),
+        total: _d(j['total_amount'] ?? j['total']),
       );
 }
 
@@ -474,7 +474,7 @@ class TeamSale {
         date: (j['date'] ?? j['record_date'] ?? '').toString(),
         staff: (j['staff'] ?? j['username'] ?? '').toString(),
         type: (j['payment_mode'] ?? j['type'] ?? '').toString(),
-        total: _d(j['total']),
+        total: _d(j['total_amount'] ?? j['total']),
       );
 }
 
@@ -539,9 +539,9 @@ class CustomerCreditItem {
         lastCreditDate: (j['last_credit_date'] ?? j['date'] ?? '').toString(),
         customer: (j['customer'] ?? j['customer_name'] ?? '').toString(),
         phone: (j['phone'] ?? '').toString(),
-        creditSales: _d(j['credit_sales'] ?? j['sales_count'] ?? j['count'] ?? 0),
-        total: _d(j['total']),
-        paid: _d(j['paid']),
+        creditSales: _d(j['credit_sales'] ?? j['sale_count'] ?? j['sales_count'] ?? j['count'] ?? 0),
+        total: _d(j['total_amount'] ?? j['total']),
+        paid: _d(j['amount_paid'] ?? j['paid']),
         creditBalance: _d(j['credit_balance'] ?? j['balance']),
       );
 }
@@ -621,9 +621,9 @@ class StaffSaleByItem {
   factory StaffSaleByItem.fromJson(int sn, Map<String, dynamic> j) => StaffSaleByItem(
         sn: sn,
         staff: (j['staff'] ?? j['username'] ?? '').toString(),
-        item: (j['product_name'] ?? j['item'] ?? j['name'] ?? '').toString(),
+        item: (j['item_name'] ?? j['product_name'] ?? j['item'] ?? j['name'] ?? '').toString(),
         qty: _i(j['quantity'] ?? j['qty']),
-        amount: _d(j['total'] ?? j['amount']),
+        amount: _d(j['amount'] ?? j['total']),
       );
 }
 
@@ -654,8 +654,8 @@ class UnpaidProductSale {
         product: (j['product_name'] ?? j['name'] ?? j['product'] ?? '').toString(),
         category: (j['category'] ?? j['category_name'] ?? '').toString(),
         lastSale: (j['last_sale'] ?? j['date'] ?? '').toString(),
-        total: _d(j['total']),
-        paid: _d(j['paid']),
+        total: _d(j['total_amount'] ?? j['total']),
+        paid: _d(j['paid_amount'] ?? j['paid']),
         balance: _d(j['balance']),
         profit: _d(j['profit']),
       );
