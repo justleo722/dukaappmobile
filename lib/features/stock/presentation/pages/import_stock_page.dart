@@ -1,6 +1,9 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/stock/data/models/stock_models.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:dukaapp/app/colors.dart';
@@ -11,14 +14,14 @@ import 'package:dukaapp/features/stock/presentation/widgets/excel_template_butto
 import 'package:dukaapp/features/stock/presentation/widgets/upload_card.dart';
 import 'package:dukaapp/features/stock/presentation/pages/import_preview_page.dart';
 
-class ImportStockPage extends StatefulWidget {
+class ImportStockPage extends ConsumerStatefulWidget {
   const ImportStockPage({super.key});
 
   @override
-  State<ImportStockPage> createState() => _ImportStockPageState();
+  ConsumerState<ImportStockPage> createState() => _ImportStockPageState();
 }
 
-class _ImportStockPageState extends State<ImportStockPage> {
+class _ImportStockPageState extends ConsumerState<ImportStockPage> {
   String? _selectedCategory;
   String? _selectedFileName;
   Uint8List? _fileBytes;
@@ -83,6 +86,18 @@ class _ImportStockPageState extends State<ImportStockPage> {
     }
   }
 
+  // Selected category, else the shop's "Uncategorized" category (same default as web).
+  String? _resolveCategoryId() {
+    final categories = ref.read(stockProvider).valueOrNull?.categories ?? const [];
+    StockCategory? match;
+    for (final c in categories) {
+      if (_selectedCategory != null && c.name == _selectedCategory) { match = c; break; }
+    }
+    match ??= categories.where((c) => c.name.toLowerCase() == 'uncategorized').firstOrNull;
+    final id = match?.categoryId?.toString();
+    return (id == null || id.isEmpty) ? null : id;
+  }
+
   void _onPreviewFile() {
     if (_fileBytes == null || _selectedFileName == null) return;
     Navigator.of(context).push(
@@ -90,6 +105,7 @@ class _ImportStockPageState extends State<ImportStockPage> {
         builder: (_) => ImportPreviewPage(
           fileBytes: _fileBytes!,
           fileName: _selectedFileName!,
+          categoryId: _resolveCategoryId(),
         ),
       ),
     );

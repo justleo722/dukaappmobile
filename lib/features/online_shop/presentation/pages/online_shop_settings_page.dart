@@ -50,6 +50,22 @@ class _OnlineShopSettingsPageState extends ConsumerState<OnlineShopSettingsPage>
       final url = data is Map ? (data['public_url'] ?? '').toString() : '';
       if (mounted && url.isNotEmpty) setState(() => _shopUrl = url);
     } catch (_) {}
+    // Nothing saved on this device yet: use the shop's own phone/email (the public
+    // storefront shows shops.phone), so the fields aren't empty.
+    if (_whatsappController.text.isEmpty || _emailController.text.isEmpty) {
+      try {
+        final res = await ref.read(apiServiceProvider).getSessionShop();
+        dynamic shop = res.data;
+        if (shop is Map && shop['data'] is Map) shop = shop['data'];
+        if (!mounted || shop is! Map) return;
+        final phone = (shop['ecommerce_phone'] ?? shop['phone'] ?? '').toString();
+        final email = (shop['email'] ?? shop['shop_email'] ?? '').toString();
+        setState(() {
+          if (_whatsappController.text.isEmpty) _whatsappController.text = phone;
+          if (_emailController.text.isEmpty) _emailController.text = email;
+        });
+      } catch (_) {}
+    }
   }
 
   @override

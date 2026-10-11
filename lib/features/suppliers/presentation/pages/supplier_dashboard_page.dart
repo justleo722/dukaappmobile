@@ -9,6 +9,9 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/suppliers/data/models/supplier_model.dart';
+import 'package:dukaapp/features/purchase/data/models/purchase_models.dart';
+import 'package:dukaapp/features/purchase/presentation/providers/purchase_provider.dart';
+import 'package:intl/intl.dart';
 
 class SupplierDashboardPage extends ConsumerStatefulWidget {
   final Supplier supplier;
@@ -29,7 +32,53 @@ class _SupplierDashboardPageState extends ConsumerState<SupplierDashboardPage>
     super.initState();
     _supplier = widget.supplier;
     _tabController = TabController(length: 3, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadPurchases());
   }
+
+  List<Map<String, String>> _cashRows = [];
+  List<Map<String, String>> _creditRows = [];
+  List<Map<String, String>> _orderRows = [];
+
+  // Real purchases for this supplier (purchase_history / purchase_orders), all time.
+  Future<void> _loadPurchases() async {
+    try {
+      final repo = ref.read(purchaseRepositoryProvider);
+      final to = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final results = await Future.wait([
+        repo.fetchPurchases(from: '1990-01-01', to: to),
+        repo.fetchPurchaseOrders(from: '1990-01-01', to: to),
+      ]);
+      final mine = (List<PurchaseItem> l) => l.where((p) => p.supplierId == _supplier.id.toString()).toList();
+      final purchases = mine(results[0]);
+      final orders = mine(results[1]);
+      if (!mounted) return;
+      setState(() {
+        _cashRows = purchases.where((p) => p.purchaseType.toLowerCase() == 'cash').map(_row).toList();
+        _creditRows = purchases.where((p) => p.purchaseType.toLowerCase() == 'credit').map(_row).toList();
+        _orderRows = orders.map((p) => {
+          'order': 'PUR-${p.purchaseId}',
+          'date': p.date,
+          'status': p.paymentStatus,
+          'total': _money(p.currency, p.totalAmount),
+        }).toList();
+      });
+    } catch (e) {
+      debugPrint('[SupplierDashboard] load purchases failed: $e');
+    }
+  }
+
+  String _money(String currency, double v) => '$currency ${NumberFormat('#,###').format(v)}';
+
+  Map<String, String> _row(PurchaseItem p) => {
+        'purchase': 'PUR-${p.purchaseId}',
+        'purchase_id': p.purchaseId?.toString() ?? '',
+        'date': p.date,
+        'type': p.purchaseType.toLowerCase() == 'credit' ? 'Credit' : 'Cash',
+        'status': p.paymentStatus,
+        'total': _money(p.currency, p.totalAmount),
+        'paid': _money(p.currency, p.paidAmount),
+        'balance': _money(p.currency, p.balance),
+      };
 
   @override
   void dispose() {
@@ -940,84 +989,25 @@ class _SupplierDashboardPageState extends ConsumerState<SupplierDashboardPage>
     );
   }
 
-  List<Map<String, String>> _generateSampleCashPurchases() {
-    if (_supplier.totalPurchases == 0) return [];
-    return [
-      {
-        'purchase': '#P1024',
-        'date': '05/08/2026',
-        'type': 'Cash',
-        'status': 'Paid',
-        'total': 'TZS 1,250,000',
-        'paid': 'TZS 1,250,000',
-        'balance': 'TZS 0',
-      },
-      {
-        'purchase': '#P1018',
-        'date': '28/07/2026',
-        'type': 'Cash',
-        'status': 'Paid',
-        'total': 'TZS 850,000',
-        'paid': 'TZS 850,000',
-        'balance': 'TZS 0',
-      },
-      {
-        'purchase': '#P1005',
-        'date': '15/07/2026',
-        'type': 'Cash',
-        'status': 'Paid',
-        'total': 'TZS 2,100,000',
-        'paid': 'TZS 2,100,000',
-        'balance': 'TZS 0',
-      },
-    ];
-  }
+  List<Map<String, String>> _generateSampleCashPurchases() => _cashRows;
 
-  List<Map<String, String>> _generateSampleCreditPurchases() {
-    if (_supplier.creditBalance == 0) return [];
-    return [
-      {
-        'purchase': '#P1030',
-        'date': '08/08/2026',
-        'type': 'Credit',
-        'status': 'Unpaid',
-        'total': 'TZS 500,000',
-        'paid': 'TZS 0',
-        'balance': 'TZS 500,000',
-      },
-      {
-        'purchase': '#P1022',
-        'date': '01/08/2026',
-        'type': 'Credit',
-        'status': 'Partial',
-        'total': 'TZS 350,000',
-        'paid': 'TZS 200,000',
-        'balance': 'TZS 150,000',
-      },
-    ];
-  }
+  List<Map<String, String>> _generateSampleCreditPurchases() => _creditRows;
 
-  List<Map<String, String>> _generateSampleOrders() {
-    return [
-      {
-        'order': '#PO2045',
-        'date': '10/08/2026',
-        'status': 'Pending',
-        'total': 'TZS 1,800,000',
-      },
-      {
-        'order': '#PO2038',
-        'date': '02/08/2026',
-        'status': 'Completed',
-        'total': 'TZS 950,000',
-      },
-      {
-        'order': '#PO2021',
-        'date': '25/07/2026',
-        'status': 'Completed',
-        'total': 'TZS 2,400,000',
-      },
-    ];
+  List<Map<String, String>> _generateSampleOrders() => _orderRows;
+
+  Future<String?> _cashAccountId() async {
+    try {
+      final res = await ref.read(apiServiceProvider).getCashbookAccounts();
+      final body = res.data;
+      final list = body is List ? body : (body is Map ? (body['data'] ?? body['accounts'] ?? []) : []);
+      final accounts = (list as List).whereType<Map>().toList();
+      final cash = accounts.where((a) => (a['account_name'] ?? '').toString().toLowerCase() == 'cash').firstOrNull
+          ?? accounts.firstOrNull;
+      final id = cash?['account_id']?.toString();
+      return (id == null || id.isEmpty) ? null : id;
+    } catch (_) {
+      return null;
+    }
   }
 
   void _showPayDialog(Map<String, String> purchase) {
@@ -1078,17 +1068,29 @@ class _SupplierDashboardPageState extends ConsumerState<SupplierDashboardPage>
             ),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
+              final amount = double.tryParse(amountController.text.replaceAll(',', '')) ?? 0;
+              final purchaseId = purchase['purchase_id'] ?? '';
+              if (amount <= 0 || purchaseId.isEmpty) return;
+              final res = await ref.read(apiServiceProvider).postSupplierClearCreditBalance({
+                'purchase_id': purchaseId,
+                'amount': amount,
+                'date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
+                if (await _cashAccountId() case final id?) 'from_account_id': id,
+              });
+              if (!mounted) return;
+              final ok = res['status']?.toString() == 'success';
+              if (ok) _loadPurchases();
+              ScaffoldMessenger.of(this.context).showSnackBar(
                 SnackBar(
+                  backgroundColor: ok ? AppColors.success : AppColors.danger,
                   content: Text(
-                    'Payment recorded for ${purchase['purchase']}',
+                    ok ? 'Payment recorded for ${purchase['purchase']}' : (res['message']?.toString() ?? 'Payment failed'),
                     style: AppTypography.bodyMedium.copyWith(
                       color: AppColors.textWhite,
                     ),
                   ),
-                  backgroundColor: AppColors.success,
                   behavior: SnackBarBehavior.floating,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(AppConstants.radiusSM),

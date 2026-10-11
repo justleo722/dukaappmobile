@@ -114,6 +114,9 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
     _todayProfitValue = todayProfit != null
         ? (double.tryParse(todayProfit['net_profit']?.toString() ?? '') ?? 0)
         : null;
+    _todayExpenseValue = todayProfit != null
+        ? (double.tryParse(todayProfit['expense']?.toString() ?? '') ?? 0)
+        : null;
     final freshExpenses = results[1] as List<ExpenseItem>;
     final fetchedCategories = results[2] as List<ExpenseAccount>;
     final fetchedCashbook = results[3] as List<ExpenseAccount>;
@@ -148,6 +151,7 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
 
   bool _hasProfitSummary = false;
   double? _todayProfitValue;
+  double? _todayExpenseValue;
 
   double get _totalExpenses => _hasProfitSummary
       ? _summary.totalExpenses
@@ -824,12 +828,13 @@ class _ProfitExpensesPageState extends ConsumerState<ProfitExpensesPage> {
       child: Row(
         children: [
           Expanded(
+            // Web: "Today Total Expenses" next to "Today Net Profit".
             child: _buildSummaryCard(
-              label: 'Leo Mauzo',
-              amount: _fmt(_todaySales),
-              color: AppColors.primary,
-              bgColor: const Color(0xFFEBF2FF),
-              icon: Icons.point_of_sale_rounded,
+              label: s.todayExpenses,
+              amount: _fmt(_todayExpenseValue ?? _todayExpenses),
+              color: AppColors.warning,
+              bgColor: AppColors.warningLight,
+              icon: Icons.receipt_long_rounded,
             ),
           ),
           const SizedBox(width: 12),

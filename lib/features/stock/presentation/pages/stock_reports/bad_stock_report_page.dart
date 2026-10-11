@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
+import 'package:dukaapp/features/stock/data/models/stock_models.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -49,14 +50,14 @@ class _BadStockReportPageState extends ConsumerState<BadStockReportPage> {
   Future<void> _loadItems() async {
     setState(() => _isLoading = true);
     try {
-      final stockState = ref.read(stockProvider);
-      final products = stockState.whenOrNull(
-            data: (s) => s.products.where((p) => p.bad > 0).toList(),
-          ) ??
-          [];
+      // Same source as the web report: Reports_model::badStock.
+      final repo = ref.read(stockRepositoryProvider);
+      final filter = ref.read(filterProvider);
+      final rows = await repo.fetchReportRows('badStock', from: filter.from, to: filter.to);
+      final products = rows.map(StockProduct.fromJson).toList();
       final items = products.asMap().entries.map((e) {
         final p = e.value;
-        return _BadStockItem(sn: e.key + 1, name: p.name, quantity: p.available.toInt(), loss: p.buyingPrice * p.available);
+        return _BadStockItem(sn: e.key + 1, name: p.name, quantity: p.bad.toInt(), loss: p.loss);
       }).toList();
       if (mounted) setState(() => _allItems = items);
     } catch (_) {

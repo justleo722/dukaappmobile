@@ -14,6 +14,7 @@ import 'package:dukaapp/features/stock/presentation/widgets/adjust_bottom_bar.da
 class _AdjustItem {
   final String name;
   final int currentStock;
+  final double openingStock;
   final dynamic productId;
   final dynamic stockId;
   int adjustQuantity;
@@ -22,6 +23,7 @@ class _AdjustItem {
   _AdjustItem({
     required this.name,
     required this.currentStock,
+    this.openingStock = 0,
     this.productId,
     this.stockId,
   })  : adjustQuantity = 0,
@@ -38,6 +40,8 @@ class AdjustStockPage extends ConsumerStatefulWidget {
 class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
   final TextEditingController _searchController = TextEditingController();
   final List<_AdjustItem> _items = [];
+  // Indexes into _allProductsCache (not the filtered list), so changing the
+  // search text doesn't change which products are selected.
   final Set<int> _selectedProducts = {};
   bool _isSaving = false;
 
@@ -52,6 +56,7 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
             .map((p) => {
                   'name': p.name,
                   'stock': p.available.toInt(),
+                  'stock_exact': p.available,
                   'product_id': p.productId,
                   'stock_id': p.stockId,
                 })
@@ -80,7 +85,7 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
   }
 
   void _addSelectedProducts() {
-    final products = _getFilteredProducts();
+    final products = _allProductsCache;
     int addedCount = 0;
     final toAdd = <_AdjustItem>[];
     for (final index in _selectedProducts) {
@@ -91,6 +96,7 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
       toAdd.add(_AdjustItem(
         name: name,
         currentStock: (product['stock'] as num?)?.toInt() ?? 0,
+        openingStock: (product['stock_exact'] as num?)?.toDouble() ?? 0,
         productId: product['product_id'],
         stockId: product['stock_id'],
       ));
@@ -127,13 +133,14 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
     });
   }
 
+  Set<int> _selectableCacheIndices(List<Map<String, dynamic>> filtered) => filtered
+      .where((p) => !_items.any((item) => item.name == p['name']))
+      .map((p) => _allProductsCache.indexOf(p))
+      .where((i) => i >= 0)
+      .toSet();
+
   void _toggleAll() {
-    final products = _getFilteredProducts();
-    final selectableIndices = products
-        .asMap()
-        .keys
-        .where((i) => !_items.any((item) => item.name == products[i]['name']))
-        .toSet();
+    final selectableIndices = _selectableCacheIndices(_getFilteredProducts());
     final allSelected = selectableIndices.every((i) => _selectedProducts.contains(i));
     setState(() {
       if (allSelected) {
@@ -155,9 +162,11 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
         .map((item) {
           final isBalancing = item.status == AdjustmentStatus.balancing;
           return {
+            'name': item.name,
             'product_id': item.productId,
             'stock_id': item.stockId,
-            'opening_quantity': item.currentStock,
+            // Exact balance (may be fractional) so the 'balanced' delta is right.
+            'opening_quantity': item.openingStock,
             // balanced: adjustQuantity IS the target (stepper initialized to currentStock)
             // outflow (bad/lost/stolen/expired): adjustQuantity is the amount to remove
             'quantity': isBalancing
@@ -449,11 +458,7 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
 
   Widget _buildProductsHeader() {
     final products = _getFilteredProducts(updateCache: true);
-    final selectableIndices = products
-        .asMap()
-        .keys
-        .where((i) => !_items.any((item) => item.name == products[i]['name']))
-        .toSet();
+    final selectableIndices = _selectableCacheIndices(products);
     final allSelected = selectableIndices.isNotEmpty &&
         selectableIndices.every((i) => _selectedProducts.contains(i));
 
@@ -603,10 +608,10 @@ class _AdjustStockPageState extends ConsumerState<AdjustStockPage> {
     return Column(
       children: [
         ...products.asMap().entries.map((entry) {
-          final index = entry.key;
           final product = entry.value;
+          final index = _allProductsCache.indexOf(product);
           final name = product['name'] as String;
-          final stock = product['stock'] as int;
+          final stock = (product['stock'] as num).toInt();
           final isAlreadyAdded = _items.any((item) => item.name == name);
           final isSelected = _selectedProducts.contains(index);
 

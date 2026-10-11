@@ -88,7 +88,9 @@ class _PurchaseReportPageState extends ConsumerState<PurchaseReportPage> {
           break;
         case 'by_supplier':
         case 'suppliers':
-          final res = await api.getReportSuppliers(from: from, to: to);
+          // Reports_model has no 'suppliers' method (getreport/suppliers → 400);
+          // purchaseBySupplier is the per-supplier purchase totals report.
+          final res = await api.getReportPurchaseByMethod('purchaseBySupplier', from: from, to: to);
           final list = _unwrapList(res.data);
           _apiHeaders = ['S/N', 'Supplier', 'Phone', 'Total', 'Paid', 'Balance'];
           _apiRows = list.asMap().entries.map((e) {

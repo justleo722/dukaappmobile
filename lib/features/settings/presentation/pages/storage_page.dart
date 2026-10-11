@@ -78,7 +78,9 @@ class _StoragePageState extends ConsumerState<StoragePage> {
       _attendants = rawAtt.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
     } catch (e) {
       debugPrint('[Storage] attendant settings failed: $e');
-      _attendantsMessage = 'Failed to load attendants';
+      // Show the real reason (HTTP status/server message) so it can be diagnosed.
+      final reason = e.toString().replaceFirst(RegExp(r'^\w*Exception:\s*'), '');
+      _attendantsMessage = 'Failed to load attendants: $reason';
     }
     if (mounted) setState(() => _isLoading = false);
   }

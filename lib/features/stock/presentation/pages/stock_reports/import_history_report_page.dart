@@ -76,8 +76,8 @@ class _ImportHistoryReportPageState extends ConsumerState<ImportHistoryReportPag
           title: r['title']?.toString() ?? r['description']?.toString() ?? 'Import',
           category: r['category']?.toString() ?? '',
           importedBy: r['username']?.toString() ?? r['imported_by']?.toString() ?? r['created_by']?.toString() ?? '',
-          items: int.tryParse(r['items_count']?.toString() ?? r['items']?.toString() ?? r['item_count']?.toString() ?? '0') ?? 0,
-          qty: int.tryParse(r['total_qty']?.toString() ?? r['qty']?.toString() ?? r['quantity']?.toString() ?? '0') ?? 0,
+          items: double.tryParse(r['items_count']?.toString() ?? r['items']?.toString() ?? r['item_count']?.toString() ?? '0')?.toInt() ?? 0,
+          qty: double.tryParse(r['total_qty']?.toString() ?? r['qty']?.toString() ?? r['quantity']?.toString() ?? '0')?.toInt() ?? 0,
           stockValue: double.tryParse(r['stock_value']?.toString() ?? r['total_value']?.toString() ?? '0') ?? 0.0,
         );
       }).toList();

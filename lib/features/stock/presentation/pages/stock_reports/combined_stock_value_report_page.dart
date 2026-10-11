@@ -12,7 +12,6 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
-import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
@@ -60,27 +59,21 @@ class _CombinedStockValueReportPageState
   Future<void> _loadItems() async {
     setState(() => _isLoading = true);
     try {
-      final authState = ref.read(authProvider);
-      final stockState = ref.read(stockProvider);
-      final summary = stockState.whenOrNull(data: (s) => s.summary);
-      final products = stockState.whenOrNull(data: (s) => s.products) ?? [];
-      final shops = authState.shops ?? [];
-
-      final activeId = authState.activeShop?.id?.toString() ?? '';
-      final items = shops.asMap().entries.map((e) {
-        final shop = e.value;
-        final id = shop.id?.toString() ?? '';
-        final isActive = id == activeId;
-        final qty = isActive ? products.fold<int>(0, (s, p) => s + p.available.toInt()) : 0;
-        final sv = isActive ? (summary?.stockValue ?? 0.0) : 0.0;
-        final itemCount = isActive ? products.length : 0;
+      // Same source as the web report: Reports_model::combinedStockValue (all the user's shops).
+      final repo = ref.read(stockRepositoryProvider);
+      final filter = ref.read(filterProvider);
+      final rows = await repo.fetchReportRows('combinedStockValue', from: filter.from, to: filter.to);
+      double d(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0;
+      final items = rows.asMap().entries.map((e) {
+        final r = e.value;
+        final id = (r['shop_id'] ?? '').toString();
         return _ShopStock(
           sn: e.key + 1,
-          shopName: shop.shopName ?? id,
+          shopName: (r['shop_name'] ?? id).toString(),
           shopId: id,
-          items: itemCount,
-          availableQty: qty,
-          stockValue: sv,
+          items: d(r['items_count']).toInt(),
+          availableQty: d(r['available']).toInt(),
+          stockValue: d(r['stock_value']),
         );
       }).toList();
       if (mounted) setState(() => _allShops = items);

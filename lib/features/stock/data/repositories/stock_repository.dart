@@ -31,6 +31,8 @@ class StockRepository {
       _remote.fetchProductsByShop(shopId);
   Future<List<StockCategory>> fetchCategories() => _remote.fetchCategories();
   Future<List<StockProduct>> fetchLowStock() => _remote.fetchLowStock();
+  Future<List<Map<String, dynamic>>> fetchReportRows(String method, {String? from, String? to}) =>
+      _remote.fetchReportRows(method, from: from, to: to);
   Future<List<StockProduct>> fetchExpiredStock() => _remote.fetchExpiredStock();
   Future<List<StockProduct>> fetchAboutToExpireStock() => _remote.fetchAboutToExpireStock();
 
@@ -48,8 +50,8 @@ class StockRepository {
   Future<List<Map<String, dynamic>>> fetchImportHistory() =>
       _remote.fetchImportHistory();
 
-  Future<Map<String, dynamic>> importProducts(List<Map<String, dynamic>> products) =>
-      _remote.importProducts(products);
+  Future<Map<String, dynamic>> importProducts(List<Map<String, dynamic>> products, {String? categoryId}) =>
+      _remote.importProducts(products, categoryId: categoryId);
 
   Future<Map<String, dynamic>> createRestock(Map<String, dynamic> body) =>
       _remote.createRestock(body);

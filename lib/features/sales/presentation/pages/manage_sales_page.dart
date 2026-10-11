@@ -49,6 +49,9 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadSales());
   }
 
+  int _ordersCount = 0;
+  double _profit = 0;
+
   Future<void> _loadSales({String? from, String? to}) async {
     if (!mounted) return;
     setState(() => _isLoading = true);
@@ -61,10 +64,13 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
 
       final summary = await repo.fetchSalesSummary(from: from, to: to);
       debugPrint('[Sales] summary: total=${summary.total}');
+      final orders = await repo.fetchOrders(from: from, to: to).catchError((_) => <SaleRecord>[]);
 
       if (!mounted) return;
       setState(() {
         _summary = summary;
+        _ordersCount = orders.length;
+        _profit = sales.fold<double>(0, (s, r) => s + r.profit);
         _sales = sales.map(_saleRecordToMap).toList();
         _isLoading = false;
       });
@@ -177,7 +183,8 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
               setState(() => _isDeleting = true);
               try {
                 final repo = ref.read(salesRepositoryProvider);
-                final res = await repo.bulkDelete({'sale_id': ids});
+                // Sales::bulkdelete reads sale_ids as a comma-separated string.
+                final res = await repo.bulkDelete({'sale_ids': ids.join(',')});
                 final ok = res['status']?.toString() == '1' ||
                     res['status'] == true ||
                     res['status']?.toString() == 'success';
@@ -307,10 +314,11 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                   children: [
                     const SizedBox(height: 12),
                     SalesSummaryCard(
-                      totalSales: _isLoading ? '...' : '${_summary.currency} ${_fmt(_summary.paid + _summary.unpaid)}',
+                      // Same cards as the web Manage Sales page.
+                      totalSales: _isLoading ? '...' : '${_summary.currency} ${_fmt(_summary.total)}',
                       totalCredits: _isLoading ? '...' : '${_summary.currency} ${_fmt(_summary.unpaid)}',
-                      totalOrders: _isLoading ? 0 : _sales.length,
-                      profit: _isLoading ? '...' : '${_summary.currency} ${_fmt(_summary.paid)}',
+                      totalOrders: _isLoading ? 0 : _ordersCount,
+                      profit: _isLoading ? '...' : '${_summary.currency} ${_fmt(_profit)}',
                     ),
                     const SizedBox(height: 16),
                     _buildActionButtons(),
@@ -684,7 +692,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                 customer: sale['customer'],
                 paymentType: sale['paymentType'],
                 soldBy: sale['soldBy'],
-                date: sale['date'].split(' ').take(2).join(' '),
+                date: _receiptDate(sale['date']),
                 total: sale['total'],
               ),
               if (index < _sales.length - 1)
@@ -894,7 +902,8 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
     try {
       final shopName = ref.read(authProvider).activeShop?.shopName ?? 'My Shop';
       final products = List<Map<String, dynamic>>.from(sale['products']);
-      final receiptNo = 'RCP-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
+      final receiptNo = _receiptNo(sale);
+      final message = ref.read(shopConfigProvider).valueOrNull?.receiptMessage ?? '';
 
       final doc = pw.Document();
       doc.addPage(pw.Page(
@@ -932,7 +941,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
               pw.Text('Tsh ${_toD(sale['balance']).toStringAsFixed(0)}'),
             ]),
             pw.SizedBox(height: 16),
-            pw.Center(child: pw.Text('Thank you!', style: const pw.TextStyle(fontSize: 12))),
+            pw.Center(child: pw.Text(message.trim().isNotEmpty ? message : 'Thank you!', style: const pw.TextStyle(fontSize: 12), textAlign: pw.TextAlign.center)),
           ],
         ),
       ));
@@ -950,6 +959,18 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
     }
   }
 
+  // Real sale id instead of a random timestamp number.
+  String _receiptNo(Map<String, dynamic> sale) {
+    final id = (sale['invoice_no'] ?? sale['sale_id'] ?? '').toString();
+    return id.isEmpty ? 'RCP' : 'RCP-$id';
+  }
+
+  // Backend date is "Oct 11, 2026 14:30": keep month, day and year.
+  String _receiptDate(dynamic date) {
+    final parts = (date ?? '').toString().split(' ');
+    return parts.length > 3 ? parts.take(3).join(' ') : parts.join(' ');
+  }
+
   void _showReceiptPreview(Map<String, dynamic> sale) {
     final products = List<Map<String, dynamic>>.from(sale['products']);
     final totalAmount = _toD(sale['totalRaw'] ?? sale['total']);
@@ -957,13 +978,14 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
     ReceiptWidget.show(
       context,
       title: 'Sales Receipt',
-      receiptNumber: 'RCP-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
-      date: sale['date'].split(' ').take(2).join(' '),
+      receiptNumber: _receiptNo(sale),
+      date: _receiptDate(sale['date']),
       time: sale['date'].split(' ').last,
       cashier: sale['soldBy'],
       paymentMode: sale['paymentMethod'],
       items: products,
-      subtotal: totalAmount,
+      // Subtotal is before discount; totalAmount (sales.total_amount) is after it.
+      subtotal: totalAmount + _toD(sale['discount']),
       totalPaid: _toD(sale['paid']),
       amountReceived: _toD(sale['paid']),
       discount: _toD(sale['discount']),

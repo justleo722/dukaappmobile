@@ -14,11 +14,13 @@ import 'package:dukaapp/features/stock/presentation/widgets/sticky_import_button
 class ImportPreviewPage extends ConsumerStatefulWidget {
   final Uint8List fileBytes;
   final String fileName;
+  final String? categoryId;
 
   const ImportPreviewPage({
     super.key,
     required this.fileBytes,
     required this.fileName,
+    this.categoryId,
   });
 
   @override
@@ -170,10 +172,17 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
     };
   }
 
+  // Exact header matches win over partial ones, in alias order, so a loose alias
+  // like 'price' can't grab the "Buying Price" column before "Selling Price".
   int _findColumn(String key, List<String> aliases) {
-    for (var i = 0; i < _headers.length; i++) {
-      final h = _headers[i].toLowerCase();
-      if (aliases.any((a) => h == a || h.contains(a))) return i;
+    final headers = _headers.map((h) => h.toLowerCase().trim()).toList();
+    for (final a in aliases) {
+      final i = headers.indexOf(a);
+      if (i >= 0) return i;
+    }
+    for (final a in aliases) {
+      final i = headers.indexWhere((h) => h.contains(a));
+      if (i >= 0) return i;
     }
     return -1;
   }
@@ -199,14 +208,20 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
     if (readyProducts.isEmpty) return;
     try {
       final repo = ref.read(stockRepositoryProvider);
-      final res = await repo.importProducts(readyProducts);
+      final res = await repo.importProducts(readyProducts, categoryId: widget.categoryId);
       final ok = res['status']?.toString() == '1' || res['status'] == true || res['status']?.toString() == 'success';
+      // Server message has the real counts; per-row reasons are in `results`.
+      var message = res['message']?.toString() ?? (ok ? 'Import completed' : 'Import failed');
+      final results = res['results'];
+      if (results is List) {
+        final firstFail = results.whereType<Map>().where((r) => r['status'] == 'failed').firstOrNull;
+        final reason = firstFail?['message']?.toString() ?? '';
+        if (reason.isNotEmpty) message += '\n${firstFail?['name'] ?? ''}: $reason';
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(
-          ok
-              ? '${readyProducts.length} products imported successfully.'
-              : (res['message']?.toString() ?? 'Import failed'),
+          message,
           style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
         ),
         backgroundColor: ok ? AppColors.success : AppColors.danger,

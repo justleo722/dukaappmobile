@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:dukaapp/features/stock/data/models/stock_models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -48,12 +49,13 @@ class _ExpiredReportPageState extends ConsumerState<ExpiredReportPage> {
   Future<void> _loadItems() async {
     setState(() => _isLoading = true);
     try {
+      // Same source as the web report: Reports_model::expiredStock (ignores dates).
       final repo = ref.read(stockRepositoryProvider);
-      final products = await repo.fetchExpiredStock();
+      final rows = await repo.fetchReportRows('expiredStock');
+      final products = rows.map(StockProduct.fromJson).toList();
       final items = products.asMap().entries.map((e) {
         final p = e.value;
-        final loss = p.buyingPrice * p.available;
-        return _ExpiredItem(sn: e.key + 1, name: p.name, quantity: p.available.toInt(), loss: loss);
+        return _ExpiredItem(sn: e.key + 1, name: p.name, quantity: p.expired.toInt(), loss: p.loss);
       }).toList();
       if (mounted) setState(() => _allItems = items);
     } catch (_) {

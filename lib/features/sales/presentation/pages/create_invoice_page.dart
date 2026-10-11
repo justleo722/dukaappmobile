@@ -12,6 +12,7 @@ import 'package:dukaapp/features/sales/presentation/widgets/add_sale_item_tile.d
 import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 import 'package:dukaapp/features/customers/presentation/pages/add_customer_page.dart';
 import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 
 class CreateInvoicePage extends ConsumerStatefulWidget {
   const CreateInvoicePage({super.key});
@@ -47,7 +48,31 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCustomers());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCustomers();
+      _loadProducts();
+    });
+  }
+
+  List<Map<String, dynamic>> _allProducts = [];
+
+  // Real stock (same source as Add Order); product_id/stock_id are required by Sales::add.
+  Future<void> _loadProducts() async {
+    try {
+      final products = await ref.read(stockRemoteDatasourceProvider).fetchStock();
+      if (!mounted) return;
+      setState(() {
+        _allProducts = products.map((p) => <String, dynamic>{
+          'product_id': p.productId,
+          'stock_id': p.stockId,
+          'name': p.name,
+          'sellingPrice': p.sellingPrice,
+          'stock': p.isService ? 9999 : p.available.toInt(),
+        }).toList();
+      });
+    } catch (e) {
+      debugPrint('[CreateInvoice] load products failed: $e');
+    }
   }
 
   Future<void> _loadCustomers() async {
@@ -222,6 +247,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
     } else {
       setState(() {
         _items.add({
+          'product_id': product['product_id'],
+          'stock_id': product['stock_id'],
           'name': product['name'],
           'sellingPrice': product['sellingPrice'],
           'quantity': 1,
@@ -416,7 +443,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
       );
       return;
     }
-    if (_selectedCustomerName == null) {
+    // Sales::add requires a real customer for invoices (saleTypeRequiresCustomer).
+    if (_selectedCustomerName == null || _selectedCustomerId == null || _selectedCustomerId!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a customer')),
       );
@@ -431,13 +459,15 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
         final qty = item['quantity'] ?? 1;
         final price = item['sellingPrice'] ?? item['price'] ?? 0.0;
         final discount = item['discount'] ?? 0.0;
-        final subtotal = (price * qty) - discount;
-        return '$productId|$stockId|$qty|$price|$discount|$subtotal|0|$subtotal';
+        // Same as add_sale_page: subtotal is gross; the server subtracts discount.
+        final subtotal = price * qty;
+        final net = subtotal - discount;
+        return '$productId|$stockId|$qty|$price|$discount|$subtotal|0|$net';
       }).toList();
 
       final total = _items.fold<double>(0, (s, i) {
         final price = ((i['sellingPrice'] ?? i['price'] ?? 0.0) as num).toDouble();
-        final qty = (i['quantity'] ?? 1) as int;
+        final qty = ((i['quantity'] ?? 1) as num).toDouble();
         final discount = ((i['discount'] ?? 0.0) as num).toDouble();
         return s + price * qty - discount;
       });
@@ -1196,18 +1226,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   }
 
   Widget _buildItemPickerSheet(ScrollController scrollController) {
-    final List<Map<String, dynamic>> allProducts = [
-      {'name': 'AIR', 'sellingPrice': 125000.0, 'stock': 5},
-      {'name': 'AIR FRESH', 'sellingPrice': 7000.0, 'stock': 15},
-      {'name': 'BEAUTY CREAM', 'sellingPrice': 18000.0, 'stock': 8},
-      {'name': 'FACE MASK', 'sellingPrice': 9000.0, 'stock': 12},
-      {'name': 'DISH SOAP', 'sellingPrice': 3500.0, 'stock': 20},
-      {'name': 'CAR PHONE HOLDER', 'sellingPrice': 15000.0, 'stock': 6},
-      {'name': 'CHARGER CABLE', 'sellingPrice': 6000.0, 'stock': 10},
-    ];
-
     return _ItemPickerContent(
-      allProducts: allProducts,
+      allProducts: _allProducts,
       formatCurrency: _formatCurrency,
       onAddItem: _addSelectedItem,
       onScanBarcode: _openBarcodeScanner,

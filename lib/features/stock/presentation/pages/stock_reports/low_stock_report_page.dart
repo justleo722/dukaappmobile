@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:dukaapp/features/stock/data/models/stock_models.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -53,13 +54,14 @@ class _LowStockReportPageState extends ConsumerState<LowStockReportPage> {
   Future<void> _loadItems() async {
     setState(() => _isLoading = true);
     try {
+      // Same source as the web report: Reports_model::lowStock.
       final repo = ref.read(stockRepositoryProvider);
-      final products = await repo.fetchLowStock();
+      final filter = ref.read(filterProvider);
+      final rows = await repo.fetchReportRows('lowStock', from: filter.from, to: filter.to);
+      final products = rows.map(StockProduct.fromJson).toList();
       final items = products.asMap().entries.map((e) {
-        final i = e.key + 1;
         final p = e.value;
-        final profit = (p.sellingPrice - p.buyingPrice) * p.available;
-        return _LowStockItem(sn: i, name: p.name, quantity: p.available.toInt(), profitEstimate: profit);
+        return _LowStockItem(sn: e.key + 1, name: p.name, quantity: p.available.toInt(), profitEstimate: p.profitEstimate);
       }).toList();
       if (mounted) setState(() => _allItems = items);
     } catch (_) {

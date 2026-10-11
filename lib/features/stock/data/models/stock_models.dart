@@ -31,6 +31,8 @@ class StockProduct {
   final double profitEstimate;
   final double stockValue;
   final double loss;
+  final double expired;
+  final double expiring;
 
   const StockProduct({
     required this.productId,
@@ -59,6 +61,8 @@ class StockProduct {
     this.profitEstimate = 0,
     this.stockValue = 0,
     this.loss = 0,
+    this.expired = 0,
+    this.expiring = 0,
   });
 
   bool get isService => type?.toLowerCase() == 'service';
@@ -101,6 +105,8 @@ class StockProduct {
       profitEstimate: _d(j['profit_estimate']),
       stockValue: _d(j['stock_value']),
       loss: _d(j['loss']),
+      expired: _d(j['expired']),
+      expiring: _d(j['expiring']),
     );
   }
 
@@ -121,6 +127,19 @@ class StockProduct {
         'expiry_date': expiryDate,
         'record_status': status,
         'image': imageUrl,
+        // Report fields — kept so cached rows match fresh API rows.
+        'sold': sold,
+        'bad': bad,
+        'lost': lost,
+        'stolen': stolen,
+        'total_in': totalIn,
+        'total_revenue': totalRevenue,
+        'total_cost': totalCost,
+        'profit_estimate': profitEstimate,
+        'stock_value': stockValue,
+        'loss': loss,
+        'expired': expired,
+        'expiring': expiring,
       };
 
   static double _d(dynamic v) {

@@ -52,7 +52,8 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
       setState(() {
         _orders = items.map((item) => {
           'purchase_id': item.purchaseId,
-          'poNumber': item.purchaseId,
+          'purchase_ids': item.purchaseIds.isNotEmpty ? item.purchaseIds.join(',') : item.purchaseId?.toString() ?? '',
+          'poNumber': 'PUR-${item.purchaseId}',
           'date': item.date,
           'status': ['paid', 'cleared', 'completed'].contains(item.paymentStatus.toLowerCase()) ? 'PAID' : 'PENDING',
           'createdBy': item.createdBy,
@@ -137,11 +138,18 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
       ),
     );
     if (confirmed == true && mounted) {
-      final purchaseId = _orders[index]['purchase_id']?.toString() ?? '';
+      final purchaseIds = _orders[index]['purchase_ids']?.toString() ?? '';
       try {
         final repo = ref.read(purchaseRepositoryProvider);
-        await repo.bulkDelete({'purchase_ids': purchaseId});
+        final res = await repo.bulkDelete({'purchase_ids': purchaseIds});
         if (!mounted) return;
+        if (res['status']?.toString() != 'success') {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(res['message']?.toString() ?? 'Delete failed'),
+            backgroundColor: AppColors.danger,
+          ));
+          return;
+        }
         setState(() { _orders.removeAt(index); _expandedIndex = null; });
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Purchase order deleted')));
       } catch (e) {
@@ -378,7 +386,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
                             try {
                               final repo = ref.read(purchaseRepositoryProvider);
                               final res = await repo.updateOrderStatus({
-                                'purchase_ids': purchaseId,
+                                'purchase_ids': _orders[index]['purchase_ids']?.toString() ?? purchaseId,
                                 'status': isCash ? 'cash' : 'credit',
                                 'record_date': DateFormat('yyyy-MM-dd').format(selectedDate),
                                 if (selectedAccount != null) 'from_account_id': selectedAccount,

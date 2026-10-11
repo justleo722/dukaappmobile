@@ -45,6 +45,10 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
 
   Future<void> _loadOrders({String? from, String? to}) async {
     if (!mounted) return;
+    // Reloads (after add/delete) keep the active date filter.
+    final filter = ref.read(filterProvider);
+    from ??= filter.from;
+    to ??= filter.to;
     setState(() => _isLoading = true);
     try {
       final repo = ref.read(salesRepositoryProvider);
@@ -64,6 +68,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
           'customer': r.customer,
           'soldBy': r.soldBy,
           'createdBy': r.soldBy,
+          'source': r.source,
           'products': r.products.map((p) => {
             'name': p.name,
             'quantity': p.quantity,
@@ -104,7 +109,8 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
     var orders = _orders;
 
     if (_activeFilter == 'active') {
-      orders = orders.where((o) => o['status'] == 'PENDING').toList();
+      // status is only ever PAID or UNPAID (set in _loadOrders).
+      orders = orders.where((o) => o['status'] == 'UNPAID').toList();
     } else if (_activeFilter == 'cleared') {
       orders = orders.where((o) => o['status'] == 'PAID').toList();
     }
@@ -256,8 +262,9 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
               }
               try {
                 final repo = ref.read(salesRepositoryProvider);
-                final res = await repo.bulkDelete({'sale_id': ids});
-                final ok = res['status']?.toString() == '1' || res['status'] == true;
+                // Sales::bulkdelete reads sale_ids as a comma-separated string.
+                final res = await repo.bulkDelete({'sale_ids': ids.join(',')});
+                final ok = res['status']?.toString() == '1' || res['status'] == true || res['status']?.toString() == 'success';
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                   content: Text(ok ? s.ordersDeleted : (res['message']?.toString() ?? s.deleteFailed)),
@@ -504,7 +511,10 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
             icon: Icons.add_rounded,
             label: s.newOrder,
             isHighlighted: true,
-            onTap: () => context.push('/sales/add-order'),
+            onTap: () async {
+              await context.push('/sales/add-order');
+              if (mounted) _loadOrders();
+            },
           ),
         ],
       ),
@@ -1604,8 +1614,11 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
     ReceiptWidget.show(
       context,
       title: s.salesOrderReceipt,
-      receiptNumber: 'RCP-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
-      date: order['date'].split(' ').take(2).join(' '),
+      receiptNumber: 'ORD-${order['sale_id'] ?? ''}',
+      date: (() {
+        final parts = (order['date'] ?? '').toString().split(' ');
+        return parts.length > 3 ? parts.take(3).join(' ') : parts.join(' ');
+      })(),
       time: order['date'].split(' ').last,
       cashier: order['createdBy'] ?? order['soldBy'],
       paymentMode: order['paymentMethod'] ?? order['paymentMode'],

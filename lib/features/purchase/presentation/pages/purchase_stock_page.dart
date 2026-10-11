@@ -814,7 +814,9 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                         purchaseBody['supplier_id']  = _supplierIdMap[_selectedSupplier ?? ''] ?? '';
                         purchaseBody['payment_mode'] = _accountIdMap[_selectedAccount ?? ''] ?? (_selectedAccount ?? '');
                         purchaseBody['record_date']  = DateFormat('yyyy-MM-dd').format(_purchaseDate);
-                        purchaseBody['type']         = widget.createMode ? 'order' : 'restock';
+                        // Web posts type=purchase; createGroupedRestock only applies the
+                        // credit (Supplier Credit / account 11) logic for 'purchase'.
+                        purchaseBody['type']         = widget.createMode ? 'order' : 'purchase';
                         if (widget.editMode && widget.purchaseId != null && widget.purchaseId!.isNotEmpty) {
                           purchaseBody['purchase_id'] = widget.purchaseId;
                         }

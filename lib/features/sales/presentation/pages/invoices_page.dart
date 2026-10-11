@@ -71,6 +71,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
           'total': r.totalRaw,
           'status': r.balance > 0.01 ? 'UNPAID' : 'PAID',
           'soldBy': r.soldBy,
+          'createdBy': r.soldBy,
           'products': r.products.map((p) => {
             'name': p.name,
             'quantity': p.quantity,
@@ -247,7 +248,18 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
               final ids = sorted.map((i) => _invoices[i]['sale_id']?.toString() ?? '').where((id) => id.isNotEmpty).toList();
               try {
                 final repo = ref.read(salesRepositoryProvider);
-                if (ids.isNotEmpty) await repo.bulkDelete({'sale_ids': ids});
+                if (ids.isNotEmpty) {
+                  final res = await repo.bulkDelete({'sale_ids': ids.join(',')});
+                  if (res['status']?.toString() != 'success') {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(res['message']?.toString() ?? s.deleteFailed),
+                        backgroundColor: AppColors.danger,
+                      ));
+                    }
+                    return;
+                  }
+                }
                 if (!mounted) return;
                 setState(() {
                   for (final i in sorted) {

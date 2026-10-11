@@ -108,6 +108,23 @@ class _CreditPurchasesPageState extends ConsumerState<CreditPurchasesPage> {
     }
   }
 
+  // The dialog has no account picker; pay from the shop's "Cash" cashbook account
+  // (same default as defaultCashbookAccount() on the server).
+  Future<String?> _cashAccountId() async {
+    try {
+      final res = await ref.read(apiServiceProvider).getCashbookAccounts();
+      final body = res.data;
+      final list = body is List ? body : (body is Map ? (body['data'] ?? body['accounts'] ?? []) : []);
+      final accounts = (list as List).whereType<Map>().toList();
+      final cash = accounts.where((a) => (a['account_name'] ?? '').toString().toLowerCase() == 'cash').firstOrNull
+          ?? accounts.firstOrNull;
+      final id = cash?['account_id']?.toString();
+      return (id == null || id.isEmpty) ? null : id;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _showClearCreditDialog(Map<String, dynamic> s) async {
     final balance = double.tryParse(s['balance']?.toString() ?? '') ?? 0.0;
     final amountController = TextEditingController(text: balance.toStringAsFixed(0));
@@ -163,7 +180,10 @@ class _CreditPurchasesPageState extends ConsumerState<CreditPurchasesPage> {
                 try {
                   final api = ref.read(apiServiceProvider);
                   final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
+                  final fromAccountId = await _cashAccountId();
                   var remaining = amt;
+                  var paidCount = 0;
+                  String? error;
                   final unpaid = _purchasesFor(s).where((p) {
                     final bal = double.tryParse(p['balance']?.toString() ?? '') ?? 0.0;
                     return bal > 0;
@@ -174,18 +194,29 @@ class _CreditPurchasesPageState extends ConsumerState<CreditPurchasesPage> {
                     if (purchaseId.isEmpty) continue;
                     final bal = double.tryParse(p['balance']?.toString() ?? '') ?? 0.0;
                     final pay = remaining >= bal ? bal : remaining;
-                    await api.postSupplierClearCreditBalance({
+                    final res = await api.postSupplierClearCreditBalance({
                       'purchase_id': purchaseId,
                       'amount': pay,
                       'date': dateStr,
+                      if (fromAccountId != null) 'from_account_id': fromAccountId,
                     });
+                    if (res['status']?.toString() != 'success') {
+                      error = res['message']?.toString() ?? 'Payment failed';
+                      break;
+                    }
+                    paidCount++;
                     remaining -= pay;
                   }
                   if (!mounted) return;
                   await _loadData();
+                  if (!mounted) return;
+                  final ok = error == null && paidCount > 0;
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text('Payment recorded for ${s['name'] ?? ''}', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
-                    backgroundColor: AppColors.success,
+                    content: Text(
+                      ok ? 'Payment recorded for ${s['name'] ?? ''}' : (error ?? 'No unpaid purchases found'),
+                      style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+                    ),
+                    backgroundColor: ok ? AppColors.success : AppColors.danger,
                   ));
                 } catch (e) {
                   if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger));

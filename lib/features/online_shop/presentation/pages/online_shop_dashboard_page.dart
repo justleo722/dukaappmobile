@@ -59,7 +59,7 @@ class _OnlineShopDashboardPageState extends ConsumerState<OnlineShopDashboardPag
           'orderId': (m['order_code'] ?? m['invoice_no'] ?? 'ORD-${m['sale_id'] ?? ''}').toString(),
           'customer': m['customer'] ?? 'Unknown',
           'amount': 'Tsh ${fmt.format(total.round())}',
-          'status': _normalizeStatus(m['status']?.toString() ?? 'Pending'),
+          'status': _normalizeStatus((m['status_label'] ?? m['status'] ?? 'Processing').toString()),
         };
       }).toList();
 
@@ -92,8 +92,8 @@ class _OnlineShopDashboardPageState extends ConsumerState<OnlineShopDashboardPag
           _topProducts = topProducts;
         });
       }
-    } catch (_) {
-      // keep defaults
+    } catch (e) {
+      debugPrint('[OnlineShopDashboard] load failed: $e');
     }
   }
 
@@ -103,8 +103,9 @@ class _OnlineShopDashboardPageState extends ConsumerState<OnlineShopDashboardPag
       case 'processing': return 'Processing';
       case 'delivering': return 'Delivering';
       case 'delivered': return 'Delivered';
-      case 'cancelled': case 'canceled': return 'Cancelled';
-      default: return 'Received';
+      case 'cancelled': case 'canceled': case 'decline order': return 'Cancelled';
+      // Matches Onlineshop_model::normalizeOrderStatus (PENDING → Processing).
+      default: return 'Processing';
     }
   }
 

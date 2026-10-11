@@ -476,11 +476,13 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
     final stockValue =
         '$currency ${_fmt(s.stockValue)}';
 
-    // Estimate profit from individual product margins
+    // Same as web: sum the backend profit_estimate (available × (latest sp − latest bp)),
+    // falling back to the local margin only when the row has no profit_estimate.
     double profitEstimate = 0;
     for (final p in stock.products) {
-      final margin = p.sellingPrice - p.buyingPrice;
-      if (margin > 0) profitEstimate += margin * p.available;
+      profitEstimate += p.profitEstimate != 0
+          ? p.profitEstimate
+          : (p.sellingPrice - p.buyingPrice) * p.available;
     }
     final profitStr = '$currency ${_fmt(profitEstimate)}';
 

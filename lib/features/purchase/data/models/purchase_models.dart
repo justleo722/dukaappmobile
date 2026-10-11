@@ -4,6 +4,7 @@ class PurchaseItem {
   final dynamic purchaseId;
   final String date;
   final String supplier;
+  final String supplierId;
   final double totalAmount;
   final double paidAmount;
   final double balance;
@@ -18,6 +19,7 @@ class PurchaseItem {
     required this.purchaseId,
     required this.date,
     required this.supplier,
+    this.supplierId = '',
     required this.totalAmount,
     required this.paidAmount,
     required this.balance,
@@ -33,9 +35,12 @@ class PurchaseItem {
     final rawItems = j['items'] as List? ?? j['products'] as List? ?? [];
     final rawIds = j['purchase_ids'] as List? ?? [];
     return PurchaseItem(
-      purchaseId: j['purchase_id'] ?? j['id'],
+      // Stock_model::purchase_history groups rows and returns no purchase_id;
+      // its 'id' is an encoded group key, not a DB id. Use the real ids.
+      purchaseId: j['purchase_id'] ?? (rawIds.isNotEmpty ? rawIds.first : j['id']),
       date: j['record_date']?.toString() ?? j['date']?.toString() ?? '',
       supplier: j['supplier']?.toString() ?? j['supplier_name']?.toString() ?? '',
+      supplierId: j['supplier_id']?.toString() ?? '',
       totalAmount: _toDouble(j['total_amount']),
       paidAmount: _toDouble(j['paid_amount']),
       balance: _toDouble(j['balance_amount'] ?? j['balance']),

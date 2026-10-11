@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
@@ -88,7 +90,7 @@ class _OnlineShopCheckoutPageState extends ConsumerState<OnlineShopCheckoutPage>
   Future<void> _loadCheckoutData() async {
     try {
       final api = ref.read(apiServiceProvider);
-      final res = await api.getOnlineShopPublic();
+      final res = await api.getOnlineShopPublic(shopId: _activeShopId);
       final raw = res.data;
       Map<String, dynamic> pub = {};
       if (raw is Map<String, dynamic>) {
@@ -258,6 +260,15 @@ class _OnlineShopCheckoutPageState extends ConsumerState<OnlineShopCheckoutPage>
     });
   }
 
+  String? get _activeShopId {
+    final id = ref.read(authProvider).activeShop?.id?.toString();
+    return (id == null || id.isEmpty) ? null : id;
+  }
+
+  // Same as onlineshop_encode_shop_id(): url-safe base64 without padding.
+  String _encodeShopId(String shopId) =>
+      base64Url.encode(utf8.encode(shopId)).replaceAll('=', '');
+
   String _generateOrderId() {
     final now = DateTime.now();
     final datePart = '${now.day.toString().padLeft(2, '0')}${now.month.toString().padLeft(2, '0')}${now.year.toString().substring(2)}';
@@ -275,51 +286,43 @@ class _OnlineShopCheckoutPageState extends ConsumerState<OnlineShopCheckoutPage>
     try {
       final api = ref.read(apiServiceProvider);
 
-      // Build items payload
+      // Keys read by Onlineshop_model::placeOrder / resolveDeliveryOption / resolvePaymentOption.
       final items = widget.cartItems.map((item) => {
         'product_id': item['product_id']?.toString() ?? '',
-        'name': item['name']?.toString() ?? '',
-        'price': _parsePrice((item['price'] as String?) ?? '0'),
-        'qty': (item['qty'] as int?) ?? 1,
-        'code': item['code']?.toString() ?? '',
+        'quantity': (item['qty'] as num?) ?? 1,
       }).toList();
 
+      final deliveryRaw = _deliveryMethods[_selectedDeliveryIndex]['_raw'];
+      final paymentRaw = _paymentMethods[_selectedPaymentIndex]['_raw'];
       final payload = {
-        'customer_name': _fullNameController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'email': _emailController.text.trim(),
-        'address': _addressController.text.trim(),
-        'region': _selectedRegion ?? '',
-        'delivery_method': _deliveryMethods[_selectedDeliveryIndex]['name'],
-        'delivery_fee': _deliveryFee,
-        'payment_method': _paymentMethods[_selectedPaymentIndex]['name'],
-        'coupon_code': _appliedCouponCode ?? '',
-        'subtotal': _subtotal,
-        'total': _total,
+        'customer': {
+          'name': _fullNameController.text.trim(),
+          'phone': _phoneController.text.trim(),
+          'email': _emailController.text.trim(),
+          'region': _selectedRegion ?? '',
+          'address': _addressController.text.trim(),
+        },
         'items': items,
+        'delivery_id': (deliveryRaw is Map ? (deliveryRaw['delivery_id'] ?? deliveryRaw['id']) : null)?.toString()
+            ?? _deliveryMethods[_selectedDeliveryIndex]['name'],
+        if (paymentRaw is Map && paymentRaw['account_id'] != null)
+          'payment_account_id': paymentRaw['account_id'].toString(),
+        'coupon_code': _appliedCouponCode ?? '',
       };
 
-      // Get encoded shop id from admin data public_url
-      String encodedShopId = '';
-      try {
-        final adminRes = await api.getOnlineShopAdmin();
-        final adminRaw = adminRes.data;
-        Map<String, dynamic> admin = {};
-        if (adminRaw is Map<String, dynamic>) {
-          admin = adminRaw['data'] is Map ? adminRaw['data'] as Map<String, dynamic> : adminRaw;
+      final shopId = _activeShopId;
+      if (shopId == null) throw Exception('No active shop');
+      final res = await api.postOnlineshopPlaceOrder(_encodeShopId(shopId), payload);
+      if (res['status']?.toString() != 'success') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(res['message']?.toString() ?? 'Order failed'),
+            backgroundColor: AppColors.danger, behavior: SnackBarBehavior.floating,
+          ));
         }
-        final publicUrl = admin['public_url']?.toString() ?? '';
-        final uri = Uri.tryParse(publicUrl);
-        encodedShopId = uri?.pathSegments.isNotEmpty == true ? uri!.pathSegments.last : '';
-      } catch (_) {}
-
-      String? serverOrderId;
-      if (encodedShopId.isNotEmpty) {
-        final res = await api.postOnlineshopPlaceOrder(encodedShopId, payload);
-        serverOrderId = res['order_id']?.toString() ?? res['data']?['order_id']?.toString();
+        return;
       }
-
-      final orderId = serverOrderId ?? _generateOrderId();
+      final orderId = res['order_id']?.toString() ?? _generateOrderId();
 
       if (!mounted) return;
       await OrderConfirmationDialog.show(

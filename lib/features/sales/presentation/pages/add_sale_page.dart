@@ -47,6 +47,42 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
     'Bank Transfer',
     'Credit',
   ];
+  // name → account_id from the shop's real payment accounts (same list as web).
+  final Map<String, String> _paymentIds = {};
+
+  Future<void> _loadPaymentModes() async {
+    try {
+      final res = await ref.read(apiServiceProvider).getPaymentMode();
+      final body = res.data;
+      final list = body is List ? body : (body is Map ? (body['data'] ?? []) : []);
+      final names = <String>[];
+      final ids = <String, String>{};
+      for (final e in (list as List).whereType<Map>()) {
+        final name = (e['name'] ?? e['account_name'] ?? '').toString();
+        final id = (e['account_id'] ?? '').toString();
+        if (name.isEmpty || id.isEmpty || ids.containsKey(name)) continue;
+        names.add(name);
+        ids[name] = id;
+      }
+      if (!mounted || names.isEmpty) return;
+      setState(() {
+        _paymentTypes
+          ..clear()
+          ..addAll(names);
+        _paymentIds
+          ..clear()
+          ..addAll(ids);
+        if (!_paymentTypes.contains(_selectedPaymentType)) {
+          _selectedPaymentType = _paymentTypes.firstWhere(
+            (n) => n.toLowerCase() == 'cash',
+            orElse: () => _paymentTypes.first,
+          );
+        }
+      });
+    } catch (e) {
+      debugPrint('[AddSale] payment modes failed: $e');
+    }
+  }
 
   late List<Map<String, dynamic>> _items;
 
@@ -63,6 +99,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
       // user navigates to AddSalePage without visiting the stock page first.
       ref.read(stockProvider);
       _loadCustomers();
+      _loadPaymentModes();
     });
   }
 
@@ -478,7 +515,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
       // the PHP-compatible items[0]=...&items[1]=... format.
       final body = <String, dynamic>{
         for (int i = 0; i < itemStrings.length; i++) 'items[$i]': itemStrings[i],
-        'payment_mode': _selectedPaymentType,
+        'payment_mode': _paymentIds[_selectedPaymentType] ?? _selectedPaymentType,
         'customer_id': _selectedCustomerId ?? '',
         // total_amount = final amount shown to user (items net - global discount)
         'total_amount': _finalAmount,
@@ -963,6 +1000,8 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
+          // initialValue is read once; rebuild the field when the list loads.
+          key: ValueKey('payment-${_paymentTypes.join('|')}'),
           initialValue: _selectedPaymentType,
           isExpanded: true,
           icon: const Icon(

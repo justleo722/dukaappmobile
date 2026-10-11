@@ -60,15 +60,21 @@ class _StockByCategoryReportPageState extends ConsumerState<StockByCategoryRepor
   Future<void> _loadItems() async {
     setState(() => _isLoading = true);
     try {
-      final stockState = ref.read(stockProvider);
-      final categories = stockState.whenOrNull(data: (s) => s.categories) ?? [];
-      final products = stockState.whenOrNull(data: (s) => s.products) ?? [];
-      final items = categories.asMap().entries.map((e) {
-        final cat = e.value;
-        final catProducts = products.where((p) => p.category == cat.name).toList();
-        final qty = catProducts.fold<int>(0, (s, p) => s + p.available.toInt());
-        final sv = catProducts.fold<double>(0, (s, p) => s + p.buyingPrice * p.available);
-        return _CategoryStock(sn: e.key + 1, category: cat.name, quantity: qty, stockValue: sv, sales: 0, profit: 0);
+      // Same source as the web report: Reports_model::stockByCategory.
+      final repo = ref.read(stockRepositoryProvider);
+      final filter = ref.read(filterProvider);
+      final rows = await repo.fetchReportRows('stockByCategory', from: filter.from, to: filter.to);
+      double d(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0;
+      final items = rows.asMap().entries.map((e) {
+        final r = e.value;
+        return _CategoryStock(
+          sn: e.key + 1,
+          category: (r['category'] ?? 'Uncategorized').toString(),
+          quantity: d(r['quantity']).toInt(),
+          stockValue: d(r['stock_value']),
+          sales: d(r['sales']),
+          profit: d(r['profit']),
+        );
       }).toList();
       if (mounted) setState(() => _allCategories = items);
     } catch (_) {

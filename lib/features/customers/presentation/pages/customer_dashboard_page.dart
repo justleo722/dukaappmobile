@@ -37,32 +37,32 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
   Future<void> _loadCustomerData() async {
     if (!mounted) return;
     setState(() => _isLoadingData = true);
+    final api = ref.read(apiServiceProvider);
+    final customerId = _customer.id;
+    // Loaded separately so a wallet failure doesn't hide the sales.
+    List<Map<String, dynamic>> salesList = _salesRecords;
+    List<Map<String, dynamic>> walletList = _walletTransactions;
     try {
-      final api = ref.read(apiServiceProvider);
-      final customerId = _customer.id;
-      final results = await Future.wait([
-        api.getCustomerSales(customerId),
-        api.getWalletCustomerStatement(customerId),
-      ]);
-
-      // Parse sales records
-      final salesRaw = results[0].data;
-      final salesList = _unwrapList(salesRaw);
-
-      // Parse wallet transactions
-      final walletRaw = results[1].data;
-      final walletList = _unwrapList(walletRaw);
-
-      if (!mounted) return;
-      setState(() {
-        _salesRecords = salesList;
-        _walletTransactions = walletList;
-        _isLoadingData = false;
-      });
+      // All sale types (cash, credit, invoice) except orders/quotations — as on web.
+      final res = await api.getCustomerAllSales(customerId);
+      salesList = _unwrapList(res.data).where((r) {
+        final type = (r['sale_type'] ?? '').toString().toLowerCase();
+        return type != 'order' && type != 'orders' && type != 'quotation';
+      }).toList();
     } catch (e) {
-      debugPrint('[CustomerDashboard] load error: $e');
-      if (mounted) setState(() => _isLoadingData = false);
+      debugPrint('[CustomerDashboard] sales load error: $e');
     }
+    try {
+      walletList = _unwrapList((await api.getWalletCustomerStatement(customerId)).data);
+    } catch (e) {
+      debugPrint('[CustomerDashboard] wallet load error: $e');
+    }
+    if (!mounted) return;
+    setState(() {
+      _salesRecords = salesList;
+      _walletTransactions = walletList;
+      _isLoadingData = false;
+    });
   }
 
   List<Map<String, dynamic>> _unwrapList(dynamic raw) {
@@ -70,9 +70,20 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
     if (raw is Map<String, dynamic>) {
       final v = raw['data'] ?? raw['result'] ?? raw['items'];
       if (v is List) return v.whereType<Map<String, dynamic>>().toList();
+      // Team/customer/waiter mode returns sales grouped: {"Group": [...], ...}.
+      final values = raw.values.toList();
+      if (values.isNotEmpty && values.every((e) => e is List)) {
+        return [for (final g in values) ...(g as List).whereType<Map<String, dynamic>>()];
+      }
     }
     return [];
   }
+
+  double _num(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
+
+  // customers() returns no total_purchases/total_spent, so derive them from the sales.
+  int get _salesCount => _salesRecords.length;
+  double get _totalSpent => _salesRecords.fold(0.0, (s, r) => s + _num(r['total_amount'] ?? r['total']));
 
   // Paid = sum of paid_amount from loaded sales records.
   double get _paid {
@@ -304,7 +315,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
                 Expanded(
                   child: _buildSummaryItem(
                     'Sales',
-                    '${_customer.totalPurchases}',
+                    '$_salesCount',
                     AppColors.primary,
                   ),
                 ),
@@ -312,7 +323,7 @@ class _CustomerDashboardPageState extends ConsumerState<CustomerDashboardPage> {
                 Expanded(
                   child: _buildSummaryItem(
                     s.totalSpent,
-                    'TZS ${_customer.totalSpent.toStringAsFixed(0)}',
+                    'TZS ${_totalSpent.toStringAsFixed(0)}',
                     AppColors.textPrimary,
                   ),
                 ),

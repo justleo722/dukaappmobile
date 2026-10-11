@@ -256,6 +256,15 @@ class ApiService {
         'customer_id': customerId,
       });
 
+  /// Every sale type for one customer (sales_orders), all time by default —
+  /// the customer dashboard filters out orders/quotations like the web does.
+  Future<Response> getCustomerAllSales(String customerId, {String? from, String? to}) =>
+      _client.get(ApiEndpoints.getDataSalesOrders, queryParameters: {
+        'from': from ?? '1990-01-01',
+        'to': to ?? DateTime.now().toIso8601String().substring(0, 10),
+        'customer_id': customerId,
+      });
+
   /// Sales summary card totals.
   Future<Response> getSalesSummary({String? from, String? to}) =>
       _client.get(ApiEndpoints.getDataSalesSummary, queryParameters: _range(from, to));
@@ -759,7 +768,9 @@ class ApiService {
   /// Place an order on the public storefront. [encodedShopId] from [getOnlineShopAdmin] public_url.
   Future<Map<String, dynamic>> postOnlineshopPlaceOrder(
       String encodedShopId, Map<String, dynamic> payload) async {
-    final url = '${ApiConfig.appApiBase}/Onlineshop/place_order/$encodedShopId';
+    // Web route onlineshop/{encodedShopId}/place-order → Onlineshop::place_order (JSON body).
+    final siteBase = ApiConfig.appApiBase.replaceFirst(RegExp(r'/api/v1/app$'), '');
+    final url = '$siteBase/onlineshop/$encodedShopId/place-order';
     final response = await _client.post(url,
         data: payload,
         options: Options(contentType: 'application/json'));

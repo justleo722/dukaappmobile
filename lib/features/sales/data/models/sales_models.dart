@@ -99,6 +99,7 @@ class SaleProduct {
   final double discount;
   final String productId;
   final String stockId;
+  final double actualBp; // buying price of the stock batch sold (sales_table_data actual_bp)
 
   const SaleProduct({
     required this.name,
@@ -108,6 +109,7 @@ class SaleProduct {
     this.discount = 0,
     this.productId = '',
     this.stockId = '',
+    this.actualBp = 0,
   });
 
   factory SaleProduct.fromJson(Map<String, dynamic> j) => SaleProduct(
@@ -118,6 +120,7 @@ class SaleProduct {
         discount: _d(j['discount']),
         productId: (j['product_id'] ?? '').toString(),
         stockId: (j['stock_id'] ?? '').toString(),
+        actualBp: _d(j['actual_bp']),
       );
 }
 
@@ -136,6 +139,8 @@ class SaleRecord {
   final String customer;
   final String saleType; // cashsale / invoice / order
   final String? invoiceNo;
+  final double vat;
+  final String source; // 'system' | 'online_shop' | …
 
   const SaleRecord({
     required this.saleId,
@@ -152,7 +157,21 @@ class SaleRecord {
     required this.customer,
     this.saleType = 'cashsale',
     this.invoiceNo,
+    this.vat = 0,
+    this.source = 'system',
   });
+
+  bool get isOrder => saleType == 'order' || saleType == 'orders';
+
+  /// Web Manage Sales profit (salesFunctionality.php): only fully paid sales,
+  /// max(0, total − vat − Σ(actual_bp × qty)).
+  double get profit {
+    if (isOrder || saleType == 'invoice' || saleType == 'quotation') return 0;
+    if (balance > 0.01) return 0;
+    final cost = products.fold<double>(0, (s, p) => s + p.actualBp * p.quantity);
+    final v = totalRaw - vat - cost;
+    return v > 0 ? v : 0;
+  }
 
   factory SaleRecord.fromJson(Map<String, dynamic> j) {
     // API returns items/products as key 'items' (from sales_table_data) or 'products'
@@ -182,24 +201,32 @@ class SaleRecord {
       paymentStatus = 'Pending';
     }
 
+    final source = (j['source'] ?? 'system').toString().toLowerCase();
+    // Mobile stores discounts per item; web stores one sale-level discount.
+    final itemDiscount = prods.fold<double>(0, (s, p) => s + p.discount);
+    final saleDiscount = _d(j['discount']);
+
     return SaleRecord(
       saleId: (j['sale_id'] ?? j['id'] ?? '').toString(),
       date: (j['date'] ?? j['record_date'] ?? j['created_at'] ?? '').toString(),
       paymentStatus: paymentStatus,
       soldBy: (() {
         final v = (j['sold_by'] ?? j['username'] ?? j['created_by_name'] ?? '').toString().trim();
-        return (v.isEmpty || v.toLowerCase() == 'null') ? 'Online Shop' : v;
+        if (v.isNotEmpty && v.toLowerCase() != 'null') return v;
+        return source == 'online_shop' ? 'Online Shop' : 'Unknown';
       })(),
       total: '$currency ${_formatNumber(totalRaw)}',
       totalRaw: totalRaw,
       products: prods,
       paymentMethod: (j['payment_mode'] ?? j['payment_method'] ?? '').toString(),
       paid: paid,
-      discount: _d(j['discount']),
+      discount: saleDiscount > itemDiscount ? saleDiscount : itemDiscount,
       balance: balance,
       customer: (j['customer'] ?? j['customer_name'] ?? 'Walk-in').toString(),
       saleType: saleType,
       invoiceNo: j['invoice_no']?.toString(),
+      vat: _d(j['vat']),
+      source: source,
     );
   }
 }

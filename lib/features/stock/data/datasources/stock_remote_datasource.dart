@@ -201,7 +201,8 @@ class StockRemoteDatasource {
     if (adjustments.isEmpty) {
       return {'status': 'error', 'message': 'No adjustments provided'};
     }
-    Map<String, dynamic> lastResult = {};
+    var succeeded = 0;
+    final failures = <String>[];
     for (final item in adjustments) {
       final m = item as Map<String, dynamic>;
       final type = (m['movement_type'] ?? m['type'])?.toString() ?? '';
@@ -213,12 +214,27 @@ class StockRemoteDatasource {
         'movement_type': type,
         if (m['opening_quantity'] != null) 'opening_quantity': m['opening_quantity'].toString(),
       };
-      lastResult = await _formPost(ApiEndpoints.postStockRestockBalance, flat);
-      if ((lastResult['status'] ?? '') == 'error') return lastResult;
+      final result = await _formPost(ApiEndpoints.postStockRestockBalance, flat);
+      // Each item is a separate request, so a warning on one must not be hidden
+      // by a later success.
+      if ((result['status'] ?? '').toString() == 'success') {
+        succeeded++;
+      } else {
+        final name = (m['name'] ?? 'Product ${flat['product_id']}').toString();
+        final msg = result['message']?.toString() ?? 'No response from server';
+        failures.add('$name: $msg');
+      }
     }
-    return lastResult.isNotEmpty
-        ? lastResult
-        : {'status': 'success', 'message': 'No items to adjust'};
+    if (succeeded == 0 && failures.isEmpty) {
+      return {'status': 'success', 'message': 'No items to adjust'};
+    }
+    if (failures.isEmpty) {
+      return {'status': 'success', 'message': 'Stock adjusted successfully'};
+    }
+    return {
+      'status': succeeded > 0 ? 'warning' : 'error',
+      'message': '${succeeded > 0 ? '$succeeded saved. ' : ''}${failures.join('\n')}',
+    };
   }
 
   /// Create a purchase/restock record (stock/restock/create).
@@ -282,9 +298,11 @@ class StockRemoteDatasource {
 
   /// Bulk import products from parsed spreadsheet rows (stock/register/import).
   /// Backend reads 'products' as a JSON string from form post.
-  Future<Map<String, dynamic>> importProducts(List<Map<String, dynamic>> products) async {
+  Future<Map<String, dynamic>> importProducts(List<Map<String, dynamic>> products, {String? categoryId}) async {
+    // Stock_model::register_product requires category_id on every row.
     final mapped = products.map((p) => {
       'name': p['name'],
+      if (categoryId != null && categoryId.isNotEmpty) 'category_id': categoryId,
       'bp': p['buyingPrice'] ?? 0,
       'sp': p['sellingPrice'] ?? 0,
       'wp': p['wholesalePrice'] ?? p['sellingPrice'] ?? 0,
@@ -296,7 +314,10 @@ class StockRemoteDatasource {
     }).toList();
     // Use _formPost so encoding is consistent with other endpoints.
     // JSON string is URL-encoded as a single form field so PHP can json_decode() it.
-    return _formPost(ApiEndpoints.postStockRegisterImport, {'products': jsonEncode(mapped)});
+    return _formPost(ApiEndpoints.postStockRegisterImport, {
+      'products': jsonEncode(mapped),
+      if (categoryId != null && categoryId.isNotEmpty) 'category_id': categoryId,
+    });
   }
 
   /// Import/purchase history records
@@ -313,6 +334,24 @@ class StockRemoteDatasource {
       options: _formOptions,
     );
     return _json(res.data);
+  }
+
+  /// Reports_model rows via getreport/{method} — the same methods the web stock
+  /// reports call (report_totalStock, report_lowStock, …).
+  Future<List<Map<String, dynamic>>> fetchReportRows(String method, {String? from, String? to}) async {
+    final params = <String, dynamic>{
+      if (from != null && from.isNotEmpty) 'from': from,
+      if (to != null && to.isNotEmpty) 'to': to,
+    };
+    final res = await _client.get(
+      ApiEndpoints.getReportSalesByMethod(method),
+      queryParameters: params.isEmpty ? null : params,
+    );
+    final body = res.data;
+    if (body is List) {
+      return body.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+    }
+    return _list(body);
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

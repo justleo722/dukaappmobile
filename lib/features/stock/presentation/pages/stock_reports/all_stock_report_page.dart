@@ -11,7 +11,6 @@ import 'package:open_file/open_file.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
-import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/shared/dialogs/app_filter_dialog.dart';
 import 'package:dukaapp/shared/providers/filter_provider.dart';
 import 'package:dukaapp/core/providers.dart';
@@ -26,6 +25,10 @@ class _StockItem {
   final int bad;
   final int lost;
   final int expired;
+  final int available;
+  final double stockValue;
+  final double sales;
+  final double profitEstimate;
 
   const _StockItem({
     required this.sn,
@@ -37,12 +40,13 @@ class _StockItem {
     required this.bad,
     required this.lost,
     required this.expired,
+    required this.available,
+    required this.stockValue,
+    required this.sales,
+    required this.profitEstimate,
   });
 
-  int get balance => inStock; // 'available' from backend already nets out all outflows
-  double get stockValue => bp * balance;
-  double get sales => sp * sold;
-  double get profitEstimate => sales - (bp * sold);
+  int get balance => available;
 }
 
 class AllStockReportPage extends ConsumerStatefulWidget {
@@ -70,7 +74,8 @@ class _AllStockReportPageState extends ConsumerState<AllStockReportPage> {
     try {
       final filter = ref.read(filterProvider);
       final api = ref.read(apiServiceProvider);
-      final resp = await api.getStock(from: filter.from, to: filter.to);
+      // Same source as the web report: Reports_model::totalStock.
+      final resp = await api.getReportSalesByMethod('totalStock', from: filter.from, to: filter.to);
       final raw = resp.data;
       List<dynamic> rows = [];
       if (raw is Map) {
@@ -86,11 +91,15 @@ class _AllStockReportPageState extends ConsumerState<AllStockReportPage> {
           name: (j['product_name'] ?? j['name'] ?? '').toString(),
           bp: _d(j['bp'] ?? j['buying_price']),
           sp: _d(j['sp'] ?? j['selling_price']),
-          inStock: _d(j['available'] ?? j['quantity'] ?? j['qty']).toInt(),
+          inStock: _d(j['total_in']).toInt(),
           sold: _d(j['sold']).toInt(),
           bad: _d(j['bad']).toInt(),
           lost: _d(j['lost']).toInt(),
           expired: _d(j['expired']).toInt(),
+          available: _d(j['available'] ?? j['quantity'] ?? j['qty']).toInt(),
+          stockValue: _d(j['stock_value']),
+          sales: _d(j['total_revenue']),
+          profitEstimate: _d(j['profit_estimate']),
         );
       }).toList();
       if (mounted) setState(() => _allItems = items);

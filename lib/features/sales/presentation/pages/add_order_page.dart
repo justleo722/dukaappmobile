@@ -237,20 +237,24 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
-    _cachedAllProducts = ref.watch(stockProvider).maybeWhen(
-          data: (state) => state.products
-              .map((p) => {
-                    'product_id': p.productId,
-                    'stock_id': p.stockId,
-                    'name': p.name,
-                    'sellingPrice': p.sellingPrice,
-                    'wholesalePrice': p.wholesalePrice,
-                    'stock': p.type == 'service' ? 9999 : p.available.toInt(),
-                    'type': p.type ?? 'product',
-                  })
-              .toList(),
-          orElse: () => _cachedAllProducts,
-        );
+    // _loadProducts() fetches the full unfiltered list; only fall back to the
+    // (possibly date-filtered) stockProvider while that is still empty.
+    if (_cachedAllProducts.isEmpty) {
+      _cachedAllProducts = ref.watch(stockProvider).maybeWhen(
+            data: (state) => state.products
+                .map((p) => {
+                      'product_id': p.productId,
+                      'stock_id': p.stockId,
+                      'name': p.name,
+                      'sellingPrice': p.sellingPrice,
+                      'wholesalePrice': p.wholesalePrice,
+                      'stock': p.type == 'service' ? 9999 : p.available.toInt(),
+                      'type': p.type ?? 'product',
+                    })
+                .toList(),
+            orElse: () => _cachedAllProducts,
+          );
+    }
 
     final query = _searchController.text.toLowerCase().trim();
     final filtered = query.isEmpty
