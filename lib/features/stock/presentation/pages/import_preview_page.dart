@@ -92,6 +92,16 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
     }
   }
 
+  // Some downloaded templates start with a stray "\n" before the file signature,
+  // which makes the zip unreadable.
+  List<int> _stripLeadingWhitespace(List<int> bytes) {
+    var i = 0;
+    while (i < bytes.length && (bytes[i] == 0x0A || bytes[i] == 0x0D || bytes[i] == 0x20 || bytes[i] == 0x09)) {
+      i++;
+    }
+    return i == 0 ? bytes : bytes.sublist(i);
+  }
+
   // The excel package only reads .xlsx; legacy .xls is decoded by the backend
   // (PhpSpreadsheet) and returned as raw rows.
   Future<void> _parseXlsOnServer() async {
@@ -112,7 +122,7 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
   }
 
   void _parseExcel() {
-    final excel = xls.Excel.decodeBytes(widget.fileBytes);
+    final excel = xls.Excel.decodeBytes(_stripLeadingWhitespace(widget.fileBytes));
 
     if (excel.tables.isEmpty) {
       _error = 'No sheets found in the file.';
@@ -163,8 +173,8 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
 
     final name = cellValue(_findColumn('name', ['product name', 'name', 'item', 'product', 'item name', 'description']));
     final qty = parseInt(cellValue(_findColumn('quantity', ['quantity', 'qty', 'stock', 'count'])));
-    final buying = parseDouble(cellValue(_findColumn('buying', ['buying price', 'buy price', 'cost', 'cost price', 'purchase price'])));
-    final selling = parseDouble(cellValue(_findColumn('selling', ['selling price', 'sell price', 'price', 'retail price', 'retail'])));
+    final buying = parseDouble(cellValue(_findColumn('buying', ['buying price', 'bp', 'buy price', 'cost price', 'purchase price', 'cost'])));
+    final selling = parseDouble(cellValue(_findColumn('selling', ['selling price', 'sp', 'sell price', 'retail price', 'retail', 'price'])));
     final wholesale = parseDouble(cellValue(_findColumn('wholesale', ['wholesale price', 'wholesale', 'bulk price'])));
     final reorder = parseInt(cellValue(_findColumn('reorder', ['reorder level', 'reorder', 'min stock', 'minimum'])));
     final barcode = cellValue(_findColumn('barcode', ['barcode', 'bar code', 'upc', 'ean', 'sku']));
