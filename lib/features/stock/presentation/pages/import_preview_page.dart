@@ -40,13 +40,16 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
     _parseFile();
   }
 
-  void _parseFile() {
+  Future<void> _parseFile() async {
     try {
       final name = widget.fileName.toLowerCase();
       if (name.endsWith('.csv')) {
         _parseCsv();
       } else if (name.endsWith('.xlsx')) {
         _parseExcel();
+      } else if (name.endsWith('.xls')) {
+        await _parseXlsOnServer();
+        if (!mounted) return;
       } else {
         setState(() {
           _error = 'Unsupported file format.';
@@ -59,8 +62,9 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = 'Failed to parse file: $e';
+        _error = 'Failed to parse file: ${e.toString().replaceFirst('Exception: ', '')}';
         _isLoading = false;
       });
     }
@@ -85,6 +89,25 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
       }
       final product = _mapRowToProduct(row, i);
       _products.add(product);
+    }
+  }
+
+  // The excel package only reads .xlsx; legacy .xls is decoded by the backend
+  // (PhpSpreadsheet) and returned as raw rows.
+  Future<void> _parseXlsOnServer() async {
+    final rows = await ref
+        .read(stockRepositoryProvider)
+        .parseSpreadsheet(widget.fileBytes, widget.fileName);
+    if (rows.isEmpty) {
+      _error = 'File is empty.';
+      return;
+    }
+    _headers = rows.first.map((e) => (e ?? '').toString().trim()).toList();
+    _products = [];
+    for (var i = 1; i < rows.length; i++) {
+      final row = rows[i];
+      if (row.every((v) => v == null || v.toString().trim().isEmpty)) continue;
+      _products.add(_mapRowToProduct(row, i));
     }
   }
 

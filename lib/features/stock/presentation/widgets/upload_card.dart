@@ -98,7 +98,7 @@ class _UploadCardState extends State<UploadCard>
         ),
         const SizedBox(height: 4),
         Text(
-          'Accepted formats: .xlsx, .csv',
+          'Accepted formats: .xlsx, .xls, .csv',
           style: AppTypography.caption,
         ),
         const SizedBox(height: 14),

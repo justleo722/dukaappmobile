@@ -50,6 +50,9 @@ class StockRepository {
   Future<List<Map<String, dynamic>>> fetchImportHistory() =>
       _remote.fetchImportHistory();
 
+  Future<List<List<dynamic>>> parseSpreadsheet(List<int> bytes, String fileName) =>
+      _remote.parseSpreadsheet(bytes, fileName);
+
   Future<Map<String, dynamic>> importProducts(List<Map<String, dynamic>> products, {String? categoryId}) =>
       _remote.importProducts(products, categoryId: categoryId);
 

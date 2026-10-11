@@ -35,12 +35,12 @@ class _ImportStockPageState extends ConsumerState<ImportStockPage> {
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
         final ext = file.name.split('.').last.toLowerCase();
-        if (!['xlsx', 'csv'].contains(ext)) {
+        if (!['xlsx', 'xls', 'csv'].contains(ext)) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  'Only .xlsx and .csv files are supported.',
+                  'Only .xlsx, .xls and .csv files are supported.',
                   style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
                 ),
                 backgroundColor: AppColors.danger,

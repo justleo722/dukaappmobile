@@ -296,6 +296,27 @@ class StockRemoteDatasource {
     return _json(res.data);
   }
 
+  /// Server-side parse of a spreadsheet the app can't decode itself (legacy .xls).
+  /// Returns the raw rows; the first row is the header.
+  Future<List<List<dynamic>>> parseSpreadsheet(List<int> bytes, String fileName) async {
+    final form = FormData.fromMap({
+      'parse_only': '1',
+      'file': MultipartFile.fromBytes(bytes, filename: fileName),
+    });
+    final res = await _client.post(
+      ApiEndpoints.postStockRegisterImport,
+      data: form,
+      options: Options(responseType: ResponseType.plain),
+    );
+    final body = _jsonFromPlain(res.data);
+    if ((body['status'] ?? '').toString() != 'success') {
+      throw Exception(body['message']?.toString() ?? 'Could not read the file on the server.');
+    }
+    final rows = body['rows'];
+    if (rows is! List) return [];
+    return rows.map<List<dynamic>>((r) => r is List ? r : <dynamic>[]).toList();
+  }
+
   /// Bulk import products from parsed spreadsheet rows (stock/register/import).
   /// Backend reads 'products' as a JSON string from form post.
   Future<Map<String, dynamic>> importProducts(List<Map<String, dynamic>> products, {String? categoryId}) async {
