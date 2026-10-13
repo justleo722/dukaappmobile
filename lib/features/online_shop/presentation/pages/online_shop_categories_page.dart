@@ -99,7 +99,7 @@ class _OnlineShopCategoriesPageState extends ConsumerState<OnlineShopCategoriesP
     final category = _categories[index];
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text(
           'Delete Category',
           style: AppTypography.h6.copyWith(fontWeight: FontWeight.w600),
@@ -110,7 +110,7 @@ class _OnlineShopCategoriesPageState extends ConsumerState<OnlineShopCategoriesP
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text(
               'Cancel',
               style: AppTypography.bodyMedium.copyWith(
@@ -120,7 +120,7 @@ class _OnlineShopCategoriesPageState extends ConsumerState<OnlineShopCategoriesP
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               final catId = category['category_id']?.toString() ?? '';
               if (catId.isNotEmpty) {
                 try {

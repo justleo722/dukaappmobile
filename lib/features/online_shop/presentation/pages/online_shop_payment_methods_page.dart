@@ -99,7 +99,7 @@ class _OnlineShopPaymentMethodsPageState
     final method = _methods[index];
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text(
           'Delete Payment Method',
           style: AppTypography.h6.copyWith(fontWeight: FontWeight.w600),
@@ -110,7 +110,7 @@ class _OnlineShopPaymentMethodsPageState
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text(
               'Cancel',
               style: AppTypography.bodyMedium.copyWith(
@@ -120,7 +120,7 @@ class _OnlineShopPaymentMethodsPageState
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               final accountId = method['account_id']?.toString() ?? '';
               if (accountId.isNotEmpty) {
                 try {
@@ -162,7 +162,7 @@ class _OnlineShopPaymentMethodsPageState
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radiusMD),
         ),
@@ -270,7 +270,7 @@ class _OnlineShopPaymentMethodsPageState
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.pop(dialogContext),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: AppColors.textHint),
                       shape: RoundedRectangleBorder(
@@ -303,7 +303,7 @@ class _OnlineShopPaymentMethodsPageState
                         );
                         return;
                       }
-                      Navigator.pop(context);
+                      Navigator.pop(dialogContext);
                       try {
                         final api = ref.read(apiServiceProvider);
                         final body = <String, dynamic>{

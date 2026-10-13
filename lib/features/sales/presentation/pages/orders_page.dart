@@ -157,7 +157,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
     final s = ref.read(stringsProvider);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radiusMD),
         ),
@@ -173,7 +173,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text(
               s.cancel,
               style: AppTypography.bodyMedium.copyWith(
@@ -183,7 +183,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               final saleId = index < _orders.length ? _orders[index]['sale_id']?.toString() : null;
               if (saleId == null || saleId.isEmpty) {
                 setState(() => _expandedOrderIndex = null);
@@ -225,7 +225,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
     final s = ref.read(stringsProvider);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
@@ -241,7 +241,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text(
               s.cancel,
               style: AppTypography.bodyMedium.copyWith(
@@ -251,7 +251,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               final ids = _selectedOrders
                   .where((i) => i < _orders.length)
                   .map((i) => _orders[i]['sale_id'])
@@ -1162,8 +1162,8 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppConstants.radiusMD),
           ),
@@ -1305,7 +1305,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.pop(dialogContext),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: AppColors.border),
                       shape: RoundedRectangleBorder(
@@ -1327,7 +1327,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                       if (amount > 0) {
                         final saleId = _orders[orderIndex]['sale_id']?.toString() ?? '';
                         final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
-                        Navigator.pop(context);
+                        Navigator.pop(dialogContext);
                         try {
                           final repo = ref.read(salesRepositoryProvider);
                           final res = await repo.addPayment({
@@ -1402,8 +1402,8 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppConstants.radiusMD),
           ),
@@ -1537,7 +1537,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.pop(dialogContext),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: AppColors.border),
                       shape: RoundedRectangleBorder(
@@ -1555,7 +1555,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () async {
-                      Navigator.pop(context);
+                      Navigator.pop(dialogContext);
                       final saleId = _orders[orderIndex]['sale_id']?.toString() ?? '';
                       try {
                         final repo = ref.read(salesRepositoryProvider);

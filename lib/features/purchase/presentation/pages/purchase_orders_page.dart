@@ -172,8 +172,8 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => Dialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppConstants.radiusLG),
           ),
@@ -348,7 +348,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () => Navigator.pop(dialogContext),
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(color: AppColors.border),
                             shape: RoundedRectangleBorder(
@@ -384,7 +384,7 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
                               );
                               return;
                             }
-                            Navigator.pop(context);
+                            Navigator.pop(dialogContext);
                             try {
                               final repo = ref.read(purchaseRepositoryProvider);
                               final res = await repo.updateOrderStatus({

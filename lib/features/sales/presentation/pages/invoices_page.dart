@@ -164,7 +164,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
     showDialog(
       context: context,
       useRootNavigator: true,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radiusMD),
         ),
@@ -180,7 +180,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
+            onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(),
             child: Text(
               s.cancel,
               style: AppTypography.bodyMedium.copyWith(
@@ -190,7 +190,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.of(context, rootNavigator: true).pop();
+              Navigator.of(dialogContext, rootNavigator: true).pop();
               final saleId = _invoices[index]['sale_id']?.toString() ?? '';
               try {
                 final repo = ref.read(salesRepositoryProvider);
@@ -227,7 +227,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
     final s = ref.read(stringsProvider);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
@@ -243,7 +243,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text(
               s.cancel,
               style: AppTypography.bodyMedium.copyWith(
@@ -253,7 +253,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               final sorted = _selectedInvoices.toList()
                 ..sort((a, b) => b.compareTo(a));
               final ids = sorted.map((i) => _invoices[i]['sale_id']?.toString() ?? '').where((id) => id.isNotEmpty).toList();
@@ -315,8 +315,8 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppConstants.radiusMD),
           ),
@@ -458,7 +458,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => Navigator.pop(dialogContext),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: AppColors.border),
                       shape: RoundedRectangleBorder(
@@ -480,7 +480,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                       if (amount > 0) {
                         final saleId = _invoices[invoiceIndex]['sale_id']?.toString() ?? '';
                         final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
-                        Navigator.pop(context);
+                        Navigator.pop(dialogContext);
                         try {
                           final repo = ref.read(salesRepositoryProvider);
                           final res = await repo.addPayment({

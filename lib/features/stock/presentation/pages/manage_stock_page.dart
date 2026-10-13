@@ -115,7 +115,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
     final count = _selectedIds.length;
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           s.deleteProducts,
@@ -129,7 +129,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text(
               s.cancel,
               style: AppTypography.bodyMedium.copyWith(
@@ -139,7 +139,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               final ids = _selectedIds.toList();
               try {
                 final repo = ref.read(stockRepositoryProvider);
@@ -180,7 +180,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
     final s = ref.read(stringsProvider);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radiusMD),
         ),
@@ -196,7 +196,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text(
               s.cancel,
               style: AppTypography.bodyMedium.copyWith(
@@ -206,7 +206,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               try {
                 final repo = ref.read(stockRepositoryProvider);
                 final res = await repo.bulkDeleteProducts([product.productId]);

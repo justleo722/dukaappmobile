@@ -146,7 +146,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
     final s = ref.read(stringsProvider);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           s.deleteSales,
@@ -160,7 +160,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text(
               s.cancel,
               style: AppTypography.bodyMedium.copyWith(
@@ -170,7 +170,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               if (_isDeleting) return;
               final ids = _selectedSales
                   .where((i) => i < _sales.length)
@@ -227,7 +227,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
     final s = ref.read(stringsProvider);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           s.deleteSale,
@@ -241,7 +241,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text(
               s.cancel,
               style: AppTypography.bodyMedium.copyWith(
@@ -251,7 +251,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               final saleId = index < _sales.length ? _sales[index]['sale_id']?.toString() : null;
               if (saleId == null || saleId.isEmpty) {
                 setState(() => _expandedSaleIndex = null);

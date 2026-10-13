@@ -190,7 +190,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
     final s = ref.read(stringsProvider);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radiusMD),
         ),
@@ -206,7 +206,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text(
               s.cancel,
               style: AppTypography.bodyMedium.copyWith(
@@ -216,11 +216,22 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               final purchaseIds = (_purchases[index]['purchase_ids'] as List?) ?? [];
               try {
                 final repo = ref.read(purchaseRepositoryProvider);
-                if (purchaseIds.isNotEmpty) await repo.bulkDelete({'purchase_ids': purchaseIds.join(',')});
+                if (purchaseIds.isNotEmpty) {
+                  final res = await repo.bulkDelete({'purchase_ids': purchaseIds.join(',')});
+                  if (res['status']?.toString() != 'success') {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(res['message']?.toString() ?? 'Delete failed'),
+                        backgroundColor: AppColors.danger,
+                      ));
+                    }
+                    return;
+                  }
+                }
                 if (!mounted) return;
                 setState(() {
                   _purchases.removeAt(index);
@@ -253,7 +264,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
     final s = ref.read(stringsProvider);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
@@ -269,7 +280,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text(
               s.cancel,
               style: AppTypography.bodyMedium.copyWith(
@@ -279,13 +290,24 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               final sorted = _selectedPurchases.toList()..sort((a, b) => b.compareTo(a));
               final allIds = sorted.expand((i) => (_purchases[i]['purchase_ids'] as List?) ?? []).toList();
               final idsStr = allIds.join(',');
               try {
                 final repo = ref.read(purchaseRepositoryProvider);
-                if (idsStr.isNotEmpty) await repo.bulkDelete({'purchase_ids': idsStr});
+                if (idsStr.isNotEmpty) {
+                  final res = await repo.bulkDelete({'purchase_ids': idsStr});
+                  if (res['status']?.toString() != 'success') {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(res['message']?.toString() ?? 'Delete failed'),
+                        backgroundColor: AppColors.danger,
+                      ));
+                    }
+                    return;
+                  }
+                }
                 if (!mounted) return;
                 setState(() {
                   for (final i in sorted) { _purchases.removeAt(i); }
@@ -324,8 +346,8 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => Dialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppConstants.radiusLG),
           ),
@@ -541,7 +563,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () => Navigator.pop(dialogContext),
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(color: AppColors.border),
                             shape: RoundedRectangleBorder(
@@ -573,7 +595,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                             final purchaseIds = (_purchases[index]['purchase_ids'] as List?) ?? [];
                             final purchaseIdsStr = purchaseIds.join(',');
                             if (purchaseIdsStr.isEmpty) return;
-                            Navigator.pop(context);
+                            Navigator.pop(dialogContext);
                             try {
                               final repo = ref.read(purchaseRepositoryProvider);
                               await repo.addPayment({
@@ -656,8 +678,8 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => Dialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppConstants.radiusLG),
           ),
@@ -792,7 +814,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () => Navigator.pop(dialogContext),
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(color: AppColors.border),
                             shape: RoundedRectangleBorder(
@@ -814,7 +836,7 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
                         flex: 2,
                         child: ElevatedButton(
                           onPressed: () {
-                            Navigator.pop(context);
+                            Navigator.pop(dialogContext);
                             setState(() {
                               _purchases.removeAt(index);
                               _expandedIndex = null;

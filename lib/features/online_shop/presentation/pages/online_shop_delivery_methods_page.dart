@@ -100,7 +100,7 @@ class _OnlineShopDeliveryMethodsPageState
     final method = _methods[index];
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text(
           'Delete Delivery Method',
           style: AppTypography.h6.copyWith(fontWeight: FontWeight.w600),
@@ -111,7 +111,7 @@ class _OnlineShopDeliveryMethodsPageState
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text(
               'Cancel',
               style: AppTypography.bodyMedium.copyWith(
@@ -121,7 +121,7 @@ class _OnlineShopDeliveryMethodsPageState
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               final deliveryId = method['delivery_id']?.toString() ?? '';
               if (deliveryId.isNotEmpty) {
                 try {
