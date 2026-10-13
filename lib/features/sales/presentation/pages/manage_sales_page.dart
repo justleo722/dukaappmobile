@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:dukaapp/features/sales/presentation/widgets/receipt_pdf.dart';
+import 'package:dukaapp/features/sales/presentation/widgets/payment_accounts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
@@ -106,6 +106,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                 'quantity': p.quantity,
                 'price': p.price,
                 'total': p.total,
+                'discount': p.discount,
                 'product_id': p.productId,
                 'stock_id': p.stockId,
               })
@@ -515,15 +516,17 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
   }
 
   /// Payment dialog for credit / unpaid sales.
-  void _showPayDialog(int index) {
+  Future<void> _showPayDialog(int index) async {
+    final accounts = await loadPaymentAccounts(ref);
+    if (!mounted) return;
     final s = ref.read(stringsProvider);
     final sale = _sales[index];
     final balance = _toD(sale['balance']);
     final saleId = sale['sale_id']?.toString() ?? '';
     final amountController = TextEditingController(text: balance.toStringAsFixed(0));
     final formKey = GlobalKey<FormState>();
-    String selectedPaymentMode = 'Cash';
-    final paymentModes = ['Cash', 'Bank', 'Mobile Money', 'Cheque', 'Other'];
+    // Real shop accounts (same as selling); the account_id is what the server books.
+    String? selectedPaymentMode = defaultPaymentAccountId(accounts);
 
     showDialog(
       context: context,
@@ -557,15 +560,15 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: selectedPaymentMode,
+                initialValue: selectedPaymentMode,
                 decoration: const InputDecoration(
                   labelText: 'Payment Mode',
                   border: OutlineInputBorder(),
                 ),
-                items: paymentModes
-                    .map((m) => DropdownMenuItem(value: m, child: Text(m)))
+                items: accounts
+                    .map((a) => DropdownMenuItem(value: a.id, child: Text(a.name)))
                     .toList(),
-                onChanged: (v) => setDialogState(() => selectedPaymentMode = v ?? 'Cash'),
+                onChanged: (v) => setDialogState(() => selectedPaymentMode = v),
               ),
             ],
           ),
@@ -584,7 +587,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                 final res = await repo.addPayment({
                   'sale_id': saleId,
                   'amount': amountController.text.trim(),
-                  'payment_mode': selectedPaymentMode,
+                  if (selectedPaymentMode != null) 'payment_mode': selectedPaymentMode,
                 });
                 final ok = res['status']?.toString() == '1' ||
                     res['status'] == true ||
@@ -903,52 +906,33 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
       final shopName = ref.read(authProvider).activeShop?.shopName ?? 'My Shop';
       final products = List<Map<String, dynamic>>.from(sale['products']);
       final receiptNo = _receiptNo(sale);
-      final message = ref.read(shopConfigProvider).valueOrNull?.receiptMessage ?? '';
-
-      final doc = pw.Document();
-      doc.addPage(pw.Page(
-        pageFormat: PdfPageFormat.a5,
-        build: (ctx) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Center(child: pw.Text(shopName, style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold))),
-            pw.Center(child: pw.Text('Sales Receipt', style: const pw.TextStyle(fontSize: 13))),
-            pw.SizedBox(height: 8),
-            pw.Text('Receipt No: $receiptNo'),
-            pw.Text('Date: ${sale['date']}'),
-            pw.Text('Cashier: ${sale['soldBy']}'),
-            pw.Text('Payment: ${sale['paymentMethod']}'),
-            pw.Divider(),
-            ...products.map((p) => pw.Row(children: [
-              pw.Expanded(child: pw.Text('${p['name'] ?? p['product_name'] ?? ''}  x${p['quantity']}')),
-              pw.Text('Tsh ${((p['price'] as num? ?? 0) * (p['quantity'] as num? ?? 1)).toStringAsFixed(0)}'),
-            ])),
-            pw.Divider(),
-            pw.Row(children: [
-              pw.Expanded(child: pw.Text('Total', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
-              pw.Text('Tsh ${_toD(sale['totalRaw'] ?? sale['total']).toStringAsFixed(0)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-            ]),
-            if (_toD(sale['discount']) > 0) pw.Row(children: [
-              pw.Expanded(child: pw.Text('Discount')),
-              pw.Text('- Tsh ${_toD(sale['discount']).toStringAsFixed(0)}'),
-            ]),
-            pw.Row(children: [
-              pw.Expanded(child: pw.Text('Paid')),
-              pw.Text('Tsh ${_toD(sale['paid']).toStringAsFixed(0)}'),
-            ]),
-            if (_toD(sale['balance']) > 0) pw.Row(children: [
-              pw.Expanded(child: pw.Text('Balance')),
-              pw.Text('Tsh ${_toD(sale['balance']).toStringAsFixed(0)}'),
-            ]),
-            pw.SizedBox(height: 16),
-            pw.Center(child: pw.Text(message.trim().isNotEmpty ? message : 'Thank you!', style: const pw.TextStyle(fontSize: 12), textAlign: pw.TextAlign.center)),
-          ],
-        ),
-      ));
+      final cfg = ref.read(shopConfigProvider).valueOrNull;
+      final totalAmount = _toD(sale['totalRaw'] ?? sale['total']);
+      final dateParts = (sale['date'] ?? '').toString().split(' ');
+      // Same layout as the on-screen ReceiptWidget.
+      final bytes = await buildReceiptPdf(
+        shopName: shopName,
+        shopAddress: cfg?.shopAddress ?? '',
+        shopPhone: cfg?.shopPhone ?? '',
+        shopTin: cfg?.shopTin ?? '',
+        title: 'Sales Receipt',
+        receiptNumber: receiptNo,
+        date: _receiptDate(sale['date']),
+        time: dateParts.isNotEmpty ? dateParts.last : '',
+        customerName: sale['customer']?.toString(),
+        cashier: (sale['soldBy'] ?? '').toString(),
+        paymentMode: (sale['paymentMethod'] ?? '').toString(),
+        items: products,
+        subtotal: totalAmount + _toD(sale['discount']),
+        discount: _toD(sale['discount']),
+        totalPaid: _toD(sale['paid']),
+        amountReceived: _toD(sale['paid']),
+        message: cfg?.receiptMessage ?? '',
+      );
 
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/receipt_$receiptNo.pdf');
-      await file.writeAsBytes(await doc.save());
+      await file.writeAsBytes(bytes);
       await OpenFile.open(file.path);
     } catch (e) {
       if (mounted) {

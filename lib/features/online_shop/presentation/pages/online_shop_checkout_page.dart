@@ -260,7 +260,11 @@ class _OnlineShopCheckoutPageState extends ConsumerState<OnlineShopCheckoutPage>
     });
   }
 
+  // The shop whose products are in the cart (also works when browsing another
+  // shop or when no one is logged in), else the logged-in user's shop.
   String? get _activeShopId {
+    final cartShop = widget.cartItems.isNotEmpty ? widget.cartItems.first['shop_id']?.toString() : null;
+    if (cartShop != null && cartShop.isNotEmpty) return cartShop;
     final id = ref.read(authProvider).activeShop?.id?.toString();
     return (id == null || id.isEmpty) ? null : id;
   }
@@ -311,7 +315,7 @@ class _OnlineShopCheckoutPageState extends ConsumerState<OnlineShopCheckoutPage>
       };
 
       final shopId = _activeShopId;
-      if (shopId == null) throw Exception('No active shop');
+      if (shopId == null) throw Exception('Could not tell which shop this order is for.');
       final res = await api.postOnlineshopPlaceOrder(_encodeShopId(shopId), payload);
       if (res['status']?.toString() != 'success') {
         if (mounted) {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dukaapp/features/sales/presentation/widgets/payment_accounts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dukaapp/features/sales/data/models/sales_models.dart';
 import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
@@ -65,6 +66,13 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
           'date': r.date,
           'customer': r.customer,
           'invoiceNo': r.invoiceNo ?? '',
+          // Web invoice.php shows the sale_id as "Invoice No" when invoice_no is empty.
+          'invoice': (r.invoiceNo != null && r.invoiceNo!.isNotEmpty && r.invoiceNo != 'null')
+              ? r.invoiceNo!
+              : r.saleId,
+          'discount': r.discount,
+          'dueDate': r.dueDate,
+          'customer_id': r.customerId,
           'paymentMethod': r.paymentMethod,
           'paid': r.paid,
           'balance': r.balance,
@@ -77,6 +85,9 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
             'quantity': p.quantity,
             'price': p.price,
             'total': p.total,
+            'discount': p.discount,
+            'product_id': p.productId,
+            'stock_id': p.stockId,
           }).toList(),
         }).toList();
       });
@@ -291,15 +302,16 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
     );
   }
 
-  void _showPayDialog(int invoiceIndex) {
+  Future<void> _showPayDialog(int invoiceIndex) async {
+    final accounts = await loadPaymentAccounts(ref);
+    if (!mounted) return;
     final s = ref.read(stringsProvider);
     final invoice = _invoices[invoiceIndex];
     final balance = (invoice['balance'] as double? ?? 0.0);
     final amountController = TextEditingController(text: balance.toStringAsFixed(0));
     DateTime selectedDate = DateTime.now();
-    String selectedAccount = 'Cash';
-
-    final accounts = ['Cash', 'Bank Account', 'Mobile Money', 'Savings'];
+    // Real shop accounts (same as selling); the account_id is what the server books.
+    String? selectedAccount = defaultPaymentAccountId(accounts);
 
     showDialog(
       context: context,
@@ -434,8 +446,8 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                         borderSide: const BorderSide(color: AppColors.inputFocusBorder, width: 1.5),
                       ),
                     ),
-                    items: accounts.map((a) => DropdownMenuItem(value: a, child: Text(a))).toList(),
-                    onChanged: (v) => setDialogState(() => selectedAccount = v ?? 'Cash'),
+                    items: accounts.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))).toList(),
+                    onChanged: (v) => setDialogState(() => selectedAccount = v),
                   ),
                 ),
               ],
@@ -471,13 +483,21 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                         Navigator.pop(context);
                         try {
                           final repo = ref.read(salesRepositoryProvider);
-                          await repo.addPayment({
+                          final res = await repo.addPayment({
                             'sale_id': saleId,
                             'amount': amount,
                             'date': dateStr,
-                            'account': selectedAccount,
+                            // Sales::addpayment reads to_account / payment_mode (account_id).
+                            if (selectedAccount != null) 'payment_mode': selectedAccount,
                           });
                           if (!mounted) return;
+                          if (res['status']?.toString() != 'success') {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text(res['message']?.toString() ?? 'Payment failed'),
+                              backgroundColor: AppColors.danger,
+                            ));
+                            return;
+                          }
                           setState(() {
                             _invoices[invoiceIndex]['paid'] = (_invoices[invoiceIndex]['paid'] as double? ?? 0.0) + amount;
                             _invoices[invoiceIndex]['balance'] = balance - amount;
@@ -846,7 +866,10 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildDetailRow(String label, Object? rawValue) {
+    final value = (rawValue == null || rawValue.toString().isEmpty || rawValue.toString() == 'null')
+        ? '-'
+        : rawValue.toString();
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -1356,7 +1379,10 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
               icon: Icons.receipt_long_rounded,
               label: s.generateInvoice,
               isHighlighted: true,
-              onTap: () => context.push('/sales/create-invoice'),
+              onTap: () async {
+                await context.push('/sales/create-invoice');
+                if (mounted) _loadInvoices();
+              },
             ),
           ],
         ),
@@ -1782,7 +1808,10 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                     onBackdate: () => _showBackdateDialog(invoiceIndex),
                     onPrint: () => _showInvoicePreview(invoice),
                     onPreview: () => _showInvoicePreview(invoice),
-                    onEdit: () => context.push('/sales/create-invoice', extra: invoice),
+                    onEdit: () async {
+                      await context.push('/sales/create-invoice', extra: invoice);
+                      if (mounted) _loadInvoices();
+                    },
                     onDelete: () => _deleteInvoice(invoiceIndex),
                   ),
                 ],

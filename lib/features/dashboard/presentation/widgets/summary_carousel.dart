@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/core/models/shop_config.dart';
@@ -54,9 +55,8 @@ class _SummaryCarouselState extends ConsumerState<SummaryCarousel> {
     final u = widget.sessionUser;
     final cur = d.currency;
 
-    String money(double v) =>
-        '$cur ${v >= 1000 ? '${(v / 1000).toStringAsFixed(1)}K' : v.toStringAsFixed(0)}';
-    String qty(double v) => '${v.toStringAsFixed(0)} Items';
+    // Full figures with thousands separators (50,000 — not 50K).
+    String money(double v) => '$cur ${NumberFormat('#,##0').format(v.round())}';
     String orders(double v) => '${v.toStringAsFixed(0)} Orders';
 
     final cards = <Map<String, dynamic>>[];
@@ -101,8 +101,9 @@ class _SummaryCarouselState extends ConsumerState<SummaryCarousel> {
     if (u.canSeeStock && cfg.showTodayStockIn) {
       cards.add({
         'title': s?.todayStockIn ?? 'Today Stock In',
-        'value': qty(d.todayStockin),
-        'description': d.todayStockin > 0 ? 'This month: ${qty(d.thisMonthStockin)}' : 'No stock added',
+        // today_stockin is SUM(bp × quantity), i.e. a TZS value, not an item count.
+        'value': money(d.todayStockin),
+        'description': d.todayStockin > 0 ? 'This month: ${money(d.thisMonthStockin)}' : 'No stock added',
         'icon': Icons.inventory_2_rounded,
         'color': const Color(0xFFFF7A00),
         'bgColor': const Color(0xFFFFF0E0),

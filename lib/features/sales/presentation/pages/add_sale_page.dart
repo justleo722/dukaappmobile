@@ -150,10 +150,11 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
     _items = products.map((p) {
       return {
         'name': p['name'],
-        'sellingPrice': (p['price'] ?? 0).toDouble(),
-        'quantity': p['quantity'] ?? 1,
-        'stock': (p['quantity'] ?? 1) + 10,
-        'discount': (p['discount'] ?? 0.0) is double ? p['discount'] : double.tryParse(p['discount']?.toString() ?? '') ?? 0.0,
+        'sellingPrice': double.tryParse(p['price']?.toString() ?? '') ?? 0.0,
+        'quantity': (num.tryParse(p['quantity']?.toString() ?? '') ?? 1).toInt(),
+        'stock': (num.tryParse(p['quantity']?.toString() ?? '') ?? 1).toInt() + 10,
+        // Was `(x ?? 0.0) is double ? x : …`, which returned null when discount was missing.
+        'discount': double.tryParse(p['discount']?.toString() ?? '') ?? 0.0,
         'product_id': p['product_id'] ?? 0,
         'stock_id': p['stock_id'] ?? '',
       };

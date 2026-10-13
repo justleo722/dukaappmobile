@@ -318,7 +318,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/sales/create-invoice',
         name: 'create-invoice',
-        builder: (context, state) => const CreateInvoicePage(),
+        builder: (context, state) => CreateInvoicePage(
+          existingInvoice: state.extra as Map<String, dynamic>?,
+        ),
       ),
       GoRoute(
         path: '/sales/add-order',

@@ -166,7 +166,7 @@ class StockRemoteDatasource {
   Future<Map<String, dynamic>> createProduct(Map<String, dynamic> body, {List<File>? photos}) async {
     final data = await _buildProductData(body, photos);
     final res = await _client.post(ApiEndpoints.postStockRegisterCreate, data: data,
-        options: Options(responseType: ResponseType.plain));
+        options: _productOptions(data));
     return _jsonFromPlain(res.data);
   }
 
@@ -174,9 +174,16 @@ class StockRemoteDatasource {
   Future<Map<String, dynamic>> updateProduct(Map<String, dynamic> body, {List<File>? photos}) async {
     final data = await _buildProductData(body, photos);
     final res = await _client.post(ApiEndpoints.postStockProductUpdate, data: data,
-        options: Options(responseType: ResponseType.plain));
+        options: _productOptions(data));
     return _jsonFromPlain(res.data);
   }
+
+  // Without photos the body is a urlencoded string; ApiClient defaults to
+  // application/json, which leaves PHP's $_POST empty ("Missing required field").
+  Options _productOptions(dynamic data) => Options(
+        responseType: ResponseType.plain,
+        contentType: data is String ? 'application/x-www-form-urlencoded' : null,
+      );
 
   Future<dynamic> _buildProductData(Map<String, dynamic> body, List<File>? photos) async {
     if (photos == null || photos.isEmpty) {
@@ -351,7 +358,8 @@ class StockRemoteDatasource {
   Future<Map<String, dynamic>> bulkDeleteProducts(List<dynamic> productIds) async {
     final res = await _client.post(
       ApiEndpoints.postStockProductBulkDelete,
-      data: {'product_id': productIds},
+      // Stock::bulkdeleteproducts reads product_ids (array or comma-separated).
+      data: {'product_ids': productIds.map((e) => e.toString()).join(',')},
       options: _formOptions,
     );
     return _json(res.data);

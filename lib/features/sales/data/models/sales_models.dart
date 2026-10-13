@@ -141,6 +141,8 @@ class SaleRecord {
   final String? invoiceNo;
   final double vat;
   final String source; // 'system' | 'online_shop' | …
+  final String dueDate;
+  final String customerId;
 
   const SaleRecord({
     required this.saleId,
@@ -159,6 +161,8 @@ class SaleRecord {
     this.invoiceNo,
     this.vat = 0,
     this.source = 'system',
+    this.dueDate = '',
+    this.customerId = '',
   });
 
   bool get isOrder => saleType == 'order' || saleType == 'orders';
@@ -218,7 +222,13 @@ class SaleRecord {
       total: '$currency ${_formatNumber(totalRaw)}',
       totalRaw: totalRaw,
       products: prods,
-      paymentMethod: (j['payment_mode'] ?? j['payment_method'] ?? '').toString(),
+      // payment_mode is a CASE ('cash' for any fully paid sale); the account actually
+      // used is payment_account_name (cashflow 'sale receipt' account).
+      paymentMethod: (() {
+        final account = (j['payment_account_name'] ?? '').toString().trim();
+        if (account.isNotEmpty) return account;
+        return (j['payment_mode'] ?? j['payment_method'] ?? '').toString();
+      })(),
       paid: paid,
       discount: saleDiscount > itemDiscount ? saleDiscount : itemDiscount,
       balance: balance,
@@ -227,6 +237,8 @@ class SaleRecord {
       invoiceNo: j['invoice_no']?.toString(),
       vat: _d(j['vat']),
       source: source,
+      dueDate: (j['due_date'] ?? '').toString(),
+      customerId: (j['customer_id'] ?? '').toString(),
     );
   }
 }

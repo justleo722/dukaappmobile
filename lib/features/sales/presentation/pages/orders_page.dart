@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dukaapp/features/sales/presentation/widgets/payment_accounts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -1148,15 +1149,16 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
     }
   }
 
-  void _showPayDialog(int orderIndex) {
+  Future<void> _showPayDialog(int orderIndex) async {
+    final accounts = await loadPaymentAccounts(ref);
+    if (!mounted) return;
     final s = ref.read(stringsProvider);
     final order = _orders[orderIndex];
     final balance = order['balance'] as double;
     final amountController = TextEditingController(text: balance.toStringAsFixed(0));
     DateTime selectedDate = DateTime.now();
-    String selectedAccount = 'Cash';
-
-    final accounts = ['Cash', 'Bank Account', 'Mobile Money', 'Savings'];
+    // Real shop accounts (same as selling); the account_id is what the server books.
+    String? selectedAccount = defaultPaymentAccountId(accounts);
 
     showDialog(
       context: context,
@@ -1291,8 +1293,8 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                         borderSide: const BorderSide(color: AppColors.inputFocusBorder, width: 1.5),
                       ),
                     ),
-                    items: accounts.map((a) => DropdownMenuItem(value: a, child: Text(a))).toList(),
-                    onChanged: (v) => setDialogState(() => selectedAccount = v ?? 'Cash'),
+                    items: accounts.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))).toList(),
+                    onChanged: (v) => setDialogState(() => selectedAccount = v),
                   ),
                 ),
               ],
@@ -1328,13 +1330,21 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                         Navigator.pop(context);
                         try {
                           final repo = ref.read(salesRepositoryProvider);
-                          await repo.addPayment({
+                          final res = await repo.addPayment({
                             'sale_id': saleId,
                             'amount': amount,
                             'date': dateStr,
-                            'account': selectedAccount,
+                            // Sales::addpayment reads to_account / payment_mode (account_id).
+                            if (selectedAccount != null) 'payment_mode': selectedAccount,
                           });
                           if (!mounted) return;
+                          if (res['status']?.toString() != 'success') {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text(res['message']?.toString() ?? 'Payment failed'),
+                              backgroundColor: AppColors.danger,
+                            ));
+                            return;
+                          }
                           setState(() {
                             _orders[orderIndex]['paid'] = (_orders[orderIndex]['paid'] as double) + amount;
                             _orders[orderIndex]['balance'] = balance - amount;

@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:dukaapp/core/config/api_config.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -23,6 +25,10 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _productsKey = GlobalKey();
   final List<Map<String, dynamic>> _cart = [];
+  String _searchQuery = '';
+  String? _selectedCategory;
+  // Shop being browsed (plain shop_id). Null = the logged-in user's shop.
+  String? _browseShopId;
   String _selectedSort = 'Default';
   bool _isLoading = true;
   String? _shopName;
@@ -92,7 +98,7 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
       }
 
       // The public endpoint has no session, so pass the shop explicitly.
-      final shopId = ref.read(authProvider).activeShop?.id?.toString();
+      final shopId = _browseShopId ?? ref.read(authProvider).activeShop?.id?.toString();
       final pubRes = await api.getOnlineShopPublic(
         shopId: (shopId != null && shopId.isNotEmpty) ? shopId : null,
       );
@@ -113,6 +119,7 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
       final productList = rawProducts is List ? rawProducts : [];
       _products = productList.map((p) {
         String name, priceRaw, shopName, icon, color, productId, category, imageUrl;
+        String productShopId = '';
         if (p is List) {
           name      = p.length > 0 ? p[0].toString() : '';
           priceRaw  = p.length > 2 ? p[2].toString() : '0';
@@ -120,6 +127,7 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
           icon      = p.length > 4 ? p[4].toString() : '';
           color     = p.length > 5 ? p[5].toString() : '';
           productId = p.length > 9 ? p[9].toString() : '';
+          productShopId = p.length > 7 ? p[7].toString() : '';
           category  = p.length > 8 ? p[8].toString() : '';
           imageUrl  = p.length > 10 ? p[10].toString() : '';
         } else if (p is Map<String, dynamic>) {
@@ -129,6 +137,7 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
           icon      = p['icon']?.toString() ?? '';
           color     = p['color']?.toString() ?? '';
           productId = p['product_id']?.toString() ?? '';
+          productShopId = p['shop_id']?.toString() ?? '';
           category  = p['category']?.toString() ?? '';
           final imgPath = p['image_path']?.toString() ?? p['image']?.toString() ?? '';
           imageUrl  = imgPath.startsWith('http') ? imgPath : '';
@@ -139,6 +148,7 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
         final validImage = imageUrl.isNotEmpty ? imageUrl : null;
         return {
           'product_id': productId,
+          'shop_id': productShopId,
           'name': name,
           'price': _fmtPrice(double.tryParse(priceRaw) ?? 0, currency),
           'seller': shopName.isNotEmpty ? shopName : (_shopName ?? ''),
@@ -178,7 +188,17 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
   // ── Sort helper ───────────────────────────────────────────────────────────
 
   List<Map<String, dynamic>> get _displayProducts {
-    final list = List<Map<String, dynamic>>.from(_products);
+    final q = _searchQuery.trim().toLowerCase();
+    final list = _products.where((p) {
+      if (_selectedCategory != null &&
+          (p['collection'] ?? '').toString().toLowerCase() != _selectedCategory!.toLowerCase()) {
+        return false;
+      }
+      if (q.isEmpty) return true;
+      return (p['name'] ?? '').toString().toLowerCase().contains(q) ||
+          (p['collection'] ?? '').toString().toLowerCase().contains(q) ||
+          (p['seller'] ?? '').toString().toLowerCase().contains(q);
+    }).toList();
     switch (_selectedSort) {
       case 'A-Z': list.sort((a, b) => (a['name'] as String).compareTo(b['name'] as String)); break;
       case 'Z-A': list.sort((a, b) => (b['name'] as String).compareTo(a['name'] as String)); break;
@@ -222,22 +242,49 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
     }
   }
 
-  void _handleTrackOrder(String orderId) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Tracking order #$orderId...'),
-        backgroundColor: AppColors.primary,
-      ),
-    );
+  // Same encoding as onlineshop_encode_shop_id(): url-safe base64 without padding.
+  String _encodeShopId(String id) => base64Url.encode(utf8.encode(id)).replaceAll('=', '');
+
+  // Accepts a plain shop id (e.g. S0003) or the encoded id from a shop link.
+  String _plainShopId(String input) {
+    final v = input.trim();
+    if (RegExp(r'^[A-Za-z]{0,3}\d+$').hasMatch(v)) return v.toUpperCase();
+    try {
+      final padded = v + '=' * ((4 - v.length % 4) % 4);
+      final decoded = utf8.decode(base64Url.decode(padded)).trim();
+      if (decoded.isNotEmpty) return decoded;
+    } catch (_) {}
+    return v;
+  }
+
+  // Tracking is a web page (Onlineshop::tracking), so open it in the browser.
+  Future<void> _handleTrackOrder(String orderId) async {
+    final id = orderId.trim();
+    if (id.isEmpty) return;
+    final shopId = _browseShopId ?? ref.read(authProvider).activeShop?.id?.toString();
+    final siteBase = ApiConfig.appApiBase.replaceFirst(RegExp(r'/api/v1/app$'), '');
+    final path = (shopId == null || shopId.isEmpty)
+        ? '/onlineshop/tracking'
+        : '/onlineshop/${_encodeShopId(shopId)}/tracking';
+    final uri = Uri.parse('$siteBase$path').replace(queryParameters: {'order_id': id});
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open order tracking'), backgroundColor: AppColors.danger),
+      );
+    }
   }
 
   void _handleBrowseShop(String shopId) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Browsing shop #$shopId...'),
-        backgroundColor: AppColors.primary,
-      ),
-    );
+    final id = _plainShopId(shopId);
+    if (id.isEmpty) return;
+    setState(() {
+      _browseShopId = id;
+      _selectedCategory = null;
+      _searchQuery = '';
+      _cart.clear(); // a cart belongs to one shop
+    });
+    _loadData();
   }
 
   void _showFilterDropdown() {
@@ -425,14 +472,20 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
               borderRadius: BorderRadius.circular(AppConstants.radiusMD),
               border: Border.all(color: AppColors.inputBorder),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.search_rounded, color: AppColors.textHint, size: 22),
-                SizedBox(width: 10),
+                const Icon(Icons.search_rounded, color: AppColors.textHint, size: 22),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    'Search products...',
-                    style: TextStyle(color: AppColors.textHint),
+                  child: TextField(
+                    onChanged: (v) => setState(() => _searchQuery = v),
+                    decoration: const InputDecoration(
+                      hintText: 'Search products...',
+                      hintStyle: TextStyle(color: AppColors.textHint),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
                   ),
                 ),
               ],
@@ -450,7 +503,7 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
                 );
               }),
               const SizedBox(width: 8),
-              _buildSmallButton(Icons.shopping_cart_rounded, 'Cart (${_cart.length})', onTap: () => context.push('/shopping-cart', extra: _cart)),
+              _buildSmallButton(Icons.shopping_cart_rounded, 'Cart (${_cart.length})', onTap: () async { await context.push('/shopping-cart', extra: _cart); if (mounted) setState(() {}); }),
               const SizedBox(width: 8),
               _buildSmallButton(Icons.local_shipping_rounded, 'Track Order', onTap: () {
                 TrackOrderBottomSheet.show(
@@ -579,7 +632,13 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
               separatorBuilder: (_, _) => const SizedBox(width: 12),
               itemBuilder: (context, index) {
                 final cat = _categories[index];
-                return SizedBox(
+                final label = (cat['label'] ?? '').toString();
+                final selected = _selectedCategory != null &&
+                    _selectedCategory!.toLowerCase() == label.toLowerCase();
+                return GestureDetector(
+                  // Tap filters the products by this category; tap again to clear.
+                  onTap: () => setState(() => _selectedCategory = selected ? null : label),
+                  child: SizedBox(
                   width: 64,
                   child: Column(
                     children: [
@@ -587,12 +646,12 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.08),
+                          color: selected ? AppColors.primary : AppColors.primary.withValues(alpha: 0.08),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
                           cat['icon'],
-                          color: AppColors.primary,
+                          color: selected ? AppColors.textWhite : AppColors.primary,
                           size: 22,
                         ),
                       ),
@@ -608,6 +667,7 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
+                  ),
                   ),
                 );
               },
@@ -1009,14 +1069,15 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
                     ),
                   ),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                  onTap: () {
+                  onTap: () async {
                     Navigator.pop(context);
                     if (item['label'] == 'Home') {
                       context.go('/storefront');
                     } else if (item['label'] == 'Products') {
                       _scrollToProducts();
                     } else if (isCart) {
-                      context.push('/shopping-cart', extra: _cart);
+                      await context.push('/shopping-cart', extra: _cart);
+                      if (mounted) setState(() {});
                     } else if (item['label'] == 'Track Order') {
                       TrackOrderBottomSheet.show(
                         context: context,

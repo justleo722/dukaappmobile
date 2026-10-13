@@ -98,9 +98,9 @@ class _ImportStockPageState extends ConsumerState<ImportStockPage> {
     return (id == null || id.isEmpty) ? null : id;
   }
 
-  void _onPreviewFile() {
+  Future<void> _onPreviewFile() async {
     if (_fileBytes == null || _selectedFileName == null) return;
-    Navigator.of(context).push(
+    final imported = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => ImportPreviewPage(
           fileBytes: _fileBytes!,
@@ -109,6 +109,7 @@ class _ImportStockPageState extends ConsumerState<ImportStockPage> {
         ),
       ),
     );
+    if (imported == true && mounted) context.pop();
   }
 
   @override

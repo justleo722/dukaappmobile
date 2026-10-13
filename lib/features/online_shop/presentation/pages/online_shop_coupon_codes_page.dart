@@ -204,7 +204,7 @@ class _OnlineShopCouponCodesPageState extends ConsumerState<OnlineShopCouponCode
         activeItem: _activeSidebarItem,
         onItemTap: _onSidebarItemTap,
       ),
-      body: Column(
+      body: _isLoading ? const Center(child: CircularProgressIndicator()) : Column(
         children: [
           Expanded(
             child: SingleChildScrollView(

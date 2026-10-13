@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:dukaapp/features/sales/presentation/widgets/payment_accounts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -159,11 +160,14 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
     }
   }
 
-  void _showUpdateStatusDialog(int index) {
+  Future<void> _showUpdateStatusDialog(int index) async {
+    // Real cashbook accounts: Stock::updateOrderStatus needs a numeric from_account_id.
+    final accounts = await loadPaymentAccounts(ref);
+    if (!mounted) return;
     final s = ref.read(stringsProvider);
     final order = _orders[index];
     String? selectedStatus;
-    String? selectedAccount;
+    String? selectedAccount = defaultPaymentAccountId(accounts);
     DateTime selectedDate = DateTime.now();
 
     showDialog(
@@ -268,11 +272,9 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
                             Icons.keyboard_arrow_down_rounded,
                             color: AppColors.textHint,
                           ),
-                          items: const [
-                            DropdownMenuItem(value: 'Cash', child: Text('Cash')),
-                            DropdownMenuItem(value: 'Bank', child: Text('Bank')),
-                            DropdownMenuItem(value: 'Mobile Money', child: Text('Mobile Money')),
-                          ],
+                          items: accounts
+                              .map((a) => DropdownMenuItem(value: a.id, child: Text(a.name)))
+                              .toList(),
                           onChanged: (value) {
                             setDialogState(() => selectedAccount = value);
                           },

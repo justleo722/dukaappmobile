@@ -143,12 +143,18 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
               final ids = _selectedIds.toList();
               try {
                 final repo = ref.read(stockRepositoryProvider);
-                await repo.bulkDeleteProducts(ids);
+                final res = await repo.bulkDeleteProducts(ids);
                 if (!mounted) return;
-                setState(() => _selectedIds.clear());
-                ref.read(stockProvider.notifier).refresh();
+                final ok = res['status']?.toString() == 'success';
+                if (ok) {
+                  setState(() => _selectedIds.clear());
+                  ref.read(stockProvider.notifier).refresh();
+                }
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Products deleted')),
+                  SnackBar(
+                    content: Text(ok ? 'Products deleted' : (res['message']?.toString() ?? 'Delete failed')),
+                    backgroundColor: ok ? AppColors.success : AppColors.danger,
+                  ),
                 );
               } catch (e) {
                 if (!mounted) return;
@@ -203,11 +209,15 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
               Navigator.pop(context);
               try {
                 final repo = ref.read(stockRepositoryProvider);
-                await repo.bulkDeleteProducts([product.productId]);
+                final res = await repo.bulkDeleteProducts([product.productId]);
                 if (!mounted) return;
-                ref.read(stockProvider.notifier).refresh();
+                final ok = res['status']?.toString() == 'success';
+                if (ok) ref.read(stockProvider.notifier).refresh();
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${product.name} deleted')),
+                  SnackBar(
+                    content: Text(ok ? '${product.name} deleted' : (res['message']?.toString() ?? 'Delete failed')),
+                    backgroundColor: ok ? AppColors.success : AppColors.danger,
+                  ),
                 );
               } catch (e) {
                 if (!mounted) return;

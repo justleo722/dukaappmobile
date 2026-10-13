@@ -263,7 +263,8 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
       ));
       if (ok) {
         ref.read(stockProvider.notifier).refresh();
-        context.pop();
+        // Tell the import page to close too, landing back on Manage Stock.
+        Navigator.of(context).pop(true);
       }
     } catch (e) {
       if (!mounted) return;

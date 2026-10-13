@@ -15,7 +15,10 @@ import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 
 class CreateInvoicePage extends ConsumerStatefulWidget {
-  const CreateInvoicePage({super.key});
+  /// Invoice map from InvoicesPage when editing; null when creating.
+  final Map<String, dynamic>? existingInvoice;
+
+  const CreateInvoicePage({super.key, this.existingInvoice});
 
   @override
   ConsumerState<CreateInvoicePage> createState() => _CreateInvoicePageState();
@@ -48,10 +51,41 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   @override
   void initState() {
     super.initState();
+    _prefillFromExisting();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadCustomers();
       _loadProducts();
     });
+  }
+
+  bool get _isEditing => widget.existingInvoice != null;
+
+  void _prefillFromExisting() {
+    final inv = widget.existingInvoice;
+    if (inv == null) return;
+    double d(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0.0;
+    final products = (inv['products'] as List?) ?? const [];
+    for (final p in products.whereType<Map>()) {
+      final qty = (num.tryParse(p['quantity']?.toString() ?? '') ?? 1).toInt();
+      _items.add({
+        'product_id': p['product_id'],
+        'stock_id': p['stock_id'],
+        'name': (p['name'] ?? '').toString(),
+        'sellingPrice': d(p['price']),
+        'quantity': qty,
+        // Invoices don't deduct stock; allow at least the invoiced quantity.
+        'stock': qty + 9999,
+        'discount': d(p['discount']),
+      });
+    }
+    final customerId = (inv['customer_id'] ?? '').toString();
+    final customerName = (inv['customer'] ?? '').toString();
+    if (customerId.isNotEmpty) {
+      _selectedCustomerId = customerId;
+      _selectedCustomerName = customerName;
+    }
+    final due = DateTime.tryParse((inv['dueDate'] ?? '').toString());
+    if (due != null) _dueDate = due;
   }
 
   List<Map<String, dynamic>> _allProducts = [];
@@ -93,6 +127,11 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
               _customers.add({'id': id.isEmpty ? null : id, 'name': name});
             }
           }
+        }
+        // Editing: show the invoice's customer by the name the list uses.
+        if (_selectedCustomerId != null) {
+          final match = _customers.where((c) => c['id'] == _selectedCustomerId).firstOrNull;
+          if (match != null) _selectedCustomerName = match['name'];
         }
       });
     } catch (_) {}
@@ -481,6 +520,8 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
         'paid_amount': 0,
         'discount': 0.0,
         'sale_type': 'invoice',
+        // Sales::add switches to update() when sale_id is posted.
+        if (_isEditing) 'sale_id': (widget.existingInvoice!['sale_id'] ?? '').toString(),
       };
 
       final repo = ref.read(salesRepositoryProvider);
@@ -488,7 +529,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
       final ok = res['status']?.toString() == '1' || res['status'] == true || res['status']?.toString() == 'success';
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ok ? 'Invoice created successfully' : (res['message']?.toString() ?? 'Failed')),
+        content: Text(ok ? (_isEditing ? 'Invoice updated successfully' : 'Invoice created successfully') : (res['message']?.toString() ?? 'Failed')),
         backgroundColor: ok ? AppColors.success : AppColors.danger,
       ));
       if (ok) context.pop();

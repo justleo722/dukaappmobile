@@ -21,7 +21,8 @@ class _ShoppingCartPageState extends State<ShoppingCartPage> {
   @override
   void initState() {
     super.initState();
-    _items = List<Map<String, dynamic>>.from(widget.cartItems);
+    // Same list instance as the storefront's cart, so removals/qty changes stick.
+    _items = widget.cartItems;
   }
 
   String _formatPrice(int amount) {
