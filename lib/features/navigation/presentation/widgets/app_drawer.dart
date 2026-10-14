@@ -167,6 +167,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AppDrawerHeader(
+              logoUrl           : ref.watch(shopConfigProvider).valueOrNull?.logoUrl ?? '',
               userName          : userName,
               userId            : userId,
               shopName          : shopName,

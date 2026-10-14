@@ -37,6 +37,10 @@ class ShopConfig {
   final String shopAddress;
   final String shopTin;
   final String receiptMessage;
+  /// Full logo URL from session_shop ('' when the shop has no logo).
+  final String logoUrl;
+  /// Shop setting enable_shop_logo: print the logo on receipts.
+  final bool showLogoOnReceipt;
 
   const ShopConfig({
     this.shopName = '',
@@ -68,6 +72,8 @@ class ShopConfig {
     this.shopAddress = '',
     this.shopTin = '',
     this.receiptMessage = '',
+    this.logoUrl = '',
+    this.showLogoOnReceipt = false,
   });
 
   static bool _b(dynamic v, {bool fallback = true}) {
@@ -108,10 +114,17 @@ class ShopConfig {
       shopAddress: m['address']?.toString() ?? '',
       shopTin: m['tin']?.toString() ?? '',
       receiptMessage: m['message_template']?.toString() ?? '',
+      logoUrl: (() {
+        final v = (m['logo'] ?? '').toString().trim();
+        return v.startsWith('http') ? v : '';
+      })(),
+      showLogoOnReceipt: _b(m['enable_shop_logo'], fallback: false),
     );
   }
 
   Map<String, dynamic> toMap() => {
+    'logo': logoUrl,
+    'enable_shop_logo': showLogoOnReceipt ? '1' : '0',
     'shop_name': shopName,
     'currency': currency,
     'shop_type': shopType,

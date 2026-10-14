@@ -11,6 +11,8 @@ class AppDrawerHeader extends StatelessWidget {
   final VoidCallback onEditProfile;
   final VoidCallback onSwitchShop;
   final VoidCallback onProfileImageTap;
+  /// Shop logo URL; the DukaApp mark is shown when empty or it fails to load.
+  final String logoUrl;
 
   const AppDrawerHeader({
     super.key,
@@ -21,6 +23,7 @@ class AppDrawerHeader extends StatelessWidget {
     required this.onEditProfile,
     required this.onSwitchShop,
     required this.onProfileImageTap,
+    this.logoUrl = '',
   });
 
   @override
@@ -56,10 +59,16 @@ class AppDrawerHeader extends StatelessWidget {
                 color: AppColors.primary.withValues(alpha: 0.2),
                 width: 2,
               ),
-              image: const DecorationImage(
-                image: AssetImage('assets/images/submark_logo.png'),
-                fit: BoxFit.cover,
-              ),
+            ),
+            child: ClipOval(
+              child: logoUrl.isNotEmpty
+                  ? Image.network(
+                      logoUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          Image.asset('assets/images/submark_logo.png', fit: BoxFit.cover),
+                    )
+                  : Image.asset('assets/images/submark_logo.png', fit: BoxFit.cover),
             ),
           ),
           Positioned(

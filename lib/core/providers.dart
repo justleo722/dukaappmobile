@@ -86,7 +86,8 @@ final shopConfigProvider = AsyncNotifierProvider<ShopConfigNotifier, ShopConfig>
 );
 
 class ShopConfigNotifier extends AsyncNotifier<ShopConfig> {
-  static const _cacheKey = 'shop_config_v1';
+  // v2: adds logo; a new key so cached configs without it are refetched.
+  static const _cacheKey = 'shop_config_v2';
   static const _cacheTtl = Duration(hours: 6);
 
   @override

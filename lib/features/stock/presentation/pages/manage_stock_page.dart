@@ -513,6 +513,13 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
             const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
         children: [
           StockActionButton(
+            icon: Icons.add_rounded,
+            label: 'Add Product',
+            isHighlighted: true,
+            onTap: () => context.push('/stock/manage/add'),
+          ),
+          const SizedBox(width: 10),
+          StockActionButton(
             icon: Icons.file_download_rounded,
             label: s.importStock,
             onTap: () {
@@ -559,13 +566,6 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
             icon: Icons.file_download_done_rounded,
             label: 'Download',
             onTap: () => context.push('/stock-reports'),
-          ),
-          const SizedBox(width: 10),
-          StockActionButton(
-            icon: Icons.add_rounded,
-            label: 'Add Product',
-            isHighlighted: true,
-            onTap: () => context.push('/stock/manage/add'),
           ),
         ],
       ),

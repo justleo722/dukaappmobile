@@ -122,7 +122,8 @@ class ReceiptWidget extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildStoreHeader(shopName, shopAddress, shopPhone, shopTin),
+                  _buildStoreHeader(shopName, shopAddress, shopPhone, shopTin,
+                      logoUrl: (cfg?.showLogoOnReceipt ?? false) ? (cfg?.logoUrl ?? '') : ''),
                   const SizedBox(height: 16),
                   _buildDashedDivider(),
                   const SizedBox(height: 12),
@@ -151,7 +152,9 @@ class ReceiptWidget extends ConsumerWidget {
     );
   }
 
-  Widget _buildStoreHeader(String shopName, String shopAddress, String shopPhone, String shopTin) {
+  Widget _buildStoreHeader(String shopName, String shopAddress, String shopPhone, String shopTin,
+      {String logoUrl = ''}) {
+    const storeIcon = Icon(Icons.store_rounded, color: AppColors.primary, size: 28);
     return Column(
       children: [
         Center(
@@ -162,11 +165,16 @@ class ReceiptWidget extends ConsumerWidget {
               color: AppColors.primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.store_rounded,
-              color: AppColors.primary,
-              size: 28,
-            ),
+            // Shop logo when "show logo on receipt" is on; store icon otherwise.
+            child: logoUrl.isNotEmpty
+                ? ClipOval(
+                    child: Image.network(
+                      logoUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => storeIcon,
+                    ),
+                  )
+                : storeIcon,
           ),
         ),
         const SizedBox(height: 10),
