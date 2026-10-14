@@ -9,9 +9,9 @@ This document describes the DukaApp Flutter mobile app integration with the live
 
 | Item | Value |
 |------|-------|
-| Base URL | `https://dukaapp.net` |
+| Base URL | `https://dukaapp.com` |
 | App API Base | `/api/v1/app` |
-| Full Base | `https://dukaapp.net/api/v1/app/` |
+| Full Base | `https://dukaapp.com/api/v1/app/` |
 
 Configured centrally in `lib/core/config/api_config.dart` via `ApiConfig.baseUrl` and `ApiConfig.appApiBase`.
 

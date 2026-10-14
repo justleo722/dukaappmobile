@@ -92,7 +92,7 @@ class DashboardPage extends ConsumerWidget {
       builder: (context) => GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => context.push('/renew'),
-        child: IgnorePointer(child: Opacity(opacity: 0.35, child: child)),
+        child: IgnorePointer(child: Opacity(opacity: 0.6, child: child)),
       ),
     );
   }

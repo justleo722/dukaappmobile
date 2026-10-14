@@ -125,7 +125,7 @@ Future<Uint8List> buildReceiptPdf({
         }),
         dashed(),
         totalRow('Subtotal:', money(subtotal)),
-        if (discount > 0) totalRow('Discount:', '- ${money(discount)}', color: green),
+        if (discount > 0) totalRow('Discount:', money(discount), color: green),
         totalRow('Total Paid:', money(totalPaid)),
         pw.SizedBox(height: 3),
         totalRow('Amount Received:', money(amountReceived), bold: true, color: primary),

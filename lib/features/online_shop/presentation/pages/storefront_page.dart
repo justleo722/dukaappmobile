@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:dukaapp/core/config/api_config.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -242,9 +241,6 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
     }
   }
 
-  // Same encoding as onlineshop_encode_shop_id(): url-safe base64 without padding.
-  String _encodeShopId(String id) => base64Url.encode(utf8.encode(id)).replaceAll('=', '');
-
   // Accepts a plain shop id (e.g. S0003) or the encoded id from a shop link.
   String _plainShopId(String input) {
     final v = input.trim();
@@ -257,17 +253,9 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
     return v;
   }
 
-  // Tracking is a web page (Onlineshop::tracking), so open it in the browser.
   Future<void> _handleTrackOrder(String orderId) async {
-    final id = orderId.trim();
-    if (id.isEmpty) return;
     final shopId = _browseShopId ?? ref.read(authProvider).activeShop?.id?.toString();
-    final siteBase = ApiConfig.appApiBase.replaceFirst(RegExp(r'/api/v1/app$'), '');
-    final path = (shopId == null || shopId.isEmpty)
-        ? '/onlineshop/tracking'
-        : '/onlineshop/${_encodeShopId(shopId)}/tracking';
-    final uri = Uri.parse('$siteBase$path').replace(queryParameters: {'order_id': id});
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final ok = await openOrderTracking(orderId, shopId: shopId);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not open order tracking'), backgroundColor: AppColors.danger),

@@ -1116,7 +1116,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
           if (_totalItemDiscount > 0) ...[
             _buildSummaryRow(
               s.itemDiscounts,
-              '- ${_formatCurrency(_totalItemDiscount)}',
+              _formatCurrency(_totalItemDiscount),
               valueColor: AppColors.danger,
             ),
           ],

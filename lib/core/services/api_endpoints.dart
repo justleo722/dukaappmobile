@@ -1,7 +1,7 @@
 /// DukaApp API Endpoint Registry
 ///
 /// Single source of truth for every API endpoint used by the mobile app.
-/// All paths are relative to [ApiConfig.baseUrl] (https://dukaapp.net).
+/// All paths are relative to [ApiConfig.baseUrl] (https://dukaapp.com).
 ///
 /// ─── Groups ─────────────────────────────────────────────────────────────────
 ///

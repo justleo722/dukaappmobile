@@ -98,7 +98,7 @@ class DashboardGrid extends ConsumerWidget {
               ? () => context.push('/renew')
               : () => _handleModuleTap(context, module['key']),
         );
-        return locked ? Opacity(opacity: 0.35, child: card) : card;
+        return locked ? Opacity(opacity: 0.6, child: card) : card;
       },
     );
   }

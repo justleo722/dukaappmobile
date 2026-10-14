@@ -18,6 +18,15 @@ class _ShoppingCartPageState extends State<ShoppingCartPage> {
   late List<Map<String, dynamic>> _items;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // Shop the cart items come from, so tracking looks in that shop.
+  String? get _shopId {
+    for (final item in _items) {
+      final id = (item['shop_id'] ?? '').toString();
+      if (id.isNotEmpty) return id;
+    }
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -190,13 +199,17 @@ class _ShoppingCartPageState extends State<ShoppingCartPage> {
                   Navigator.of(context).pop();
                   TrackOrderBottomSheet.show(
                     context: context,
-                    onTrackOrder: (orderId) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Tracking order #$orderId...'),
-                          backgroundColor: AppColors.primary,
-                        ),
-                      );
+                    onTrackOrder: (orderId) async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final ok = await openOrderTracking(orderId, shopId: _shopId);
+                      if (!ok) {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text('Could not open order tracking'),
+                            backgroundColor: AppColors.danger,
+                          ),
+                        );
+                      }
                     },
                   );
                 },

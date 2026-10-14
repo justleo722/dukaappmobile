@@ -500,12 +500,13 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
         ),
         if (filtered.isNotEmpty) ...[
           const SizedBox(height: 4),
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2))],
-            ),
+          Material(
+            // ListTiles paint on the nearest Material, so give the dropdown its own.
+            color: AppColors.card,
+            elevation: 2,
+            shadowColor: Colors.black.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(12),
+            clipBehavior: Clip.antiAlias,
             child: Column(
               children: filtered.map((p) {
                 final stock = p['stock'] as int;

@@ -1119,7 +1119,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
           if (_totalItemDiscount > 0) ...[
             _buildSummaryRow(
               'Item Discounts',
-              '- ${_formatCurrency(_totalItemDiscount)}',
+              _formatCurrency(_totalItemDiscount),
               valueColor: AppColors.danger,
             ),
           ],

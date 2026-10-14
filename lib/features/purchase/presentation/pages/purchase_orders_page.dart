@@ -8,6 +8,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
+import 'package:dukaapp/app/app.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
@@ -160,9 +161,20 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
     }
   }
 
+  bool _statusDialogOpening = false;
+
   Future<void> _showUpdateStatusDialog(int index) async {
+    // Loading accounts takes a moment; a second tap meanwhile would stack a second
+    // dialog that stays open after the first one closes.
+    if (_statusDialogOpening) return;
+    _statusDialogOpening = true;
     // Real cashbook accounts: Stock::updateOrderStatus needs a numeric from_account_id.
-    final accounts = await loadPaymentAccounts(ref);
+    final List<PaymentAccount> accounts;
+    try {
+      accounts = await loadPaymentAccounts(ref);
+    } finally {
+      _statusDialogOpening = false;
+    }
     if (!mounted) return;
     final s = ref.read(stringsProvider);
     final order = _orders[index];
@@ -371,17 +383,13 @@ class _PurchaseOrdersPageState extends ConsumerState<PurchaseOrdersPage> {
                         child: ElevatedButton(
                           onPressed: () async {
                             if (selectedStatus == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Please select a status')),
-                              );
+                              showAppToast('Please select a status', isError: true);
                               return;
                             }
                             final purchaseId = _orders[index]['purchase_id']?.toString() ?? '';
                             final isCash = selectedStatus == 'Paid (Cash)';
                             if (isCash && (selectedAccount == null || selectedAccount!.isEmpty)) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Please select an account')),
-                              );
+                              showAppToast('Please select an account', isError: true);
                               return;
                             }
                             Navigator.pop(dialogContext);

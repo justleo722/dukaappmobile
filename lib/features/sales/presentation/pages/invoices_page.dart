@@ -1,4 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
+import 'package:dukaapp/features/sales/presentation/widgets/invoice_pdf.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/payment_accounts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dukaapp/features/sales/data/models/sales_models.dart';
@@ -48,8 +52,10 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     final today = DateTime.now().toIso8601String().substring(0, 10);
-    final effectiveFrom = from ?? '1990-01-01';
-    final effectiveTo = to ?? today;
+    // Same as the other sales pages: the active filter, which defaults to Today.
+    final filter = ref.read(filterProvider);
+    final effectiveFrom = from ?? (filter.from.isNotEmpty ? filter.from : today);
+    final effectiveTo = to ?? (filter.to.isNotEmpty ? filter.to : today);
     try {
       final repo = ref.read(salesRepositoryProvider);
       final results = await Future.wait([
@@ -66,10 +72,8 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
           'date': r.date,
           'customer': r.customer,
           'invoiceNo': r.invoiceNo ?? '',
-          // Web invoice.php shows the sale_id as "Invoice No" when invoice_no is empty.
-          'invoice': (r.invoiceNo != null && r.invoiceNo!.isNotEmpty && r.invoiceNo != 'null')
-              ? r.invoiceNo!
-              : r.saleId,
+          // Web invoice.php always shows the sale_id as "Invoice No".
+          'invoice': r.saleId,
           'discount': r.discount,
           'dueDate': r.dueDate,
           'customer_id': r.customerId,
@@ -706,6 +710,39 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
     }
   }
 
+  Future<void> _downloadInvoicePdf(Map<String, dynamic> invoice) async {
+    try {
+      final cfg = ref.read(shopConfigProvider).valueOrNull;
+      double d(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0;
+      final bytes = await buildInvoicePdf(
+        shopName: _shopName,
+        shopAddress: cfg?.shopAddress ?? '',
+        shopPhone: cfg?.shopPhone ?? '',
+        shopTin: cfg?.shopTin ?? '',
+        invoiceNo: (invoice['invoice'] ?? invoice['sale_id'] ?? '').toString(),
+        date: (invoice['date'] ?? '').toString(),
+        dueDate: (invoice['dueDate'] ?? '').toString(),
+        customer: (invoice['customer'] ?? '').toString(),
+        createdBy: (invoice['createdBy'] ?? '').toString(),
+        items: List<Map<String, dynamic>>.from(invoice['products'] ?? const []),
+        discount: d(invoice['discount']),
+        total: d(invoice['total']),
+        paid: d(invoice['paid']),
+        balance: d(invoice['balance']),
+        message: cfg?.receiptMessage ?? '',
+      );
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/Invoice_${invoice['invoice'] ?? invoice['sale_id'] ?? ''}.pdf');
+      await file.writeAsBytes(bytes, flush: true);
+      await OpenFile.open(file.path);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Download failed: $e'), backgroundColor: AppColors.danger),
+      );
+    }
+  }
+
   void _showInvoicePreview(Map<String, dynamic> invoice) {
     final products = List<Map<String, dynamic>>.from(invoice['products']);
     final totalAmount = products.fold<double>(
@@ -758,7 +795,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
             ),
           ),
         ),
-        _buildPreviewActions(),
+        _buildPreviewActions(invoice),
       ],
     );
   }
@@ -1042,7 +1079,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
         children: [
           _buildTotalRow(s.subtotal, _formatCurrency(totalAmount)),
           const SizedBox(height: 8),
-          _buildTotalRow('Discount', '- ${_formatCurrency((invoice['discount'] as double? ?? 0.0))}'),
+          _buildTotalRow('Discount', _formatCurrency((invoice['discount'] as double? ?? 0.0))),
           const SizedBox(height: 8),
           _buildTotalRow(s.paidAmount, _formatCurrency((invoice['paid'] as double? ?? 0.0))),
           const Divider(height: 20),
@@ -1103,6 +1140,9 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
   }
 
   Widget _buildPreviewFooter() {
+    // Shop's custom receipt message (Custom Features → message_template).
+    final message = (ref.read(shopConfigProvider).valueOrNull?.receiptMessage ?? '').trim();
+    if (message.isEmpty) return const SizedBox.shrink();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -1111,7 +1151,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
         borderRadius: BorderRadius.circular(AppConstants.radiusMD),
       ),
       child: Text(
-        'LIPA VODA 12345',
+        message,
         style: AppTypography.bodyMedium.copyWith(
           color: AppColors.primary,
           fontWeight: FontWeight.w700,
@@ -1122,7 +1162,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
     );
   }
 
-  Widget _buildPreviewActions() {
+  Widget _buildPreviewActions(Map<String, dynamic> invoice) {
     final s = ref.read(stringsProvider);
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1157,9 +1197,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
             child: ElevatedButton.icon(
               onPressed: () {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Print functionality coming soon')),
-                );
+                _downloadInvoicePdf(invoice);
               },
               icon: const Icon(Icons.print_rounded, color: Colors.white, size: 18),
               label: Text(
@@ -1804,7 +1842,7 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                   ),
                   const SizedBox(height: 12),
                   SalesBottomActions(
-                    onDownload: () {},
+                    onDownload: () => _downloadInvoicePdf(invoice),
                     onBackdate: () => _showBackdateDialog(invoiceIndex),
                     onPrint: () => _showInvoicePreview(invoice),
                     onPreview: () => _showInvoicePreview(invoice),
