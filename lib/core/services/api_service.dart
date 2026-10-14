@@ -777,6 +777,18 @@ class ApiService {
     return _body(response);
   }
 
+  /// Public order tracking (Onlineshop::tracking with format=json). Without
+  /// [shopId] the order is looked up across all shops.
+  Future<Map<String, dynamic>> getOnlineshopTracking(String orderId, {String? shopId}) async {
+    final siteBase = ApiConfig.appApiBase.replaceFirst(RegExp(r'/api/v1/app$'), '');
+    final response = await _client.get('$siteBase/onlineshop/tracking', queryParameters: {
+      'format': 'json',
+      'order_id': orderId,
+      if (shopId != null && shopId.isNotEmpty) 'shop_id': shopId,
+    });
+    return _body(response);
+  }
+
   /// Apply a coupon on the public storefront.
   Future<Map<String, dynamic>> postOnlineshopApplyCoupon(
       String encodedShopId, Map<String, dynamic> payload) async {

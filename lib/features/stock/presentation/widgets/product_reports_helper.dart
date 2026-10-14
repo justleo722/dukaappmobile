@@ -306,13 +306,8 @@ class ProductReportsHelper {
   static void showPhotosDialog({
     required BuildContext context,
     required String productName,
+    List<String> photoUrls = const [],
   }) {
-    // Sample photos - in real app these would come from the product's photo list
-    final List<String> samplePhotos = [
-      'https://via.placeholder.com/400x400/007AFF/FFFFFF?text=${Uri.encodeComponent(productName)}+1',
-      'https://via.placeholder.com/400x400/34C759/FFFFFF?text=${Uri.encodeComponent(productName)}+2',
-      'https://via.placeholder.com/400x400/FF9500/FFFFFF?text=${Uri.encodeComponent(productName)}+3',
-    ];
 
     showDialog(
       context: context,
@@ -370,7 +365,7 @@ class ProductReportsHelper {
               ),
               // Photos grid
               Flexible(
-                child: samplePhotos.isEmpty
+                child: photoUrls.isEmpty
                     ? Center(
                         child: Padding(
                           padding: const EdgeInsets.all(32),
@@ -400,12 +395,12 @@ class ProductReportsHelper {
                           crossAxisSpacing: 10,
                           mainAxisSpacing: 10,
                         ),
-                        itemCount: samplePhotos.length,
+                        itemCount: photoUrls.length,
                         itemBuilder: (context, index) {
                           return ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: Image.network(
-                              samplePhotos[index],
+                              photoUrls[index],
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) => Container(
                                 decoration: BoxDecoration(

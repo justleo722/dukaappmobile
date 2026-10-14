@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/app/typography.dart';
@@ -25,9 +24,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _biometricAvailable = false;
   bool _biometricEnabled = false;
 
-  static const _kSavedId = 'biometric_saved_id';
-  static const _kSavedPw = 'biometric_saved_pw';
-
   @override
   void initState() {
     super.initState();
@@ -42,14 +38,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _triggerBiometric() async {
+    final creds = await BiometricService.readCredentials();
+    if (!mounted) return;
+    if (creds == null) {
+      _showSnackBar('Ingia kwa password mara moja kwanza, kisha biometric itafanya kazi.');
+      return;
+    }
     final ok = await BiometricService.authenticate();
-    if (!ok || !mounted) return;
-    final prefs = await SharedPreferences.getInstance();
-    final id = prefs.getString(_kSavedId) ?? '';
-    final pw = prefs.getString(_kSavedPw) ?? '';
-    if (id.isEmpty || pw.isEmpty) return;
-    _userIdController.text = id;
-    _passwordController.text = pw;
+    if (!mounted) return;
+    if (!ok) {
+      if (BiometricService.lastError.isNotEmpty) _showSnackBar(BiometricService.lastError);
+      return;
+    }
+    _userIdController.text = creds.id;
+    _passwordController.text = creds.password;
     _handleLogin();
   }
 
@@ -116,10 +118,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         }
         // Save credentials for biometric re-login
         if (_biometricAvailable) {
-          SharedPreferences.getInstance().then((p) {
-            p.setString(_kSavedId, _userIdController.text.trim());
-            p.setString(_kSavedPw, _passwordController.text);
-          });
+          BiometricService.saveCredentials(_userIdController.text.trim(), _passwordController.text);
         }
         Future.delayed(const Duration(milliseconds: 1200), () {
           if (context.mounted) context.go('/dashboard');

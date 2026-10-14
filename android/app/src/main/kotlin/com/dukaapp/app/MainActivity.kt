@@ -4,13 +4,14 @@ import android.content.ContentValues
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileOutputStream
 
-class MainActivity : FlutterActivity() {
+// FlutterFragmentActivity: local_auth (biometric login) refuses to run on a plain FlutterActivity.
+class MainActivity : FlutterFragmentActivity() {
     private val CHANNEL = "com.example.dukaapp/downloads"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

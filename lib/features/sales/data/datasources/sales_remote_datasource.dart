@@ -47,11 +47,12 @@ class SalesRemoteDatasource {
   }
 
   Future<List<SaleRecord>> fetchOrders({String? from, String? to}) async {
-    // 'orders' = sale_type order/orders only (includes online-shop orders);
+    // 'orders' = sale_type order/orders (includes online-shop orders) plus paid
+    // orders, which stay listed here after moving to sales;
     // 'sales_orders' returns every sale type.
     final res = await _api.getOrders(from: from, to: to);
     return _parseList(res.data, SaleRecord.fromJson)
-        .where((r) => r.isOrder)
+        .where((r) => r.isOrder || r.isPaidOrder)
         .toList();
   }
 

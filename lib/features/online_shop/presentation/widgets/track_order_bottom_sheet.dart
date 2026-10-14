@@ -1,54 +1,48 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:dukaapp/core/config/api_config.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/core/providers.dart';
 
-/// Tracking is a web page (Onlineshop::tracking), so it opens in the browser.
-/// Without [shopId] the web looks the order up across all shops.
-Future<bool> openOrderTracking(String orderId, {String? shopId}) async {
-  final id = orderId.trim().replaceFirst(RegExp(r'^#'), '');
-  if (id.isEmpty) return false;
-  final siteBase = ApiConfig.appApiBase.replaceFirst(RegExp(r'/api/v1/app$'), '');
-  // Same encoding as onlineshop_encode_shop_id(): url-safe base64 without padding.
-  final path = (shopId == null || shopId.isEmpty)
-      ? '/onlineshop/tracking'
-      : '/onlineshop/${base64Url.encode(utf8.encode(shopId)).replaceAll('=', '')}/tracking';
-  final uri = Uri.parse('$siteBase$path').replace(queryParameters: {'order_id': id});
-  try {
-    return await launchUrl(uri, mode: LaunchMode.externalApplication);
-  } catch (_) {
-    return false;
-  }
+/// Order ID from what the user typed or pasted: "#12", "ORD-0012", or a whole
+/// tracking link (…/tracking?order_id=ORD-0012).
+String parseOrderIdInput(String input) {
+  final v = input.trim();
+  final uri = Uri.tryParse(v);
+  final fromLink = uri?.queryParameters['order_id'];
+  if (fromLink != null && fromLink.trim().isNotEmpty) return fromLink.trim();
+  return v.replaceFirst(RegExp(r'^#'), '');
 }
 
-class TrackOrderBottomSheet extends StatefulWidget {
-  final ValueChanged<String> onTrackOrder;
+/// Looks an order up in-app (Onlineshop::tracking, format=json) and shows the
+/// result in the sheet. Without [shopId] the order is looked up across all shops.
+class TrackOrderBottomSheet extends ConsumerStatefulWidget {
+  final String? shopId;
 
-  const TrackOrderBottomSheet({super.key, required this.onTrackOrder});
+  const TrackOrderBottomSheet({super.key, this.shopId});
 
-  static void show({
-    required BuildContext context,
-    required ValueChanged<String> onTrackOrder,
-  }) {
+  static void show({required BuildContext context, String? shopId}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => TrackOrderBottomSheet(onTrackOrder: onTrackOrder),
+      builder: (_) => TrackOrderBottomSheet(shopId: shopId),
     );
   }
 
   @override
-  State<TrackOrderBottomSheet> createState() => _TrackOrderBottomSheetState();
+  ConsumerState<TrackOrderBottomSheet> createState() =>
+      _TrackOrderBottomSheetState();
 }
 
-class _TrackOrderBottomSheetState extends State<TrackOrderBottomSheet> {
+class _TrackOrderBottomSheetState extends ConsumerState<TrackOrderBottomSheet> {
   final TextEditingController _orderIdController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   String? _errorText;
+  bool _loading = false;
+  Map<String, dynamic>? _tracking;
 
   @override
   void dispose() {
@@ -57,16 +51,139 @@ class _TrackOrderBottomSheetState extends State<TrackOrderBottomSheet> {
     super.dispose();
   }
 
-  void _handleTrackOrder() {
-    final orderId = _orderIdController.text.trim();
+  Future<void> _pasteOrderId() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim() ?? '';
+    if (text.isEmpty || !mounted) return;
+    final id = parseOrderIdInput(text);
+    _orderIdController.text = id;
+    _orderIdController.selection = TextSelection.collapsed(offset: id.length);
+    setState(() => _errorText = null);
+  }
+
+  Future<void> _handleTrackOrder() async {
+    final orderId = parseOrderIdInput(_orderIdController.text);
     if (orderId.isEmpty) {
       setState(() => _errorText = 'Please enter an Order ID');
       _focusNode.requestFocus();
       return;
     }
-    setState(() => _errorText = null);
-    Navigator.pop(context);
-    widget.onTrackOrder(orderId);
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _errorText = null;
+      _loading = true;
+      _tracking = null;
+    });
+    try {
+      final res = await ref
+          .read(apiServiceProvider)
+          .getOnlineshopTracking(orderId, shopId: widget.shopId);
+      if (!mounted) return;
+      final tracking = res['tracking'];
+      setState(() {
+        if (res['status']?.toString() == 'success' && tracking is Map) {
+          _tracking = Map<String, dynamic>.from(tracking);
+        } else {
+          _errorText = (res['message']?.toString().isNotEmpty ?? false)
+              ? res['message'].toString()
+              : 'Order not found. Check the Order ID and try again.';
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _errorText =
+            'Could not check the order. Check your connection and try again.',
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Widget _buildTrackingResult(Map<String, dynamic> t) {
+    String v(String key) {
+      final value = (t[key] ?? '').toString().trim();
+      return value.isEmpty ? '-' : value;
+    }
+
+    Widget row(String label, String value) => Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(AppConstants.radiusMD),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Order ${v('order_id')}',
+                  style: AppTypography.bodyMedium.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+                ),
+                child: Text(
+                  v('status'),
+                  style: AppTypography.captionBold.copyWith(
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          row('Placed on', v('placed_on')),
+          row('Last update', v('step_time')),
+          if (v('customer_name') != '-') row('Customer', v('customer_name')),
+          row('Payment', v('payment_method')),
+          row('Delivery', v('delivery_method')),
+          row('Address', v('address')),
+          row('Total', v('total')),
+        ],
+      ),
+    );
   }
 
   @override
@@ -168,6 +285,15 @@ class _TrackOrderBottomSheetState extends State<TrackOrderBottomSheet> {
                   ),
                   decoration: InputDecoration(
                     hintText: 'e.g. ORD-2026-001',
+                    suffixIcon: IconButton(
+                      tooltip: 'Paste',
+                      onPressed: _pasteOrderId,
+                      icon: const Icon(
+                        Icons.content_paste_rounded,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
+                    ),
                     hintStyle: AppTypography.bodyMedium.copyWith(
                       color: AppColors.textHint,
                     ),
@@ -232,7 +358,7 @@ class _TrackOrderBottomSheetState extends State<TrackOrderBottomSheet> {
                   width: double.infinity,
                   height: AppConstants.buttonHeight,
                   child: ElevatedButton(
-                    onPressed: _handleTrackOrder,
+                    onPressed: _loading ? null : _handleTrackOrder,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.secondary,
                       foregroundColor: AppColors.textWhite,
@@ -243,19 +369,28 @@ class _TrackOrderBottomSheetState extends State<TrackOrderBottomSheet> {
                         ),
                       ),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.search_rounded, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Track Order',
-                          style: AppTypography.buttonLarge.copyWith(
-                            color: AppColors.textWhite,
+                    child: _loading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.textWhite,
+                            ),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.search_rounded, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Track Order',
+                                style: AppTypography.buttonLarge.copyWith(
+                                  color: AppColors.textWhite,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -265,6 +400,10 @@ class _TrackOrderBottomSheetState extends State<TrackOrderBottomSheet> {
                     color: AppColors.textHint,
                   ),
                 ),
+                if (_tracking != null) ...[
+                  const SizedBox(height: 16),
+                  _buildTrackingResult(_tracking!),
+                ],
               ],
             ),
           ),

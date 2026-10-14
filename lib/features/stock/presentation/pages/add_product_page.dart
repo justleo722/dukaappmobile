@@ -75,6 +75,16 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
   bool get _isService => _selectedType == 'Service';
   bool get _isEditing => widget.product != null;
 
+  // Photos the product already has (shown while editing until new ones are picked).
+  List<String> get _existingPhotoUrls {
+    if (!_isEditing) return const [];
+    final p = widget.product!;
+    final list = p['photoUrls'];
+    if (list is List && list.isNotEmpty) return list.map((e) => e.toString()).toList();
+    final single = p['imageUrl']?.toString() ?? '';
+    return single.startsWith('http') ? [single] : const [];
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1220,6 +1230,32 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (_selectedPhotos.isEmpty && _existingPhotoUrls.isNotEmpty) ...[
+                          SizedBox(
+                            height: 100,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _existingPhotoUrls.length,
+                              separatorBuilder: (_, _) => const SizedBox(width: 8),
+                              itemBuilder: (context, index) => ClipRRect(
+                                borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+                                child: Image.network(
+                                  _existingPhotoUrls[index],
+                                  width: 100,
+                                  height: 100,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Container(
+                                    width: 100,
+                                    height: 100,
+                                    color: AppColors.background,
+                                    child: const Icon(Icons.broken_image_rounded, color: AppColors.textHint),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                         if (_selectedPhotos.isNotEmpty) ...[
                           SizedBox(
                             height: 100,

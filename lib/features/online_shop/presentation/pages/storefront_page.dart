@@ -253,14 +253,11 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
     return v;
   }
 
-  Future<void> _handleTrackOrder(String orderId) async {
-    final shopId = _browseShopId ?? ref.read(authProvider).activeShop?.id?.toString();
-    final ok = await openOrderTracking(orderId, shopId: shopId);
-    if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open order tracking'), backgroundColor: AppColors.danger),
-      );
-    }
+  void _openTrackOrder() {
+    TrackOrderBottomSheet.show(
+      context: context,
+      shopId: _browseShopId ?? ref.read(authProvider).activeShop?.id?.toString(),
+    );
   }
 
   void _handleBrowseShop(String shopId) {
@@ -494,10 +491,7 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
               _buildSmallButton(Icons.shopping_cart_rounded, 'Cart (${_cart.length})', onTap: () async { await context.push('/shopping-cart', extra: _cart); if (mounted) setState(() {}); }),
               const SizedBox(width: 8),
               _buildSmallButton(Icons.local_shipping_rounded, 'Track Order', onTap: () {
-                TrackOrderBottomSheet.show(
-                  context: context,
-                  onTrackOrder: _handleTrackOrder,
-                );
+                _openTrackOrder();
               }),
             ],
           ),
@@ -1067,10 +1061,7 @@ class _StorefrontPageState extends ConsumerState<StorefrontPage> {
                       await context.push('/shopping-cart', extra: _cart);
                       if (mounted) setState(() {});
                     } else if (item['label'] == 'Track Order') {
-                      TrackOrderBottomSheet.show(
-                        context: context,
-                        onTrackOrder: _handleTrackOrder,
-                      );
+                      _openTrackOrder();
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(

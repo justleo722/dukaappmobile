@@ -197,21 +197,7 @@ class _ShoppingCartPageState extends State<ShoppingCartPage> {
                 label: 'Track Order',
                 onTap: () {
                   Navigator.of(context).pop();
-                  TrackOrderBottomSheet.show(
-                    context: context,
-                    onTrackOrder: (orderId) async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      final ok = await openOrderTracking(orderId, shopId: _shopId);
-                      if (!ok) {
-                        messenger.showSnackBar(
-                          const SnackBar(
-                            content: Text('Could not open order tracking'),
-                            backgroundColor: AppColors.danger,
-                          ),
-                        );
-                      }
-                    },
-                  );
+                  TrackOrderBottomSheet.show(context: context, shopId: _shopId);
                 },
               ),
             ],

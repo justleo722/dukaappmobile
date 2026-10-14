@@ -601,6 +601,7 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
             'barcode': product.barcode,
             'unit': product.unit,
             'imageUrl': product.imageUrl,
+            'photoUrls': product.photoUrls,
             'type': product.type,
           }),
           onHistory: () => ProductReportsHelper.exportHistoryPdf(
@@ -626,6 +627,9 @@ class _ManageStockPageState extends ConsumerState<ManageStockPage> {
           onPhotos: () => ProductReportsHelper.showPhotosDialog(
             context: context,
             productName: product.name,
+            photoUrls: product.photoUrls.isNotEmpty
+                ? product.photoUrls
+                : [if (product.imageUrl != null && product.imageUrl!.isNotEmpty) product.imageUrl!],
           ),
           onRestock: () =>
               context.push('/stock/manage/purchase', extra: {

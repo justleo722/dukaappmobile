@@ -6,11 +6,13 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/core/models/shop_config.dart';
 import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/features/customers/presentation/pages/add_customer_page.dart';
 import 'package:dukaapp/features/sales/data/repositories/sales_repository.dart';
 import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/add_sale_item_tile.dart';
+import 'package:dukaapp/features/sales/presentation/widgets/item_picker_content.dart';
 import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 
@@ -286,9 +288,9 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
                     const SizedBox(height: 16),
                     _buildSearchBar(filtered),
                     const SizedBox(height: 16),
+                    _buildItemsHeader(),
+                    const SizedBox(height: 8),
                     if (_items.isNotEmpty) ...[
-                      _buildItemsHeader(),
-                      const SizedBox(height: 8),
                       _buildItemsList(),
                       const SizedBox(height: 16),
                       _buildSummarySection(),
@@ -528,13 +530,71 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
     );
   }
 
+  // Same "Add Item" picker as Add Sale.
+  void _openItemPicker() {
+    final cfg = ref.read(shopConfigProvider).valueOrNull ?? ShopConfig.defaults;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => ItemPickerContent(
+          allProducts: _cachedAllProducts,
+          formatCurrency: (v) => 'Tsh ${NumberFormat('#,###').format(v)}',
+          onAddItem: _addProduct,
+          onScanBarcode: _scanBarcode,
+          enableBarcodeScanner: cfg.enableBarcodeScanner,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _scanBarcode() async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(fullscreenDialog: true, builder: (_) => const BarcodeScannerScreen()),
+    );
+    if (result != null && result.isNotEmpty && mounted) {
+      _searchController.text = result;
+      setState(() {});
+    }
+  }
+
   Widget _buildItemsHeader() {
+    final s = ref.read(stringsProvider);
     return Row(
       children: [
         Text('Order Items', style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
-        const Spacer(),
+        const SizedBox(width: 8),
         Text('${_items.length} item${_items.length == 1 ? '' : 's'}',
             style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+        const Spacer(),
+        GestureDetector(
+          onTap: _openItemPicker,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(AppConstants.radiusSM),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  s.addItem,
+                  style: AppTypography.buttonSmall.copyWith(fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }

@@ -88,7 +88,8 @@ class DashboardGrid extends ConsumerWidget {
       itemBuilder: (context, index) {
         final module = modules[index];
         final locked = subscriptionExpired && module['key'] != 'renew';
-        final card = DashboardModuleCard(
+        return DashboardModuleCard(
+          locked: locked,
           title: module['title'],
           description: module['description'],
           icon: module['icon'],
@@ -98,7 +99,6 @@ class DashboardGrid extends ConsumerWidget {
               ? () => context.push('/renew')
               : () => _handleModuleTap(context, module['key']),
         );
-        return locked ? Opacity(opacity: 0.6, child: card) : card;
       },
     );
   }

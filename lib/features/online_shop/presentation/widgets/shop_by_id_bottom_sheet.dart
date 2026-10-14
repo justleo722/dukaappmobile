@@ -1,7 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+
+/// Shop ID from what the user typed or pasted: a plain id, the encoded id, or a
+/// whole shop link (…/onlineshop/<encoded id>/…, or ?shop_id=S0003).
+String parseShopIdInput(String input) {
+  final v = input.trim();
+  final uri = Uri.tryParse(v);
+  if (uri != null && uri.hasScheme) {
+    final fromQuery = uri.queryParameters['shop_id'];
+    if (fromQuery != null && fromQuery.trim().isNotEmpty)
+      return fromQuery.trim();
+    final segments = uri.pathSegments;
+    final i = segments.indexOf('onlineshop');
+    if (i >= 0 && i + 1 < segments.length) {
+      final seg = segments[i + 1];
+      const pages = {
+        'all-products',
+        'all_products',
+        'product',
+        'checkout',
+        'track',
+        'tracking',
+        'place-order',
+        'apply-coupon',
+      };
+      if (!pages.contains(seg)) return seg;
+    }
+  }
+  return v;
+}
 
 class ShopByIdBottomSheet extends StatefulWidget {
   final ValueChanged<String> onBrowseShop;
@@ -36,8 +66,18 @@ class _ShopByIdBottomSheetState extends State<ShopByIdBottomSheet> {
     super.dispose();
   }
 
+  Future<void> _pasteShopId() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim() ?? '';
+    if (text.isEmpty || !mounted) return;
+    final id = parseShopIdInput(text);
+    _shopIdController.text = id;
+    _shopIdController.selection = TextSelection.collapsed(offset: id.length);
+    setState(() => _errorText = null);
+  }
+
   void _handleBrowseShop() {
-    final shopId = _shopIdController.text.trim();
+    final shopId = parseShopIdInput(_shopIdController.text);
     if (shopId.isEmpty) {
       setState(() => _errorText = 'Please enter a Shop ID');
       _focusNode.requestFocus();
@@ -147,6 +187,15 @@ class _ShopByIdBottomSheetState extends State<ShopByIdBottomSheet> {
                   ),
                   decoration: InputDecoration(
                     hintText: 'e.g. SHP-2026-0042',
+                    suffixIcon: IconButton(
+                      tooltip: 'Paste',
+                      onPressed: _pasteShopId,
+                      icon: const Icon(
+                        Icons.content_paste_rounded,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
+                    ),
                     hintStyle: AppTypography.bodyMedium.copyWith(
                       color: AppColors.textHint,
                     ),

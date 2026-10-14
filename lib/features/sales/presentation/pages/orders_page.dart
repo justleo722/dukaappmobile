@@ -1353,6 +1353,8 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                               _orders[orderIndex]['balance'] = 0.0;
                             }
                           });
+                          // A fully paid record now also shows in Sales.
+                          ref.invalidate(salesProvider);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text(s.paymentRecordedSuccessfully)),
                           );

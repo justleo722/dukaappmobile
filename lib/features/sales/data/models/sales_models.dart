@@ -143,6 +143,9 @@ class SaleRecord {
   final String source; // 'system' | 'online_shop' | …
   final String dueDate;
   final String customerId;
+  // Order paid in full: Sales::addpayment turns it into a cashsale with status
+  // COMPLETED. It shows in Sales and keeps its copy in Orders.
+  final bool isPaidOrder;
 
   const SaleRecord({
     required this.saleId,
@@ -163,6 +166,7 @@ class SaleRecord {
     this.source = 'system',
     this.dueDate = '',
     this.customerId = '',
+    this.isPaidOrder = false,
   });
 
   bool get isOrder => saleType == 'order' || saleType == 'orders';
@@ -239,6 +243,8 @@ class SaleRecord {
       source: source,
       dueDate: (j['due_date'] ?? '').toString(),
       customerId: (j['customer_id'] ?? '').toString(),
+      isPaidOrder: (saleType == 'cashsale' || saleType == 'sale') &&
+          (j['status'] ?? '').toString().trim().toUpperCase() == 'COMPLETED',
     );
   }
 }

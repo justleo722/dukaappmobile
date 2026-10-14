@@ -19,6 +19,8 @@ class StockProduct {
   final String? expiryDate;
   final String? status;     // 'active' | 'deleted'
   final String? imageUrl;
+  /// Every product photo as a full URL (server photo_urls).
+  final List<String> photoUrls;
 
   // Movement/report fields (populated when fetched with date range)
   final double sold;
@@ -51,6 +53,7 @@ class StockProduct {
     this.expiryDate,
     this.status,
     this.imageUrl,
+    this.photoUrls = const [],
     this.sold = 0,
     this.bad = 0,
     this.lost = 0,
@@ -91,7 +94,13 @@ class StockProduct {
       barcode: j['barcode']?.toString(),
       expiryDate: j['expiry_date']?.toString(),
       status: j['record_status']?.toString(),
+      photoUrls: j['photo_urls'] is List
+          ? (j['photo_urls'] as List).map((e) => e.toString()).where((e) => e.startsWith('http')).toList()
+          : const [],
+      // photo_url: full URL from the server (R2 when the upload engine is
+      // cloud); the uploads/ path built here only works for local storage.
       imageUrl: _resolveImageUrl(
+          ((j['photo_url']?.toString().trim().isNotEmpty ?? false) ? j['photo_url'].toString().trim() : null) ??
           _firstPhoto(j['photo']?.toString(), shopId: j['shop_id']?.toString()) ??
           j['image']?.toString() ??
           j['image_url']?.toString()),

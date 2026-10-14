@@ -174,7 +174,15 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
                               ? (v) async {
                                   if (v) {
                                     final ok = await BiometricService.authenticate();
-                                    if (!ok) return;
+                                    if (!ok) {
+                                      if (mounted && BiometricService.lastError.isNotEmpty) {
+                                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                          content: Text(BiometricService.lastError),
+                                          backgroundColor: AppColors.danger,
+                                        ));
+                                      }
+                                      return;
+                                    }
                                   }
                                   await BiometricService.setEnabled(v);
                                   if (mounted) setState(() => _biometricEnabled = v);
