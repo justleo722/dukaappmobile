@@ -930,7 +930,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                   ),
                   const SizedBox(height: 8),
                   PaymentSummaryCard(
-                    paymentMethod: order['paymentMode'],
+                    paymentMethod: order['paymentMethod']?.toString() ?? '',
                     paid: order['paid'],
                     discount: order['discount'],
                     balance: order['balance'],

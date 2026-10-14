@@ -49,11 +49,10 @@ class ItemPickerContentState extends ConsumerState<ItemPickerContent> {
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(stringsProvider);
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+    // Material (not a coloured Container): the product ListTiles paint on it.
+    return Material(
+      color: AppColors.card,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       child: Column(
         children: [
           Container(
