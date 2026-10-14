@@ -44,15 +44,30 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     // Try cached data first
     if (db.isOpen) {
       final cachedRaw = await db.get('dashboard', 'state');
-      if (cachedRaw != null) {
-        // Serve cache immediately, then refresh silently in background
-        _backgroundRefresh(repo, db);
-        return DashboardState.fromCache(cachedRaw as Map<String, dynamic>);
+      if (cachedRaw is Map<String, dynamic>) {
+        // The KPIs are "today / this month / this year": a cache saved on another
+        // day would show that day's figures as today's, so only serve it as-is
+        // when it is from today. An older one is used only if the API fails.
+        if (cachedRaw['cached_on'] == _todayKey()) {
+          // Serve cache immediately, then refresh silently in background
+          _backgroundRefresh(repo, db);
+          return DashboardState.fromCache(cachedRaw);
+        }
+        try {
+          return await _fetchAndCache(repo, db);
+        } catch (_) {
+          return DashboardState.fromCache(cachedRaw);
+        }
       }
     }
 
     // No cache — fetch from API (shows loading spinner once only)
     return await _fetchAndCache(repo, db);
+  }
+
+  static String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month}-${now.day}';
   }
 
   /// Background refresh — updates state without showing loading spinner.
@@ -71,7 +86,7 @@ class DashboardNotifier extends AsyncNotifier<DashboardState> {
     final fresh = await repo.fetch();
     // Persist to local DB for next cold start
     if (db.isOpen) {
-      await db.put('dashboard', 'state', fresh.toJson());
+      await db.put('dashboard', 'state', {...fresh.toJson(), 'cached_on': _todayKey()});
     }
     return fresh;
   }
