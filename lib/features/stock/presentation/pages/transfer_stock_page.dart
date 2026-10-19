@@ -4,11 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
+import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/transfer_shop_dropdown.dart';
-import 'package:dukaapp/features/stock/presentation/widgets/transfer_product_card.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/transfer_summary_card.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/transfer_bottom_bar.dart';
+import 'package:dukaapp/features/stock/presentation/widgets/compact_qty_stepper.dart';
 
 class _TransferItem {
   final String name;
@@ -36,27 +37,32 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
   final TextEditingController _searchController = TextEditingController();
   final List<_TransferItem> _items = [];
   bool _isSaving = false;
-  /// Checkbox selection inside _ProductSelectionList, lifted to parent so
-  /// the Transfer button can become enabled as soon as checkboxes are ticked.
-  final Set<int> _pendingIndices = {};
 
-  List<Map<String, dynamic>> _getFilteredProducts() {
+  /// Full unfiltered catalog (name, stock, product_id, barcode).
+  List<Map<String, dynamic>> _getAllProducts() {
     final stockState = ref.read(stockProvider);
-    final allProducts = stockState.whenOrNull(
+    return stockState.whenOrNull(
           data: (s) => s.products
               .map((p) => {
                     'name': p.name,
                     'stock': p.available.toInt(),
                     'product_id': p.productId,
+                    'barcode': p.barcode ?? '',
                   })
               .toList(),
         ) ??
         [];
+  }
+
+  /// Products matching the current search query (name or barcode).
+  List<Map<String, dynamic>> _getFilteredProducts() {
+    final allProducts = _getAllProducts();
     final query = _searchController.text.toLowerCase().trim();
     if (query.isEmpty) return allProducts;
     return allProducts.where((p) {
       final name = (p['name'] as String).toLowerCase();
-      return name.contains(query);
+      final barcode = (p['barcode']?.toString() ?? '').toLowerCase();
+      return name.contains(query) || barcode.contains(query);
     }).toList();
   }
 
@@ -67,8 +73,52 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
     return match?.group(1);
   }
 
+  /// Items currently part of the transfer (quantity >= 1).
+  List<_TransferItem> get _selectedItems =>
+      _items.where((item) => item.transferQuantity > 0).toList();
+
   int get _totalTransferQuantity =>
-      _items.fold(0, (sum, item) => sum + item.transferQuantity);
+      _selectedItems.fold(0, (sum, item) => sum + item.transferQuantity);
+
+  int _itemIndexByName(String name) =>
+      _items.indexWhere((item) => item.name == name);
+
+  int _qtyFor(String name) {
+    final i = _itemIndexByName(name);
+    return i < 0 ? 0 : _items[i].transferQuantity;
+  }
+
+  /// Select (or bump) a product straight from the catalog / barcode scan.
+  void _incrementProduct(Map<String, dynamic> product) {
+    final name = product['name'] as String;
+    final i = _itemIndexByName(name);
+    setState(() {
+      if (i < 0) {
+        _items.add(_TransferItem(
+          name: name,
+          availableStock: (product['stock'] as num?)?.toInt() ?? 0,
+          productId: product['product_id'],
+          transferQuantity: 1,
+        ));
+      } else {
+        _items[i].transferQuantity += 1;
+      }
+    });
+  }
+
+  void _decrementProduct(String name) {
+    final i = _itemIndexByName(name);
+    if (i < 0) return;
+    setState(() {
+      if (_items[i].transferQuantity <= 1) {
+        // Deselect: keep the item (and its state) but drop it out of the
+        // active transfer by setting quantity to 0.
+        _items[i].transferQuantity = 0;
+      } else {
+        _items[i].transferQuantity -= 1;
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -76,36 +126,27 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
     super.dispose();
   }
 
-  void _addSelectedProducts(List<Map<String, dynamic>> products, Set<int> indices) {
-    int addedCount = 0;
-    for (final index in indices) {
-      if (index >= products.length) continue;
-      final product = products[index];
-      final name = product['name'] as String;
-      if (_items.any((item) => item.name == name)) continue;
-      _items.add(_TransferItem(
-        name: name,
-        availableStock: (product['stock'] as num?)?.toInt() ?? 0,
-        productId: product['product_id'],
-        transferQuantity: 1,
-      ));
-      addedCount++;
-    }
-    if (addedCount > 0) {
-      setState(() {});
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '$addedCount product${addedCount == 1 ? '' : 's'} added',
-            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-          ),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-          ),
-        ),
-      );
+  /// Open the camera and scan a barcode. An exact match is selected (or its
+  /// quantity bumped) straight from the catalog; otherwise the code becomes
+  /// the search query.
+  Future<void> _scanBarcode() async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const BarcodeScannerScreen(),
+      ),
+    );
+    if (result == null || result.isEmpty || !mounted) return;
+    final code = result.trim();
+
+    final matches = _getAllProducts().where(
+      (p) => (p['barcode']?.toString() ?? '').trim() == code,
+    );
+
+    if (matches.isNotEmpty) {
+      _incrementProduct(matches.first);
+    } else {
+      setState(() => _searchController.text = code);
     }
   }
 
@@ -120,26 +161,24 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
         top: false,
         child: Column(
           children: [
+            // Pinned header: destination shop and search stay fixed.
+            _buildStickyHeader(),
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 16),
-                    _buildInfoSection(),
                     const SizedBox(height: 12),
                     _buildProductsHeader(),
                     const SizedBox(height: 8),
-                    if (_items.isNotEmpty) ...[
-                      _buildTransferCards(),
+                    _buildCatalogList(),
+                    if (_selectedItems.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       TransferSummaryCard(
-                        productsSelected: _items.length,
+                        productsSelected: _selectedItems.length,
                         totalQuantity: _totalTransferQuantity,
                         destinationShop: _selectedShop ?? '',
                       ),
-                    ] else ...[
-                      _buildProductList(),
                     ],
                     SizedBox(height: 24 + bottomPadding),
                   ],
@@ -148,12 +187,9 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
             ),
             TransferBottomBar(
               onClose: () => context.pop(),
-              // Enable once a shop is chosen AND either:
-              //  - items are already in the transfer list, OR
-              //  - the user has ticked checkboxes (pending selection)
               onTransfer: (_selectedShop != null &&
                       !_isSaving &&
-                      (_items.isNotEmpty || _pendingIndices.isNotEmpty))
+                      _selectedItems.isNotEmpty)
                   ? _transfer
                   : null,
             ),
@@ -166,25 +202,6 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
   Future<void> _transfer() async {
     final shopId = _extractShopId(_selectedShop);
     if (shopId == null) return;
-
-    // If the user tapped Transfer while products are only checked (not yet added
-    // to the transfer list), add them first and stop — let the user review
-    // quantities on the cards before confirming the transfer.
-    if (_pendingIndices.isNotEmpty) {
-      final products = _getFilteredProducts();
-      _addSelectedProducts(products, Set.from(_pendingIndices));
-      setState(() => _pendingIndices.clear());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Set the transfer quantity for each product, then tap Transfer.',
-              style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
-          backgroundColor: AppColors.primary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
-        ),
-      );
-      return;
-    }
 
     final transferItems = _items
         .where((item) => item.transferQuantity > 0 && item.productId != null)
@@ -309,112 +326,115 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
     );
   }
 
-  Widget _buildInfoSection() {
+  Widget _buildStickyHeader() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-      padding: const EdgeInsets.all(AppConstants.paddingMD),
       decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(18),
+        color: const Color(0xFFF5F7FB),
+        border: Border(
+          bottom: BorderSide(color: AppColors.divider),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Column(
-        children: [
-          TransferShopDropdown(
-            value: _selectedShop,
-            onChanged: (v) => setState(() => _selectedShop = v),
-          ),
-          const SizedBox(height: 14),
-          _buildSearchField(),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppConstants.paddingLG,
+          12,
+          AppConstants.paddingLG,
+          10,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Destination shop picker stays pinned at the top.
+            TransferShopDropdown(
+              value: _selectedShop,
+              onChanged: (v) => setState(() => _selectedShop = v),
+            ),
+            const SizedBox(height: 8),
+            // Search bar
+            _buildSearchBar(),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildSearchField() {
-    return TextField(
-      controller: _searchController,
-      onChanged: (_) => setState(() {}),
-      style: AppTypography.bodyMedium,
-      decoration: InputDecoration(
-        hintText: 'Search product name or scan barcode',
-        hintStyle: AppTypography.bodyMedium.copyWith(
-          color: AppColors.textHint,
-        ),
-        prefixIcon: const Icon(
-          Icons.search_rounded,
-          color: AppColors.textHint,
-          size: 20,
-        ),
-        suffixIcon: _searchController.text.isNotEmpty
-            ? IconButton(
-                onPressed: () {
-                  _searchController.clear();
-                  setState(() {});
-                },
-                icon: const Icon(
-                  Icons.close_rounded,
-                  color: AppColors.textHint,
-                  size: 18,
-                ),
-              )
-            : Container(
-                margin: const EdgeInsets.all(6),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.barcode_reader,
-                  color: AppColors.primary,
-                  size: 18,
-                ),
-              ),
-        filled: true,
-        fillColor: AppColors.card,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 12,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
-          borderSide: const BorderSide(color: AppColors.inputBorder),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
-          borderSide: const BorderSide(color: AppColors.inputBorder),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
-          borderSide: const BorderSide(
-            color: AppColors.inputFocusBorder,
-            width: 1.5,
+  Widget _buildSearchBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMD, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+        border: Border.all(color: AppColors.inputBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
-        ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search_rounded, color: AppColors.textHint, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              style: AppTypography.bodyMedium,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Search product or scan barcode',
+                hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
+          if (_searchController.text.isNotEmpty)
+            GestureDetector(
+              onTap: () => setState(() => _searchController.clear()),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.close_rounded, color: AppColors.textHint, size: 18),
+              ),
+            ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: () {
+              FocusScope.of(context).unfocus();
+              _scanBarcode();
+            },
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary, size: 20),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildProductsHeader() {
     final products = _getFilteredProducts();
-    final selectableIndices = products
-        .asMap()
-        .keys
-        .where((i) => !_items.any((item) => item.name == products[i]['name']))
-        .toSet();
+    final selectedCount = _selectedItems.length;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       child: Row(
         children: [
-          if (_items.isNotEmpty) ...[
+          if (selectedCount > 0) ...[
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
@@ -422,7 +442,7 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                '${_items.length} item${_items.length == 1 ? '' : 's'}',
+                '$selectedCount item${selectedCount == 1 ? '' : 's'}',
                 style: AppTypography.caption.copyWith(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w600,
@@ -432,37 +452,25 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
             const SizedBox(width: 8),
           ],
           Text(
-            _items.isEmpty ? 'Products' : 'Transfer Items',
-            style: AppTypography.label.copyWith(color: AppColors.textPrimary),
+            selectedCount > 0 ? 'Transfer Items' : 'Products',
+            style: AppTypography.h6.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const Spacer(),
-          if (_items.isEmpty && products.isNotEmpty)
-            Text(
-              '${selectableIndices.length} available',
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textSecondary,
-              ),
+          Text(
+            '${products.length} available',
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textSecondary,
             ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildTransferCards() {
-    return Column(
-      children: List.generate(_items.length, (index) {
-        final item = _items[index];
-        return TransferProductCard(
-          productName: item.name,
-          availableStock: item.availableStock,
-          transferQuantity: item.transferQuantity,
-          onQuantityChanged: (v) => setState(() => item.transferQuantity = v),
-        );
-      }),
-    );
-  }
-
-  Widget _buildProductList() {
+  Widget _buildCatalogList() {
     final products = _getFilteredProducts();
 
     if (_searchController.text.isNotEmpty && products.isEmpty) {
@@ -510,263 +518,174 @@ class _TransferStockPageState extends ConsumerState<TransferStockPage> {
       );
     }
 
-    return _ProductSelectionList(
-      products: products,
-      addedNames: _items.map((i) => i.name).toSet(),
-      selectedIndices: _pendingIndices,
-      onSelectionChanged: (indices) => setState(() {
-        _pendingIndices
-          ..clear()
-          ..addAll(indices);
-      }),
-      onAddProducts: (indices) {
-        _addSelectedProducts(products, indices);
-        setState(() => _pendingIndices.clear());
-      },
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
+      child: Column(
+        children: products.map(_buildCatalogCard).toList(),
+      ),
     );
   }
-}
 
-class _ProductSelectionList extends StatelessWidget {
-  final List<Map<String, dynamic>> products;
-  final Set<String> addedNames;
-  /// Controlled selection — parent owns this set and updates it via [onSelectionChanged].
-  final Set<int> selectedIndices;
-  final ValueChanged<Set<int>> onSelectionChanged;
-  final ValueChanged<Set<int>> onAddProducts;
+  Widget _buildCatalogCard(Map<String, dynamic> product) {
+    final name = product['name'] as String;
+    final stock = (product['stock'] as num?)?.toInt() ?? 0;
+    final qty = _qtyFor(name);
+    final selected = qty > 0;
+    final idx = _itemIndexByName(name);
+    final item = idx >= 0 ? _items[idx] : null;
 
-  const _ProductSelectionList({
-    required this.products,
-    required this.addedNames,
-    required this.selectedIndices,
-    required this.onSelectionChanged,
-    required this.onAddProducts,
-  });
-
-  void _toggleSelection(int index) {
-    final updated = Set<int>.from(selectedIndices);
-    if (updated.contains(index)) {
-      updated.remove(index);
-    } else {
-      updated.add(index);
-    }
-    onSelectionChanged(updated);
-  }
-
-  void _toggleAll() {
-    final selectable = products
-        .asMap()
-        .keys
-        .where((i) => !addedNames.contains(products[i]['name']))
-        .toSet();
-    final allSelected = selectable.every((i) => selectedIndices.contains(i));
-    final updated = Set<int>.from(selectedIndices);
-    if (allSelected) {
-      updated.removeAll(selectable);
-    } else {
-      updated.addAll(selectable);
-    }
-    onSelectionChanged(updated);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final selectableIndices = products
-        .asMap()
-        .keys
-        .where((i) => !addedNames.contains(products[i]['name']))
-        .toSet();
-    final allSelected = selectableIndices.isNotEmpty &&
-        selectableIndices.every((i) => selectedIndices.contains(i));
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-          child: Row(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.35)
+              : AppColors.border,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header: avatar + name/stock + stepper
+          Row(
             children: [
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: Checkbox(
-                  value: allSelected,
-                  onChanged: selectableIndices.isNotEmpty ? (_) => _toggleAll() : null,
-                  activeColor: AppColors.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  side: BorderSide(
-                    color: allSelected ? AppColors.primary : AppColors.border,
-                    width: 1.5,
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: Text(
+                    name.isNotEmpty
+                        ? name.substring(0, name.length.clamp(0, 2)).toUpperCase()
+                        : '??',
+                    style: AppTypography.captionBold.copyWith(
+                      color: AppColors.primary,
+                      fontSize: 11,
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 10),
-              Text(
-                'Select All',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w600,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name,
+                      style: AppTypography.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      'Available: $stock',
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: 6),
+              CompactQtyStepper(
+                qty: qty,
+                onAdd: () => _incrementProduct(product),
+                onRemove: () => _decrementProduct(name),
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 4),
-        ...products.asMap().entries.map((entry) {
-          final index = entry.key;
-          final product = entry.value;
-          final name = product['name'] as String;
-          final stock = product['stock'] as int;
-          final isAlreadyAdded = addedNames.contains(name);
-          final isSelected = selectedIndices.contains(index);
-
-          return Container(
-            margin: const EdgeInsets.symmetric(
-              horizontal: AppConstants.paddingLG,
-              vertical: 4,
-            ),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? AppColors.primary.withValues(alpha: 0.04)
-                  : AppColors.card,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: isSelected
-                      ? AppColors.primary.withValues(alpha: 0.06)
-                      : Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
-              child: InkWell(
-                onTap: isAlreadyAdded ? null : () => _toggleSelection(index),
-                borderRadius: BorderRadius.circular(14),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  child: Row(
-                    children: [
-                      if (!isAlreadyAdded)
-                        SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: Checkbox(
-                            value: isSelected,
-                            onChanged: (_) => _toggleSelection(index),
-                            activeColor: AppColors.primary,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            side: BorderSide(
-                              color: isSelected ? AppColors.primary : AppColors.border,
-                              width: 1.5,
-                            ),
-                          ),
-                        )
-                      else
-                        const SizedBox(width: 24),
-                      const SizedBox(width: 12),
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Center(
-                          child: Text(
-                            name.substring(0, name.length.clamp(0, 2)).toUpperCase(),
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              name,
-                              style: AppTypography.bodyMedium.copyWith(
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Available: $stock',
-                              style: AppTypography.caption.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (isAlreadyAdded)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.success.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            'Added',
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.success,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        }),
-        if (selectedIndices.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-            child: SizedBox(
-              width: double.infinity,
-              height: AppConstants.buttonHeight,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  onAddProducts(Set.from(selectedIndices));
-                },
-                icon: const Icon(Icons.add_rounded, size: 20),
-                label: Text(
-                  'Add Selected (${selectedIndices.length})',
-                  style: AppTypography.buttonLarge,
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: AppColors.textWhite,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radiusMD),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          const SizedBox(height: 8),
+          // Available / transfer / remaining breakdown once selected.
+          if (selected && item != null)
+            _buildTransferInfoRow(item)
+          else
+            _buildUnselectedFooter(stock),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTransferInfoRow(_TransferItem item) {
+    final remaining = item.availableStock - item.transferQuantity;
+    return Row(
+      children: [
+        _buildInfoChip('Available', '${item.availableStock}', AppColors.primary),
+        const SizedBox(width: 8),
+        _buildInfoChip('Transfer', '${item.transferQuantity}', AppColors.secondary),
+        const SizedBox(width: 8),
+        _buildInfoChip(
+          'Remaining',
+          '$remaining',
+          remaining < 0 ? AppColors.danger : AppColors.success,
+        ),
       ],
+    );
+  }
+
+  Widget _buildInfoChip(String label, String value, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: AppTypography.bodyMedium.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              label,
+              style: AppTypography.caption.copyWith(
+                color: color,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUnselectedFooter(int available) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        'Available: $available units — tap + to transfer',
+        style: AppTypography.caption.copyWith(
+          color: AppColors.textSecondary,
+          fontSize: 10,
+        ),
+      ),
     );
   }
 }

@@ -13,6 +13,10 @@ class PurchaseInformationCard extends StatelessWidget {
   final List<String> accounts;
   /// Optional dynamic list of suppliers loaded from API. Falls back to empty list.
   final List<String> suppliers;
+  /// Set to false when the page renders its own inline search bar.
+  final bool showSearch;
+  /// When true, the account and supplier dropdowns share a single row.
+  final bool inlineRow;
 
   const PurchaseInformationCard({
     super.key,
@@ -23,6 +27,8 @@ class PurchaseInformationCard extends StatelessWidget {
     required this.onSupplierChanged,
     this.accounts = const [],
     this.suppliers = const [],
+    this.showSearch = true,
+    this.inlineRow = false,
   });
 
   @override
@@ -44,11 +50,17 @@ class PurchaseInformationCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSearchField(),
-          const SizedBox(height: 14),
-          _buildDropdownRow(),
-          const SizedBox(height: 14),
-          _buildSupplierDropdown(),
+          if (showSearch) ...[
+            _buildSearchField(),
+            const SizedBox(height: 14),
+          ],
+          if (inlineRow)
+            _buildInlineDropdownRow()
+          else ...[
+            _buildDropdownRow(),
+            const SizedBox(height: 14),
+            _buildSupplierDropdown(),
+          ],
         ],
       ),
     );
@@ -108,6 +120,32 @@ class PurchaseInformationCard extends StatelessWidget {
             hint: 'Select account',
             items: accounts,
             onChanged: onAccountChanged,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInlineDropdownRow() {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildDropdown(
+            label: 'From Account',
+            value: selectedAccount,
+            hint: 'Select account',
+            items: accounts,
+            onChanged: onAccountChanged,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _buildDropdown(
+            label: 'Supplier',
+            value: selectedSupplier,
+            hint: 'Select supplier',
+            items: suppliers,
+            onChanged: onSupplierChanged,
           ),
         ),
       ],

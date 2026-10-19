@@ -6,8 +6,10 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
+import 'package:dukaapp/features/stock/presentation/widgets/compact_qty_stepper.dart';
+import 'package:dukaapp/features/stock/presentation/widgets/price_input.dart';
+import 'package:dukaapp/features/stock/presentation/widgets/expiry_picker.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_information_card.dart';
-import 'package:dukaapp/features/purchase/presentation/widgets/purchase_product_card.dart';
 import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_summary_card.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_bottom_bar.dart';
@@ -72,6 +74,8 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
   String? _selectedSupplier;
   DateTime _purchaseDate = DateTime.now();
   final List<_PurchaseItem> _items = [];
+  // Live search over the inline product list.
+  final TextEditingController _searchController = TextEditingController();
 
   List<Map<String, dynamic>> _allProducts = [];
   bool _isLoadingProducts = true;
@@ -122,6 +126,7 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
         final products = stockProducts.map((p) => {
           'name': p.name,
           'product_id': p.productId?.toString() ?? '',
+          'barcode': p.barcode ?? '',
           'stock': p.type == 'service' ? 9999.0 : p.available,
           'buyingPrice': p.buyingPrice,
           'sellingPrice': p.sellingPrice,
@@ -147,6 +152,7 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
         return {
           'name': (m['product_name'] ?? m['name'] ?? '').toString(),
           'product_id': (m['product_id'] ?? m['id'])?.toString() ?? '',
+          'barcode': (m['barcode'] ?? m['bar_code'] ?? '').toString(),
           'stock': toD(m['available'] ?? m['quantity'] ?? m['stock'] ?? 0),
           'buyingPrice': toD(m['bp'] ?? m['buying_price'] ?? m['actual_bp'] ?? m['cost_price']),
           'sellingPrice': toD(m['sp'] ?? m['selling_price'] ?? m['unit_price'] ?? m['price']),
@@ -253,11 +259,17 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
     }
   }
 
-  int get _totalQuantity => _items.fold(0, (sum, item) => sum + item.quantity);
+  /// Items currently part of the purchase (quantity >= 1).
+  List<_PurchaseItem> get _selectedItems =>
+      _items.where((item) => item.quantity > 0).toList();
+
+  int get _totalQuantity =>
+      _items.fold(0, (sum, item) => sum + (item.quantity > 0 ? item.quantity : 0));
 
   String get _estimatedValue {
     double total = 0;
     for (final item in _items) {
+      if (item.quantity <= 0) continue;
       final price = double.tryParse(item.buyingPrice.text) ?? 0;
       total += price * item.quantity;
     }
@@ -266,10 +278,146 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     for (final item in _items) {
       item.dispose();
     }
     super.dispose();
+  }
+
+  /// Products matching the current search query (name or barcode).
+  List<Map<String, dynamic>> get _filteredProducts {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) return _allProducts;
+    return _allProducts.where((p) {
+      final name = (p['name'] as String).toLowerCase();
+      final barcode = (p['barcode']?.toString() ?? '').toLowerCase();
+      return name.contains(query) || barcode.contains(query);
+    }).toList();
+  }
+
+  /// Filter a free-text query against product name OR barcode.
+  List<Map<String, dynamic>> filterProducts(String query) {
+    final q = query.toLowerCase().trim();
+    if (q.isEmpty) return List.from(_allProducts);
+    return _allProducts.where((p) {
+      final name = (p['name'] as String).toLowerCase();
+      final barcode = (p['barcode']?.toString() ?? '').toLowerCase();
+      return name.contains(q) || barcode.contains(q);
+    }).toList();
+  }
+
+  /// Products to render: the filtered catalog, plus any already-selected
+  /// items whose product isn't in the catalog (e.g. edit-mode extras).
+  List<Map<String, dynamic>> get _displayProducts {
+    final list = List<Map<String, dynamic>>.from(_filteredProducts);
+    final names = list.map((p) => p['name'] as String).toSet();
+    for (final item in _items) {
+      if (item.quantity > 0 && !names.contains(item.name)) {
+        list.add({
+          'name': item.name,
+          'product_id': item.productId,
+          'barcode': '',
+          'stock': item.currentStock,
+          'buyingPrice': 0,
+          'sellingPrice': 0,
+          'wholesalePrice': 0,
+        });
+      }
+    }
+    return list;
+  }
+
+  /// Open the camera and scan a barcode. An exact match is added straight to
+  /// the purchase list; otherwise the code becomes the search query.
+  Future<void> _scanBarcode() async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const BarcodeScannerScreen(),
+      ),
+    );
+    if (result == null || result.isEmpty || !mounted) return;
+    final code = result.trim();
+
+    final matches = _allProducts.where(
+      (p) => (p['barcode']?.toString() ?? '').trim() == code,
+    );
+
+    if (matches.isNotEmpty) {
+      final product = matches.first;
+      final name = product['name'] as String;
+      if (_items.any((item) => item.name == name)) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('$name is already in this purchase'),
+          backgroundColor: AppColors.warning,
+        ));
+        return;
+      }
+      _incrementProduct(product);
+      _showAddedSnack(name);
+    } else {
+      setState(() => _searchController.text = code);
+    }
+  }
+
+  /// Add a single product straight to the purchase list (one tap).
+
+
+  int _itemIndexByName(String name) =>
+      _items.indexWhere((item) => item.name == name);
+
+  int _qtyFor(String name) {
+    final i = _itemIndexByName(name);
+    return i < 0 ? 0 : _items[i].quantity;
+  }
+
+  void _incrementProduct(Map<String, dynamic> product) {
+    final name = product['name'] as String;
+    final i = _itemIndexByName(name);
+    setState(() {
+      if (i < 0) {
+        _items.add(_PurchaseItem(
+          name: name,
+          productId: product['product_id'],
+          currentStock: (product['stock'] as num?)?.toInt() ?? 0,
+          buyingPriceValue: (product['buyingPrice'] as num?)?.toDouble() ?? 0.0,
+          sellingPriceValue: (product['sellingPrice'] as num?)?.toDouble() ?? 0.0,
+          wholesalePriceValue: (product['wholesalePrice'] as num?)?.toDouble() ?? 0.0,
+        ));
+      } else {
+        _items[i].quantity += 1;
+      }
+    });
+  }
+
+  void _decrementProduct(String name) {
+    final i = _itemIndexByName(name);
+    if (i < 0) return;
+    setState(() {
+      if (_items[i].quantity <= 1) {
+        // Deselect: keep the item (and its controllers) but drop it out of
+        // the active purchase by setting quantity to 0.
+        _items[i].quantity = 0;
+      } else {
+        _items[i].quantity -= 1;
+      }
+    });
+  }
+
+  void _showAddedSnack(String name) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        '$name added to purchase',
+        style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+      ),
+      backgroundColor: AppColors.success,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.radiusSM),
+      ),
+    ));
   }
 
   void _addProducts(List<Map<String, dynamic>> products) {
@@ -305,12 +453,7 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
     }
   }
 
-  void _removeProduct(int index) {
-    setState(() {
-      _items[index].dispose();
-      _items.removeAt(index);
-    });
-  }
+
 
   void _showSearchSheet() {
     if (_isLoadingProducts) {
@@ -450,15 +593,9 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                           controller: searchController,
                           autofocus: true,
                           onChanged: (value) {
-                            final query = value.toLowerCase().trim();
                             setSheetState(() {
                               selectedIndices.clear();
-                              filtered = query.isEmpty
-                                  ? List.from(_allProducts)
-                                  : _allProducts.where((p) {
-                                      final name = (p['name'] as String).toLowerCase();
-                                      return name.contains(query);
-                                    }).toList();
+                              filtered = filterProducts(value);
                             });
                           },
                           style: AppTypography.bodyMedium,
@@ -489,15 +626,21 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                                   );
                                   if (result != null && result.isNotEmpty) {
                                     searchController.text = result;
-                                    final query = result.toLowerCase().trim();
                                     setSheetState(() {
                                       selectedIndices.clear();
-                                      filtered = query.isEmpty
-                                          ? List.from(_allProducts)
-                                          : _allProducts.where((p) {
-                                              final name = (p['name'] as String).toLowerCase();
-                                              return name.contains(query);
-                                            }).toList();
+                                      filtered = filterProducts(result);
+                                      // Auto-select an exact barcode match so the
+                                      // user can add it with one tap.
+                                      final code = result.trim();
+                                      final exactIndex = filtered.indexWhere(
+                                        (p) => (p['barcode']?.toString() ?? '').trim() == code,
+                                      );
+                                      if (exactIndex >= 0) {
+                                        final name = filtered[exactIndex]['name'] as String;
+                                        if (!_items.any((item) => item.name == name)) {
+                                          selectedIndices.add(exactIndex);
+                                        }
+                                      }
                                     });
                                   }
                                 },
@@ -591,6 +734,7 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                                   final product = filtered[index];
                                   final name = product['name'] as String;
                                   final stock = (product['stock'] as num?)?.toInt() ?? 0;
+                                  final barcode = (product['barcode']?.toString() ?? '').trim();
                                   final isAlreadyAdded = _items.any((item) => item.name == name);
                                   final isSelected = selectedIndices.contains(index);
 
@@ -656,7 +800,9 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                                                 ),
                                                 const SizedBox(height: 2),
                                                 Text(
-                                                  'Stock: $stock',
+                                                  barcode.isNotEmpty
+                                                      ? 'Stock: $stock  •  Barcode: $barcode'
+                                                      : 'Stock: $stock',
                                                   style: AppTypography.caption.copyWith(
                                                     color: AppColors.textSecondary,
                                                   ),
@@ -746,35 +892,21 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
         top: false,
         child: Column(
           children: [
+            // Pinned header: account, supplier, date and search stay fixed.
+            _buildStickyHeader(),
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 16),
-                    PurchaseInformationCard(
-                      onSearchTap: _showSearchSheet,
-                      selectedAccount: _selectedAccount,
-                      onAccountChanged: (v) => setState(() => _selectedAccount = v),
-                      selectedSupplier: _selectedSupplier,
-                      onSupplierChanged: (v) => setState(() => _selectedSupplier = v),
-                      accounts: _accounts,
-                      suppliers: _suppliers,
-                    ),
-                    const SizedBox(height: 14),
-                    _buildDateSection(),
-                    const SizedBox(height: 16),
-                    _buildItemsHeader(),
+                    const SizedBox(height: 12),
+                    _buildProductsHeader(),
                     const SizedBox(height: 8),
-                    if (_items.isNotEmpty) ...[
-                      _buildProductList(),
-                      const SizedBox(height: 8),
-                    ],
-                    _buildAddButton(),
-                    if (_items.isNotEmpty) ...[
+                    _buildCatalogList(),
+                    if (_selectedItems.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       PurchaseSummaryCard(
-                        numberOfProducts: _items.length,
+                        numberOfProducts: _selectedItems.length,
                         totalQuantity: _totalQuantity,
                         estimatedValue: _estimatedValue,
                       ),
@@ -791,16 +923,17 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                   : widget.createMode
                       ? 'Create Order'
                       : null,
-              onSave: _items.isNotEmpty
+              onSave: _selectedItems.isNotEmpty
                   ? () async {
                       try {
                         final repo = ref.read(purchaseRepositoryProvider);
+                        final items = _selectedItems;
                         // Backend expects parallel arrays: product_id[], quantity[], bp[], sp[], wp[], expiry_date[]
                         // PHP reads: product_id[i]=pid, quantity[pid]=qty, bp[pid]=val ...
                         // so quantity/bp/sp/wp/expiry must be keyed by product_id, not by index.
                         final Map<String, dynamic> purchaseBody = {};
-                        for (int i = 0; i < _items.length; i++) {
-                          final item = _items[i];
+                        for (int i = 0; i < items.length; i++) {
+                          final item = items[i];
                           final pid = item.productId?.toString() ?? i.toString();
                           purchaseBody['product_id[$i]'] = pid;
                           purchaseBody['quantity[$pid]'] = item.quantity.toString();
@@ -886,7 +1019,7 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                 ? 'Create Purchase Order'
                 : widget.editMode
                     ? 'Edit Purchase Order'
-                    : 'Purchase Stock',
+                    : 'Restock Products',
             style: AppTypography.h6.copyWith(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w700,
@@ -898,7 +1031,7 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                 ? 'Create a new purchase order.'
                 : widget.editMode
                     ? 'Editing ${widget.poNumber ?? "purchase order"}'
-                    : 'Add purchased products into inventory.',
+                    : 'Pick products below and record the purchase.',
             style: AppTypography.caption.copyWith(
               color: AppColors.textSecondary,
               fontSize: 10,
@@ -936,71 +1069,165 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
     );
   }
 
-  Widget _buildDateSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Purchase Date',
-            style: AppTypography.label.copyWith(color: AppColors.textPrimary),
+  Widget _buildStickyHeader() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F7FB),
+        border: Border(
+          bottom: BorderSide(color: AppColors.divider),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
-          const SizedBox(height: 8),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppConstants.paddingLG,
+          12,
+          AppConstants.paddingLG,
+          10,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Account + Supplier in one row
+            PurchaseInformationCard(
+              showSearch: false,
+              inlineRow: true,
+              selectedAccount: _selectedAccount,
+              onAccountChanged: (v) => setState(() => _selectedAccount = v),
+              selectedSupplier: _selectedSupplier,
+              onSupplierChanged: (v) => setState(() => _selectedSupplier = v),
+              accounts: _accounts,
+              suppliers: _suppliers,
+            ),
+            const SizedBox(height: 8),
+            // Date
+            _buildDateField(),
+            const SizedBox(height: 8),
+            // Search bar
+            _buildSearchBar(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateField() {
+    return GestureDetector(
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: _purchaseDate,
+          firstDate: DateTime(2020),
+          lastDate: DateTime.now(),
+          builder: (context, child) {
+            return Theme(
+              data: Theme.of(context).copyWith(
+                colorScheme: Theme.of(context).colorScheme.copyWith(
+                  primary: AppColors.primary,
+                ),
+              ),
+              child: child!,
+            );
+          },
+        );
+        if (picked != null) {
+          setState(() => _purchaseDate = picked);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+          border: Border.all(color: AppColors.inputBorder),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.calendar_today_rounded,
+              color: AppColors.primary,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '${_purchaseDate.day.toString().padLeft(2, '0')}/${_purchaseDate.month.toString().padLeft(2, '0')}/${_purchaseDate.year}',
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: AppColors.textHint,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMD, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+        border: Border.all(color: AppColors.inputBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search_rounded, color: AppColors.textHint, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              style: AppTypography.bodyMedium,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Search product or scan barcode',
+                hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
+          if (_searchController.text.isNotEmpty)
+            GestureDetector(
+              onTap: () => setState(() => _searchController.clear()),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.close_rounded, color: AppColors.textHint, size: 18),
+              ),
+            ),
+          const SizedBox(width: 4),
           GestureDetector(
-            onTap: () async {
-              final picked = await showDatePicker(
-                context: context,
-                initialDate: _purchaseDate,
-                firstDate: DateTime(2020),
-                lastDate: DateTime.now(),
-                builder: (context, child) {
-                  return Theme(
-                    data: Theme.of(context).copyWith(
-                      colorScheme: Theme.of(context).colorScheme.copyWith(
-                        primary: AppColors.primary,
-                      ),
-                    ),
-                    child: child!,
-                  );
-                },
-              );
-              if (picked != null) {
-                setState(() => _purchaseDate = picked);
-              }
+            onTap: () {
+              FocusScope.of(context).unfocus();
+              _scanBarcode();
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: AppColors.card,
-                borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
-                border: Border.all(color: AppColors.inputBorder),
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
               ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.calendar_today_rounded,
-                    color: AppColors.primary,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      '${_purchaseDate.day.toString().padLeft(2, '0')}/${_purchaseDate.month.toString().padLeft(2, '0')}/${_purchaseDate.year}',
-                      style: AppTypography.bodyMedium.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: AppColors.textHint,
-                    size: 20,
-                  ),
-                ],
-              ),
+              child: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary, size: 20),
             ),
           ),
         ],
@@ -1008,80 +1235,249 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
     );
   }
 
-  Widget _buildItemsHeader() {
+  Widget _buildProductsHeader() {
+    final products = _displayProducts;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '${_items.length} item${_items.length == 1 ? '' : 's'}',
-              style: AppTypography.caption.copyWith(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w600,
-              ),
+          Text(
+            'Products',
+            style: AppTypography.h6.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            'Purchase Items',
-            style: AppTypography.label.copyWith(color: AppColors.textPrimary),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+            ),
+            child: Text(
+              '${products.length}',
+              style: AppTypography.captionBold.copyWith(
+                color: AppColors.primary,
+                fontSize: 11,
+              ),
+            ),
+          ),
+          const Spacer(),
+          TextButton.icon(
+            onPressed: _showSearchSheet,
+            icon: const Icon(Icons.checklist_rounded, size: 18, color: AppColors.primary),
+            label: Text(
+              'Select multiple',
+              style: AppTypography.captionBold.copyWith(
+                color: AppColors.primary,
+                fontSize: 11,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildProductList() {
-    return Column(
-      children: List.generate(_items.length, (index) {
-        final item = _items[index];
-        return PurchaseProductCard(
-          productName: item.name,
-          quantity: item.quantity,
-          onQuantityChanged: (v) => setState(() => item.quantity = v),
-          buyingPriceController: item.buyingPrice,
-          sellingPriceController: item.sellingPrice,
-          wholesalePriceController: item.wholesalePrice,
-          expiryDate: item.expiryDate,
-          onExpiryChanged: (v) => setState(() => item.expiryDate = v),
-          currentStock: item.currentStock,
-          onDelete: () => _removeProduct(index),
-        );
-      }),
+  Widget _buildCatalogList() {
+    if (_isLoadingProducts) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32),
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
+    final products = _displayProducts;
+    if (products.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppConstants.paddingLG,
+          vertical: 8,
+        ),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(AppConstants.radiusMD),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            children: [
+              const Icon(
+                Icons.search_off_rounded,
+                size: 32,
+                color: AppColors.textHint,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'No products match your search',
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
+      child: Column(
+        children: products.map(_buildCatalogCard).toList(),
+      ),
     );
   }
 
-  Widget _buildAddButton() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-      child: SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: _showSearchSheet,
-          icon: const Icon(Icons.add_rounded, size: 20),
-          label: Text(
-            'Add Another Product',
-            style: AppTypography.buttonLarge.copyWith(
-              color: AppColors.primary,
-            ),
+  Widget _buildCatalogCard(Map<String, dynamic> product) {
+    final name = product['name'] as String;
+    final stock = (product['stock'] as num?)?.toInt() ?? 0;
+    final buyingPrice = (product['buyingPrice'] as num?)?.toDouble() ?? 0;
+    final qty = _qtyFor(name);
+    final selected = qty > 0;
+    final idx = _itemIndexByName(name);
+    final item = idx >= 0 ? _items[idx] : null;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.35)
+              : AppColors.border,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.primary,
-            side: const BorderSide(
-              color: AppColors.primary,
-              width: 1.5,
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppConstants.radiusMD),
-            ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header: avatar + name/stock + stepper
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: Text(
+                    name.isNotEmpty
+                        ? name.substring(0, name.length.clamp(0, 2)).toUpperCase()
+                        : '??',
+                    style: AppTypography.captionBold.copyWith(
+                      color: AppColors.primary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name,
+                      style: AppTypography.bodyMedium.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      'Stock: $stock',
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              CompactQtyStepper(
+                qty: qty,
+                onAdd: () => _incrementProduct(product),
+                onRemove: () => _decrementProduct(name),
+              ),
+            ],
           ),
+          const SizedBox(height: 8),
+          // Prices + expiry. Editable only once selected.
+          if (selected && item != null) ...[
+            _buildCompactPriceRow(item),
+            const SizedBox(height: 8),
+            ExpiryPicker(
+              label: 'Expiry Date',
+              selectedDate: item.expiryDate,
+              onDateSelected: (d) => setState(() => item.expiryDate = d),
+            ),
+          ] else
+            _buildUnselectedFooter(buyingPrice),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactPriceRow(_PurchaseItem item) {
+    return Row(
+      children: [
+        Expanded(
+          child: PriceInput(
+            label: 'Buy',
+            controller: item.buyingPrice,
+            hintText: '0',
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: PriceInput(
+            label: 'Sell',
+            controller: item.sellingPrice,
+            hintText: '0',
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: PriceInput(
+            label: 'Whole',
+            controller: item.wholesalePrice,
+            hintText: '0',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUnselectedFooter(double buyingPrice) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        buyingPrice > 0
+            ? 'Buying price: Tsh ${buyingPrice.toStringAsFixed(0)} — tap + to restock'
+            : 'Tap + to add this product to the purchase',
+        style: AppTypography.caption.copyWith(
+          color: AppColors.textSecondary,
+          fontSize: 10,
         ),
       ),
     );

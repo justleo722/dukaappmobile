@@ -135,9 +135,18 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
       setState(() {
         _categories.clear();
         _categoryIds.clear();
+        // The backend can return the same category name more than once
+        // (created twice). DropdownButton asserts its value matches exactly
+        // one item, so keep only the first occurrence of each name.
+        final seen = <String>{};
         for (final c in stock.categories) {
-          _categories.add(c.name);
-          _categoryIds[c.name] = c.categoryId;
+          final name = c.name.trim();
+          if (name.isEmpty) continue;
+          final key = name.toLowerCase();
+          if (seen.contains(key)) continue;
+          seen.add(key);
+          _categories.add(name);
+          _categoryIds[name] = c.categoryId;
         }
         // When editing, restore category from product data if not yet set
         if (_isEditing && _selectedCategory == null) {
@@ -255,16 +264,28 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
   }
 
   Future<void> _addCategory(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    // Case-insensitive match — don't create a near-duplicate ("drinks" vs
+    // "DRINKS"); just select the category that already exists.
+    final match = _categories.firstWhere(
+      (c) => c.toLowerCase() == trimmed.toLowerCase(),
+      orElse: () => '',
+    );
+    if (match.isNotEmpty) {
+      setState(() => _selectedCategory = match);
+      return;
+    }
     // Optimistically add to local list first
     setState(() {
-      if (!_categories.contains(name)) _categories.add(name);
-      _selectedCategory = name;
+      _categories.add(trimmed);
+      _selectedCategory = trimmed;
     });
     try {
-      final result = await ref.read(stockRepositoryProvider).createCategory(name);
+      final result = await ref.read(stockRepositoryProvider).createCategory(trimmed);
       final categoryId = result['category_id'];
       if (categoryId != null) {
-        setState(() => _categoryIds[name] = categoryId);
+        setState(() => _categoryIds[trimmed] = categoryId);
       }
       // Refresh categories in background
       ref.read(stockProvider.notifier).refresh();
@@ -729,7 +750,16 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          initialValue: _selectedCategory,
+          // Rebuild the field once the async category list arrives, so the
+          // restored selection is actually reflected (initialValue is only
+          // read once per FormField state).
+          key: ValueKey('category-${_categories.join('|')}'),
+          // Only pass a value that exists exactly once in items — asserting
+          // on an unknown value crashes the edit screen before categories
+          // finish loading.
+          initialValue: _categories.contains(_selectedCategory)
+              ? _selectedCategory
+              : null,
           isExpanded: true,
           hint: Text(
             'Select category',
@@ -1064,7 +1094,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
                 ? Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                     child: DropdownButtonFormField<String>(
-                      value: _selectedSupplierId,
+                      initialValue: _selectedSupplierId,
                       isExpanded: true,
                       hint: Text(
                         _suppliersList.isEmpty ? 'Loading suppliers…' : 'Select supplier',

@@ -1430,6 +1430,12 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
         padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
         children: [
           SalesActionButton(
+            icon: Icons.inventory_2_rounded,
+            label: 'Restock',
+            onTap: () => context.push('/purchase'),
+          ),
+          const SizedBox(width: 10),
+          SalesActionButton(
             icon: Icons.shopping_cart_rounded,
             label: 'Order',
             onTap: () => context.push('/purchases/orders'),
@@ -1451,12 +1457,6 @@ class _PurchasesPageState extends ConsumerState<PurchasesPage> {
             icon: Icons.file_download_done_rounded,
             label: 'Download',
             onTap: () => context.push('/purchases/reports'),
-          ),
-          const SizedBox(width: 10),
-          SalesActionButton(
-            icon: Icons.refresh_rounded,
-            label: 'Re-stock',
-            onTap: () => context.push('/purchase'),
           ),
         ],
       ),

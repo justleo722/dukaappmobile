@@ -79,9 +79,17 @@ class StockRepository {
       _remote.fetchCategories(),
       _remote.fetchSummary(from: from, to: to),
     ]);
+    // The backend can return the same category name more than once (it was
+    // created twice). Dropdowns built from this list assert unique values,
+    // so keep only the first entry of each name.
+    final rawCategories = results[1] as List<StockCategory>;
+    final seenCategoryNames = <String>{};
+    final categories = rawCategories
+        .where((c) => seenCategoryNames.add(c.name.trim().toLowerCase()))
+        .toList();
     final state = StockState(
       products: results[0] as List<StockProduct>,
-      categories: results[1] as List<StockCategory>,
+      categories: categories,
       summary: results[2] as StockValueSummary,
     );
     // Only cache if DB is open (guard against StateError on cold start)

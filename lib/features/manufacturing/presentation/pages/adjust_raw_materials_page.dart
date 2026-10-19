@@ -5,10 +5,11 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/core/providers.dart';
-import 'package:dukaapp/features/stock/presentation/widgets/adjust_product_card.dart';
+import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/adjustment_status_dropdown.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/adjustment_summary_card.dart';
 import 'package:dukaapp/features/stock/presentation/widgets/adjust_bottom_bar.dart';
+import 'package:dukaapp/features/stock/presentation/widgets/compact_qty_stepper.dart';
 
 class _AdjustItem {
   final String rawMaterialId;
@@ -32,8 +33,8 @@ class AdjustRawMaterialsPage extends ConsumerStatefulWidget {
 class _AdjustRawMaterialsPageState extends ConsumerState<AdjustRawMaterialsPage> {
   final TextEditingController _searchController = TextEditingController();
   final List<_AdjustItem> _items = [];
-  final Set<int> _selectedMaterials = {};
   List<Map<String, dynamic>> _allMaterials = [];
+  bool _isLoadingMaterials = true;
   bool _isSaving = false;
 
   @override
@@ -61,63 +62,136 @@ class _AdjustRawMaterialsPageState extends ConsumerState<AdjustRawMaterialsPage>
           'raw_material_id': (m['raw_material_id'] ?? m['id'] ?? '').toString(),
           'name': (m['material_name'] ?? m['name'] ?? '').toString(),
           'stock': num.tryParse((m['current_stock'] ?? m['quantity'] ?? m['stock'] ?? 0).toString()) ?? 0,
+          'barcode': (m['barcode'] ?? m['bar_code'] ?? '').toString(),
         };
       }).toList();
-      setState(() => _allMaterials = materials);
-    } catch (_) {}
+      if (mounted) setState(() { _allMaterials = materials; _isLoadingMaterials = false; });
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingMaterials = false);
+    }
   }
 
+  /// Materials matching the current search query (name or barcode).
   List<Map<String, dynamic>> get _filteredMaterials {
     final query = _searchController.text.toLowerCase().trim();
     if (query.isEmpty) return _allMaterials;
-    return _allMaterials.where((m) => (m['name'] as String).toLowerCase().contains(query)).toList();
+    return _allMaterials.where((m) {
+      final name = (m['name'] as String).toLowerCase();
+      final barcode = (m['barcode']?.toString() ?? '').toLowerCase();
+      return name.contains(query) || barcode.contains(query);
+    }).toList();
   }
 
-  int get _totalAdjustedQuantity => _items.fold(0, (sum, item) => sum + item.adjustQuantity);
-  int get _adjustmentTypeCount => _items.where((item) => item.status != AdjustmentStatus.none).length;
+  /// Items currently part of the adjustment (quantity > 0).
+  List<_AdjustItem> get _selectedItems =>
+      _items.where((i) => i.adjustQuantity > 0).toList();
+
+  int get _totalAdjustedQuantity => _selectedItems.fold(0, (sum, item) => sum + item.adjustQuantity);
+  int get _adjustmentTypeCount => _selectedItems.where((item) => item.status != AdjustmentStatus.none).length;
 
   @override
   void dispose() { _searchController.dispose(); super.dispose(); }
 
-  void _addSelectedMaterials() {
-    final materials = _filteredMaterials;
-    int addedCount = 0;
-    for (final index in _selectedMaterials) {
-      if (index >= materials.length) continue;
-      final m = materials[index];
-      final name = m['name'] as String;
-      if (_items.any((item) => item.name == name)) continue;
-      _items.add(_AdjustItem(
-        rawMaterialId: (m['raw_material_id'] ?? '').toString(),
-        name: name,
-        currentStock: (m['stock'] as num).toInt(),
-      ));
-      addedCount++;
+  /// Materials to render: the filtered catalog, plus any already-selected
+  /// items whose material isn't in the catalog.
+  List<Map<String, dynamic>> get _displayMaterials {
+    final list = List<Map<String, dynamic>>.from(_filteredMaterials);
+    final names = list.map((m) => m['name'] as String).toSet();
+    for (final item in _items) {
+      if (item.adjustQuantity > 0 && !names.contains(item.name)) {
+        list.add({
+          'raw_material_id': item.rawMaterialId,
+          'name': item.name,
+          'stock': item.currentStock,
+          'barcode': '',
+        });
+      }
     }
-    setState(() => _selectedMaterials.clear());
-    if (addedCount > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('$addedCount material${addedCount == 1 ? '' : 's'} added', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
-        backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM))));
-    }
+    return list;
   }
 
-  void _toggleSelection(int index) {
+  int _itemIndexByName(String name) => _items.indexWhere((item) => item.name == name);
+
+  int _qtyFor(String name) {
+    final i = _itemIndexByName(name);
+    return i < 0 ? 0 : _items[i].adjustQuantity;
+  }
+
+  void _incrementMaterial(Map<String, dynamic> material) {
+    final name = material['name'] as String;
+    final i = _itemIndexByName(name);
     setState(() {
-      if (_selectedMaterials.contains(index)) { _selectedMaterials.remove(index); }
-      else { _selectedMaterials.add(index); }
+      if (i < 0) {
+        _items.add(_AdjustItem(
+          rawMaterialId: (material['raw_material_id'] ?? '').toString(),
+          name: name,
+          currentStock: (material['stock'] as num).toInt(),
+        ));
+        _items.last.adjustQuantity = 1;
+      } else {
+        _items[i].adjustQuantity += 1;
+      }
     });
   }
 
-  void _toggleAll() {
-    final materials = _filteredMaterials;
-    final selectableIndices = materials.asMap().keys.where((i) => !_items.any((item) => item.name == materials[i]['name'])).toSet();
-    final allSelected = selectableIndices.every((i) => _selectedMaterials.contains(i));
+  void _decrementMaterial(String name) {
+    final i = _itemIndexByName(name);
+    if (i < 0) return;
     setState(() {
-      if (allSelected) { _selectedMaterials.removeAll(selectableIndices); }
-      else { _selectedMaterials.addAll(selectableIndices); }
+      if (_items[i].adjustQuantity <= 1) {
+        // Deselect: keep the item (and its state) but drop it out of the
+        // active adjustment by setting quantity to 0.
+        _items[i].adjustQuantity = 0;
+      } else {
+        _items[i].adjustQuantity -= 1;
+      }
     });
+  }
+
+  /// Open the camera and scan a barcode. An exact match is selected straight
+  /// away; otherwise the code becomes the search query.
+  Future<void> _scanBarcode() async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const BarcodeScannerScreen(),
+      ),
+    );
+    if (result == null || result.isEmpty || !mounted) return;
+    final code = result.trim();
+
+    final matches = _allMaterials.where(
+      (m) => (m['barcode']?.toString() ?? '').trim() == code,
+    );
+
+    if (matches.isNotEmpty) {
+      final material = matches.first;
+      final name = material['name'] as String;
+      if (_items.any((item) => item.name == name && item.adjustQuantity > 0)) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('$name is already selected'),
+          backgroundColor: AppColors.warning,
+        ));
+        return;
+      }
+      _incrementMaterial(material);
+      _showSelectedSnack(name);
+    } else {
+      setState(() => _searchController.text = code);
+    }
+  }
+
+  void _showSelectedSnack(String name) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        '$name selected',
+        style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+      ),
+      backgroundColor: AppColors.success,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
+    ));
   }
 
   Future<void> _save() async {
@@ -173,21 +247,22 @@ class _AdjustRawMaterialsPageState extends ConsumerState<AdjustRawMaterialsPage>
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     return Scaffold(backgroundColor: const Color(0xFFF5F7FB), appBar: _buildAppBar(),
       body: SafeArea(top: false, child: Column(children: [
+        _buildStickyHeader(),
         Expanded(child: SingleChildScrollView(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const SizedBox(height: 16), _buildSearchSection(), const SizedBox(height: 12),
+            const SizedBox(height: 12),
             _buildMaterialsHeader(), const SizedBox(height: 8),
-            if (_items.isNotEmpty) ...[
-              _buildAdjustmentCards(), const SizedBox(height: 16),
-              AdjustmentSummaryCard(productsSelected: _items.length, adjustedQuantity: _totalAdjustedQuantity, adjustmentTypeCount: _adjustmentTypeCount),
+            _buildCatalogList(),
+            if (_selectedItems.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              AdjustmentSummaryCard(productsSelected: _selectedItems.length, adjustedQuantity: _totalAdjustedQuantity, adjustmentTypeCount: _adjustmentTypeCount),
             ],
-            if (_items.isEmpty) _buildMaterialList(),
             SizedBox(height: 24 + bottomPadding),
           ]),
         )),
         AdjustBottomBar(
           onClose: () => context.pop(),
-          onSave: (_items.isNotEmpty && !_isSaving) ? _save : null,
+          onSave: (_selectedItems.isNotEmpty && !_isSaving) ? _save : null,
         ),
       ])),
     );
@@ -209,128 +284,281 @@ class _AdjustRawMaterialsPageState extends ConsumerState<AdjustRawMaterialsPage>
     );
   }
 
-  Widget _buildSearchSection() {
-    return Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-        decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4))]),
-        child: TextField(controller: _searchController, onChanged: (_) => setState(() {}), style: AppTypography.bodyMedium,
-          decoration: InputDecoration(hintText: 'Search raw material name', hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
-            prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textHint, size: 20),
-            suffixIcon: _searchController.text.isNotEmpty
-              ? IconButton(onPressed: () { _searchController.clear(); setState(() {}); }, icon: const Icon(Icons.close_rounded, color: AppColors.textHint, size: 18))
-              : null,
-            filled: true, fillColor: AppColors.card, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)),
-        ),
+  Widget _buildStickyHeader() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F7FB),
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(AppConstants.paddingLG, 12, AppConstants.paddingLG, 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          _buildSearchBar(),
+        ]),
       ),
     );
   }
 
-  Widget _buildMaterialsHeader() {
-    final materials = _filteredMaterials;
-    final selectableIndices = materials.asMap().keys.where((i) => !_items.any((item) => item.name == materials[i]['name'])).toSet();
-    final allSelected = selectableIndices.isNotEmpty && selectableIndices.every((i) => _selectedMaterials.contains(i));
-
-    return Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
+  Widget _buildSearchBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMD, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+        border: Border.all(color: AppColors.inputBorder),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2)),
+        ],
+      ),
       child: Row(children: [
-        if (_items.isNotEmpty) ...[
-          Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-            child: Text('${_items.length} item${_items.length == 1 ? '' : 's'}', style: AppTypography.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600))),
-          const SizedBox(width: 8),
-        ],
-        Text(_items.isEmpty ? 'Raw Materials' : 'Adjustment Items', style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
-        const Spacer(),
-        if (_items.isEmpty && materials.isNotEmpty) ...[
-          SizedBox(width: 24, height: 24, child: Checkbox(
-            value: allSelected, onChanged: selectableIndices.isNotEmpty ? (_) => _toggleAll() : null,
-            activeColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-            side: BorderSide(color: allSelected ? AppColors.primary : AppColors.border, width: 1.5))),
-          const SizedBox(width: 6),
-          Text('Select All', style: AppTypography.bodySmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
-        ],
+        const Icon(Icons.search_rounded, color: AppColors.textHint, size: 20),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextField(
+            controller: _searchController,
+            style: AppTypography.bodyMedium,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: 'Search raw material or scan barcode',
+              hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+            ),
+          ),
+        ),
+        if (_searchController.text.isNotEmpty)
+          GestureDetector(
+            onTap: () => setState(() => _searchController.clear()),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4),
+              child: Icon(Icons.close_rounded, color: AppColors.textHint, size: 18),
+            ),
+          ),
+        const SizedBox(width: 4),
+        GestureDetector(
+          onTap: () {
+            FocusScope.of(context).unfocus();
+            _scanBarcode();
+          },
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary, size: 20),
+          ),
+        ),
       ]),
     );
   }
 
-  Widget _buildAdjustmentCards() {
-    return Column(children: List.generate(_items.length, (index) {
-      final item = _items[index];
-      return AdjustProductCard(
-        productName: item.name, currentStock: item.currentStock,
-        adjustQuantity: item.adjustQuantity, onQuantityChanged: (v) => setState(() => item.adjustQuantity = v),
-        status: item.status, onStatusChanged: (v) => setState(() => item.status = v ?? AdjustmentStatus.none),
-      );
-    }));
+  Widget _buildMaterialsHeader() {
+    final materials = _displayMaterials;
+    return Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
+      child: Row(children: [
+        Text('Raw Materials', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
+        const SizedBox(width: 8),
+        Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(AppConstants.radiusFull)),
+          child: Text('${materials.length}', style: AppTypography.captionBold.copyWith(color: AppColors.primary, fontSize: 11))),
+        const Spacer(),
+        if (_selectedItems.isNotEmpty)
+          Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+            child: Text('${_selectedItems.length} selected', style: AppTypography.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600))),
+      ]),
+    );
   }
 
-  Widget _buildMaterialList() {
-    final materials = _filteredMaterials;
-    if (_searchController.text.isNotEmpty && materials.isEmpty) {
-      return Center(child: Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingXXL, vertical: 60),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 120, height: 120, decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.06), shape: BoxShape.circle),
-            child: Icon(Icons.search_off_rounded, size: 56, color: AppColors.primary.withValues(alpha: 0.4))),
-          const SizedBox(height: 24),
-          Text('No Materials Found', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Text('Search a material to begin adjusting stock.', style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary), textAlign: TextAlign.center),
-        ]),
-      ));
+  Widget _buildCatalogList() {
+    if (_isLoadingMaterials) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32),
+        child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      );
     }
+    final materials = _displayMaterials;
+    if (materials.isEmpty) {
+      if (_searchController.text.isNotEmpty) {
+        return Center(child: Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingXXL, vertical: 60),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(width: 120, height: 120, decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.06), shape: BoxShape.circle),
+              child: Icon(Icons.search_off_rounded, size: 56, color: AppColors.primary.withValues(alpha: 0.4))),
+            const SizedBox(height: 24),
+            Text('No Materials Found', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Text('Search a material to begin adjusting stock.', style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary), textAlign: TextAlign.center),
+          ]),
+        ));
+      }
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG, vertical: 8),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(AppConstants.radiusMD),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(children: [
+            const Icon(Icons.inventory_2_rounded, size: 32, color: AppColors.textHint),
+            const SizedBox(height: 8),
+            Text('No raw materials available yet', style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
+          ]),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
+      child: Column(children: materials.map(_buildCatalogCard).toList()),
+    );
+  }
 
-    return Column(children: [
-      ...materials.asMap().entries.map((entry) {
-        final index = entry.key;
-        final material = entry.value;
-        final name = material['name'] as String;
-        final stock = (material['stock'] as num).toInt();
-        final isAlreadyAdded = _items.any((item) => item.name == name);
-        final isSelected = _selectedMaterials.contains(index);
+  Widget _buildCatalogCard(Map<String, dynamic> material) {
+    final name = material['name'] as String;
+    final stock = (material['stock'] as num).toInt();
+    final qty = _qtyFor(name);
+    final selected = qty > 0;
+    final idx = _itemIndexByName(name);
+    final item = idx >= 0 ? _items[idx] : null;
 
-        return Container(margin: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG, vertical: 4),
-          decoration: BoxDecoration(color: isSelected ? AppColors.primary.withValues(alpha: 0.04) : AppColors.card,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [BoxShadow(color: isSelected ? AppColors.primary.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))]),
-          child: Material(color: Colors.transparent, borderRadius: BorderRadius.circular(14),
-            child: InkWell(onTap: isAlreadyAdded ? null : () => _toggleSelection(index), borderRadius: BorderRadius.circular(14),
-              child: Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                child: Row(children: [
-                  if (!isAlreadyAdded) SizedBox(width: 24, height: 24, child: Checkbox(
-                    value: isSelected, onChanged: (_) => _toggleSelection(index),
-                    activeColor: AppColors.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                    side: BorderSide(color: isSelected ? AppColors.primary : AppColors.border, width: 1.5)))
-                  else const SizedBox(width: 24),
-                  const SizedBox(width: 12),
-                  Container(width: 36, height: 36, decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                    child: Center(child: Text(name.substring(0, name.length.clamp(0, 2)).toUpperCase(),
-                      style: AppTypography.bodySmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)))),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(name, style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 2),
-                    Text('Stock: $stock', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
-                  ])),
-                  if (isAlreadyAdded) Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                    child: Text('Added', style: AppTypography.caption.copyWith(color: AppColors.success, fontWeight: FontWeight.w600))),
-                ]),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.35)
+              : AppColors.border,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header: avatar + name/stock + stepper
+          Row(children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Center(
+                child: Text(
+                  name.isNotEmpty
+                      ? name.substring(0, name.length.clamp(0, 2)).toUpperCase()
+                      : '??',
+                  style: AppTypography.captionBold.copyWith(
+                    color: AppColors.primary,
+                    fontSize: 11,
+                  ),
+                ),
               ),
             ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    name,
+                    style: AppTypography.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    'Stock: $stock',
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.textSecondary,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            CompactQtyStepper(
+              qty: qty,
+              onAdd: () => _incrementMaterial(material),
+              onRemove: () => _decrementMaterial(name),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          // Selected: stock info + per-item status (all original fields).
+          if (selected && item != null) ...[
+            _buildCompactStockRow(item),
+            const SizedBox(height: 8),
+            AdjustmentStatusDropdown(
+              status: item.status,
+              onChanged: (v) => setState(() => item.status = v ?? AdjustmentStatus.none),
+            ),
+          ] else
+            _buildUnselectedFooter(stock),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactStockRow(_AdjustItem item) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(children: [
+        const Icon(Icons.inventory_2_rounded, size: 16, color: AppColors.textSecondary),
+        const SizedBox(width: 8),
+        Text(
+          'Current Stock',
+          style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 10),
+        ),
+        const Spacer(),
+        Text(
+          '${item.currentStock} Units  •  Adjust Qty: ${item.adjustQuantity}',
+          style: AppTypography.captionBold.copyWith(
+            color: AppColors.textPrimary,
+            fontSize: 11,
           ),
-        );
-      }),
-      if (_selectedMaterials.isNotEmpty) ...[
-        const SizedBox(height: 12),
-        Padding(padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-          child: SizedBox(width: double.infinity, height: AppConstants.buttonHeight,
-            child: ElevatedButton.icon(onPressed: _addSelectedMaterials, icon: const Icon(Icons.add_rounded, size: 20),
-              label: Text('Add Selected (${_selectedMaterials.length})', style: AppTypography.buttonLarge),
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: AppColors.textWhite, elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD)))))),
-      ],
-    ]);
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildUnselectedFooter(int stock) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        'Stock: $stock — tap + to adjust',
+        style: AppTypography.caption.copyWith(
+          color: AppColors.textSecondary,
+          fontSize: 10,
+        ),
+      ),
+    );
   }
 }

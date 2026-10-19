@@ -4,10 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
-import 'package:dukaapp/core/services/api_service.dart';
 import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
+import 'package:dukaapp/features/stock/presentation/widgets/compact_qty_stepper.dart';
+import 'package:dukaapp/features/stock/presentation/widgets/expiry_picker.dart';
+import 'package:dukaapp/features/stock/presentation/widgets/price_input.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_information_card.dart';
-import 'package:dukaapp/features/purchase/presentation/widgets/purchase_product_card.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_summary_card.dart';
 import 'package:dukaapp/features/purchase/presentation/widgets/purchase_bottom_bar.dart';
 
@@ -44,6 +46,8 @@ class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPag
   String? _selectedSupplier;
   DateTime _restockDate = DateTime.now();
   final List<_RestockItem> _items = [];
+  // Live search over the inline raw-material catalog.
+  final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _allMaterials = [];
   List<String> _accounts = [];
   Map<String, String> _accountIdMap = {};
@@ -131,283 +135,134 @@ class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPag
 
   @override
   void dispose() {
+    _searchController.dispose();
     for (final item in _items) {
       item.dispose();
     }
     super.dispose();
   }
 
-  void _addProducts(List<Map<String, dynamic>> materials) {
-    int addedCount = 0;
-    for (final material in materials) {
-      final name = material['name'] as String;
-      if (_items.any((item) => item.name == name)) continue;
-      _items.add(_RestockItem(
-        rawMaterialId: material['raw_material_id']?.toString() ?? '',
-        name: name,
-        currentStock: (material['stock'] as num).toInt(),
-        unitCostValue: (material['unitCost'] as num).toDouble(),
-      ));
-      addedCount++;
-    }
-    if (addedCount > 0) {
-      setState(() {});
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '$addedCount material${addedCount == 1 ? '' : 's'} added',
-            style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
-          ),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusSM)),
-        ),
-      );
-    }
+  // ---------------------------------------------------------------------------
+  // Premium inline catalog helpers
+  // ---------------------------------------------------------------------------
+
+  /// Materials currently part of the restock (quantity >= 1).
+  List<_RestockItem> get _selectedItems =>
+      _items.where((item) => item.quantity > 0).toList();
+
+  /// Materials matching the current search query (name or barcode).
+  List<Map<String, dynamic>> get _filteredMaterials {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) return _allMaterials;
+    return _allMaterials.where((p) {
+      final name = (p['name'] as String).toLowerCase();
+      final barcode = (p['barcode']?.toString() ?? '').toLowerCase();
+      return name.contains(query) || barcode.contains(query);
+    }).toList();
   }
 
-  void _removeProduct(int index) {
+  /// Materials to render: the filtered catalog, plus any already-selected
+  /// items whose material isn't in the catalog.
+  List<Map<String, dynamic>> get _displayProducts {
+    final list = List<Map<String, dynamic>>.from(_filteredMaterials);
+    final names = list.map((p) => p['name'] as String).toSet();
+    for (final item in _items) {
+      if (item.quantity > 0 && !names.contains(item.name)) {
+        list.add({
+          'raw_material_id': item.rawMaterialId,
+          'name': item.name,
+          'stock': item.currentStock,
+          'unitCost': double.tryParse(item.unitCostController.text) ?? 0,
+        });
+      }
+    }
+    return list;
+  }
+
+  int _itemIndexByName(String name) => _items.indexWhere((item) => item.name == name);
+
+  int _qtyFor(String name) {
+    final i = _itemIndexByName(name);
+    return i < 0 ? 0 : _items[i].quantity;
+  }
+
+  /// Select a material (quantity 1) or bump its quantity.
+  void _incrementProduct(Map<String, dynamic> material) {
+    final name = material['name'] as String;
+    final i = _itemIndexByName(name);
     setState(() {
-      _items[index].dispose();
-      _items.removeAt(index);
+      if (i < 0) {
+        _items.add(_RestockItem(
+          rawMaterialId: (material['raw_material_id'] ?? '').toString(),
+          name: name,
+          currentStock: ((material['stock'] as num?) ?? 0).toInt(),
+          unitCostValue: ((material['unitCost'] as num?) ?? 0).toDouble(),
+        ));
+      } else {
+        _items[i].quantity += 1;
+      }
     });
   }
 
-  void _showSearchSheet() {
-    final searchController = TextEditingController();
-    List<Map<String, dynamic>> filtered = List.from(_allMaterials);
-    final Set<int> selectedIndices = {};
+  /// Deselect at quantity 1 — the item (and its controller) is kept.
+  void _decrementProduct(String name) {
+    final i = _itemIndexByName(name);
+    if (i < 0) return;
+    setState(() {
+      if (_items[i].quantity <= 1) {
+        _items[i].quantity = 0;
+      } else {
+        _items[i].quantity -= 1;
+      }
+    });
+  }
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            void toggleSelection(int index) {
-              setSheetState(() {
-                if (selectedIndices.contains(index)) {
-                  selectedIndices.remove(index);
-                } else {
-                  selectedIndices.add(index);
-                }
-              });
-            }
-
-            void toggleAll() {
-              setSheetState(() {
-                final selectableIndices = filtered
-                    .asMap().keys
-                    .where((i) => !_items.any((item) => item.name == filtered[i]['name']))
-                    .toSet();
-                final allSelected = selectableIndices.every((i) => selectedIndices.contains(i));
-                if (allSelected) {
-                  selectedIndices.removeAll(selectableIndices);
-                } else {
-                  selectedIndices.addAll(selectableIndices);
-                }
-              });
-            }
-
-            void addSelected() {
-              final toAdd = selectedIndices
-                  .map((i) => filtered[i])
-                  .where((p) => !_items.any((item) => item.name == p['name']))
-                  .toList();
-              Navigator.pop(context);
-              _addProducts(toAdd);
-            }
-
-            return DraggableScrollableSheet(
-              initialChildSize: 0.7,
-              minChildSize: 0.5,
-              maxChildSize: 0.9,
-              builder: (context, scrollController) {
-                final selectableCount = filtered
-                    .where((p) => !_items.any((item) => item.name == p['name']))
-                    .length;
-                final allSelected = selectableCount > 0 &&
-                    filtered.asMap().keys
-                        .where((i) => !_items.any((item) => item.name == filtered[i]['name']))
-                        .every((i) => selectedIndices.contains(i));
-
-                return Container(
-                  decoration: const BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  ),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 12),
-                      Container(width: 40, height: 4,
-                        decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
-                      const SizedBox(height: 16),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text('Search Raw Material',
-                                style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
-                            ),
-                            if (selectedIndices.isNotEmpty)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                                child: Text('${selectedIndices.length} selected',
-                                  style: AppTypography.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
-                              ),
-                            const SizedBox(width: 8),
-                            IconButton(onPressed: () => Navigator.pop(context),
-                              icon: const Icon(Icons.close_rounded, size: 22)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-                        child: TextField(
-                          controller: searchController, autofocus: true,
-                          onChanged: (value) {
-                            final query = value.toLowerCase().trim();
-                            setSheetState(() {
-                              selectedIndices.clear();
-                              filtered = query.isEmpty
-                                  ? List.from(_allMaterials)
-                                  : _allMaterials.where((p) => (p['name'] as String).toLowerCase().contains(query)).toList();
-                            });
-                          },
-                          style: AppTypography.bodyMedium,
-                          decoration: InputDecoration(
-                            hintText: 'Search by material name',
-                            hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
-                            prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textHint, size: 20),
-                            filled: true, fillColor: AppColors.background,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppConstants.textFieldRadius), borderSide: BorderSide.none),
-                          ),
-                        ),
-                      ),
-                      if (filtered.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-                          child: Row(
-                            children: [
-                              SizedBox(width: 24, height: 24,
-                                child: Checkbox(
-                                  value: allSelected,
-                                  onChanged: selectableCount > 0 ? (_) => toggleAll() : null,
-                                  activeColor: AppColors.primary,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                                  side: BorderSide(color: allSelected ? AppColors.primary : AppColors.border, width: 1.5),
-                                )),
-                              const SizedBox(width: 10),
-                              Text('Select All', style: AppTypography.bodySmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 4),
-                      Expanded(
-                        child: filtered.isEmpty
-                            ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                                Icon(Icons.search_off_rounded, size: 48, color: AppColors.textHint.withValues(alpha: 0.5)),
-                                const SizedBox(height: 12),
-                                Text('No materials found', style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
-                              ]))
-                            : ListView.separated(
-                                controller: scrollController,
-                                padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-                                itemCount: filtered.length,
-                                separatorBuilder: (context, index) => const Divider(height: 1, color: AppColors.borderLight),
-                                itemBuilder: (context, index) {
-                                  final material = filtered[index];
-                                  final name = material['name'] as String;
-                                  final stock = (material['stock'] as num).toInt();
-                                  final isAlreadyAdded = _items.any((item) => item.name == name);
-                                  final isSelected = selectedIndices.contains(index);
-
-                                  return InkWell(
-                                    onTap: isAlreadyAdded ? null : () => toggleSelection(index),
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 8),
-                                      child: Row(
-                                        children: [
-                                          if (!isAlreadyAdded)
-                                            SizedBox(width: 24, height: 24,
-                                              child: Checkbox(
-                                                value: isSelected,
-                                                onChanged: (_) => toggleSelection(index),
-                                                activeColor: AppColors.primary,
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                                                side: BorderSide(color: isSelected ? AppColors.primary : AppColors.border, width: 1.5),
-                                              ))
-                                          else
-                                            const SizedBox(width: 24),
-                                          const SizedBox(width: 12),
-                                          Container(width: 40, height: 40,
-                                            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                                            child: Center(
-                                              child: Text(name.substring(0, name.length.clamp(0, 2)).toUpperCase(),
-                                                style: AppTypography.bodySmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)))),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(name, style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
-                                                const SizedBox(height: 2),
-                                                Text('Stock: $stock', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
-                                              ],
-                                            ),
-                                          ),
-                                          if (isAlreadyAdded)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                              decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                                              child: Text('Added', style: AppTypography.caption.copyWith(color: AppColors.success, fontWeight: FontWeight.w600)),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
-                      if (selectedIndices.isNotEmpty)
-                        Container(
-                          padding: EdgeInsets.only(
-                            left: AppConstants.paddingLG, right: AppConstants.paddingLG,
-                            top: 12, bottom: MediaQuery.of(context).padding.bottom + 12),
-                          decoration: const BoxDecoration(
-                            color: AppColors.card,
-                            border: Border(top: BorderSide(color: AppColors.divider, width: 1)),
-                          ),
-                          child: SizedBox(
-                            width: double.infinity, height: AppConstants.buttonHeight,
-                            child: ElevatedButton.icon(
-                              onPressed: addSelected,
-                              icon: const Icon(Icons.add_rounded, size: 20),
-                              label: Text('Add Selected (${selectedIndices.length})', style: AppTypography.buttonLarge),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary, foregroundColor: AppColors.textWhite, elevation: 0,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD)),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
+  /// Open the camera and scan a barcode. An exact match is selected straight
+  /// from the catalog; otherwise the code becomes the search query.
+  Future<void> _scanBarcode() async {
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const BarcodeScannerScreen(),
+      ),
     );
+    if (result == null || result.isEmpty || !mounted) return;
+    final code = result.trim();
+
+    final matches = _allMaterials.where(
+      (p) => (p['barcode']?.toString() ?? '').trim() == code,
+    );
+
+    if (matches.isNotEmpty) {
+      final material = matches.first;
+      final name = material['name'] as String;
+      if (_qtyFor(name) > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('$name is already selected'),
+          backgroundColor: AppColors.warning,
+        ));
+        return;
+      }
+      _incrementProduct(material);
+      _showAddedSnack(name);
+    } else {
+      setState(() => _searchController.text = code);
+    }
+  }
+
+  void _showAddedSnack(String name) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        '$name added to restock',
+        style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite),
+      ),
+      backgroundColor: AppColors.success,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.radiusSM),
+      ),
+    ));
   }
 
   @override
@@ -421,34 +276,21 @@ class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPag
         top: false,
         child: Column(
           children: [
+            // Pinned header: account, supplier, date and search stay fixed.
+            _buildStickyHeader(),
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 16),
-                    PurchaseInformationCard(
-                      onSearchTap: _showSearchSheet,
-                      accounts: _accounts,
-                      selectedAccount: _selectedAccount,
-                      onAccountChanged: (v) => setState(() => _selectedAccount = v),
-                      selectedSupplier: _selectedSupplier,
-                      onSupplierChanged: (v) => setState(() => _selectedSupplier = v),
-                    ),
-                    const SizedBox(height: 14),
-                    _buildDateSection(),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     _buildItemsHeader(),
                     const SizedBox(height: 8),
-                    if (_items.isNotEmpty) ...[
-                      _buildProductList(),
-                      const SizedBox(height: 8),
-                    ],
-                    _buildAddButton(),
-                    if (_items.isNotEmpty) ...[
+                    _buildCatalogList(),
+                    if (_selectedItems.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       PurchaseSummaryCard(
-                        numberOfProducts: _items.length,
+                        numberOfProducts: _selectedItems.length,
                         totalQuantity: _totalQuantity,
                         estimatedValue: _estimatedValue,
                       ),
@@ -461,17 +303,18 @@ class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPag
             PurchaseBottomBar(
               onClose: () => context.pop(),
               saveLabel: 'Save Restock',
-              onSave: _items.isNotEmpty
+              onSave: _selectedItems.isNotEmpty
                   ? () async {
                       try {
                         final api = ref.read(apiServiceProvider);
+                        final selectedItems = _selectedItems;
                         final body = <String, dynamic>{
                           'record_date': '${_restockDate.year}-${_restockDate.month.toString().padLeft(2,'0')}-${_restockDate.day.toString().padLeft(2,'0')}',
                           if (_selectedAccount != null && _accountIdMap[_selectedAccount] != null)
                             'account_id': _accountIdMap[_selectedAccount]!,
                         };
-                        for (int i = 0; i < _items.length; i++) {
-                          final item = _items[i];
+                        for (int i = 0; i < selectedItems.length; i++) {
+                          final item = selectedItems[i];
                           final id = item.rawMaterialId;
                           body['raw_material_id[$i]'] = id;
                           body['quantity[$id]'] = item.quantity.toString();
@@ -547,46 +390,134 @@ class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPag
     );
   }
 
-  Widget _buildDateSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
+  Widget _buildStickyHeader() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F7FB),
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(AppConstants.paddingLG, 12, AppConstants.paddingLG, 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          // Account + Supplier in one row.
+          PurchaseInformationCard(
+            showSearch: false,
+            inlineRow: true,
+            accounts: _accounts,
+            selectedAccount: _selectedAccount,
+            onAccountChanged: (v) => setState(() => _selectedAccount = v),
+            selectedSupplier: _selectedSupplier,
+            onSupplierChanged: (v) => setState(() => _selectedSupplier = v),
+          ),
+          const SizedBox(height: 8),
+          // Date
           Text('Restock Date', style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
           const SizedBox(height: 8),
+          _buildDateField(),
+          const SizedBox(height: 8),
+          // Search bar
+          _buildSearchBar(),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildDateField() {
+    return GestureDetector(
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context, initialDate: _restockDate,
+          firstDate: DateTime(2020), lastDate: DateTime.now(),
+          builder: (context, child) => Theme(
+            data: Theme.of(context).copyWith(colorScheme: Theme.of(context).colorScheme.copyWith(primary: AppColors.primary)),
+            child: child!,
+          ),
+        );
+        if (picked != null) setState(() => _restockDate = picked);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.card, borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+          border: Border.all(color: AppColors.inputBorder),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.calendar_today_rounded, color: AppColors.primary, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '${_restockDate.day.toString().padLeft(2, '0')}/${_restockDate.month.toString().padLeft(2, '0')}/${_restockDate.year}',
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
+              ),
+            ),
+            Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textHint, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMD, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+        border: Border.all(color: AppColors.inputBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search_rounded, color: AppColors.textHint, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              style: AppTypography.bodyMedium,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Search material or scan barcode',
+                hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+            ),
+          ),
+          if (_searchController.text.isNotEmpty)
+            GestureDetector(
+              onTap: () => setState(() => _searchController.clear()),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.close_rounded, color: AppColors.textHint, size: 18),
+              ),
+            ),
+          const SizedBox(width: 4),
           GestureDetector(
-            onTap: () async {
-              final picked = await showDatePicker(
-                context: context, initialDate: _restockDate,
-                firstDate: DateTime(2020), lastDate: DateTime.now(),
-                builder: (context, child) => Theme(
-                  data: Theme.of(context).copyWith(colorScheme: Theme.of(context).colorScheme.copyWith(primary: AppColors.primary)),
-                  child: child!,
-                ),
-              );
-              if (picked != null) setState(() => _restockDate = picked);
+            onTap: () {
+              FocusScope.of(context).unfocus();
+              _scanBarcode();
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: AppColors.card, borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
-                border: Border.all(color: AppColors.inputBorder),
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
               ),
-              child: Row(
-                children: [
-                  const Icon(Icons.calendar_today_rounded, color: AppColors.primary, size: 20),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      '${_restockDate.day.toString().padLeft(2, '0')}/${_restockDate.month.toString().padLeft(2, '0')}/${_restockDate.year}',
-                      style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                  Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textHint, size: 20),
-                ],
-              ),
+              child: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.primary, size: 20),
             ),
           ),
         ],
@@ -595,60 +526,175 @@ class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPag
   }
 
   Widget _buildItemsHeader() {
+    final materials = _displayProducts;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-            child: Text('${_items.length} item${_items.length == 1 ? '' : 's'}',
-              style: AppTypography.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
-          ),
+          Text('Restock Items', style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
           const SizedBox(width: 8),
-          Text('Restock Items', style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(AppConstants.radiusFull)),
+            child: Text('${_selectedItems.length}', style: AppTypography.captionBold.copyWith(color: AppColors.primary, fontSize: 11)),
+          ),
+          const Spacer(),
+          Text('${materials.length} available', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
         ],
       ),
     );
   }
 
-  Widget _buildProductList() {
-    return Column(
-      children: List.generate(_items.length, (index) {
-        final item = _items[index];
-        return PurchaseProductCard(
-          productName: item.name,
-          quantity: item.quantity,
-          onQuantityChanged: (v) => setState(() => item.quantity = v),
-          buyingPriceController: item.unitCostController,
-          sellingPriceController: TextEditingController(),
-          wholesalePriceController: TextEditingController(),
-          expiryDate: item.expiryDate,
-          onExpiryChanged: (v) => setState(() => item.expiryDate = v),
-          currentStock: item.currentStock,
-          onDelete: () => _removeProduct(index),
-        );
-      }),
+  Widget _buildCatalogList() {
+    final materials = _displayProducts;
+    if (materials.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG, vertical: 8),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(AppConstants.radiusMD),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            children: [
+              const Icon(Icons.inventory_2_rounded, size: 32, color: AppColors.textHint),
+              const SizedBox(height: 8),
+              Text(
+                (_allMaterials.isEmpty && _searchController.text.trim().isEmpty)
+                    ? 'No raw materials available'
+                    : 'No materials match your search',
+                style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
+      child: Column(children: materials.map(_buildCatalogCard).toList()),
     );
   }
 
-  Widget _buildAddButton() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
-      child: SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: _showSearchSheet,
-          icon: const Icon(Icons.add_rounded, size: 20),
-          label: Text('Add Another Material',
-            style: AppTypography.buttonLarge.copyWith(color: AppColors.primary)),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.primary,
-            side: const BorderSide(color: AppColors.primary, width: 1.5),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD)),
-          ),
+  Widget _buildCatalogCard(Map<String, dynamic> material) {
+    final name = material['name'] as String;
+    final idx = _itemIndexByName(name);
+    final item = idx >= 0 ? _items[idx] : null;
+    final qty = item?.quantity ?? 0;
+    final selected = qty > 0;
+    final stock = item?.currentStock ?? ((material['stock'] as num?) ?? 0).toInt();
+    final unitCost = item != null
+        ? (double.tryParse(item.unitCostController.text) ?? 0)
+        : (((material['unitCost'] as num?) ?? 0).toDouble());
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.35)
+              : AppColors.border,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header: avatar + name/stock + stepper
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: Text(
+                    name.isNotEmpty ? name.substring(0, name.length.clamp(0, 2)).toUpperCase() : '??',
+                    style: AppTypography.captionBold.copyWith(color: AppColors.primary, fontSize: 11),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      name,
+                      style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      'Stock: $stock',
+                      style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              CompactQtyStepper(
+                qty: qty,
+                onAdd: () => _incrementProduct(material),
+                onRemove: () => _decrementProduct(name),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Unit cost + expiry revealed once selected.
+          if (selected && item != null)
+            Row(
+              children: [
+                Expanded(
+                  child: PriceInput(label: 'Unit Cost', controller: item.unitCostController, hintText: '0'),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ExpiryPicker(
+                    label: 'Expiry Date',
+                    selectedDate: item.expiryDate,
+                    onDateSelected: (d) => setState(() => item.expiryDate = d),
+                  ),
+                ),
+              ],
+            )
+          else
+            _buildUnselectedFooter(unitCost),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUnselectedFooter(double unitCost) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        unitCost > 0
+            ? 'Unit cost: Tsh ${unitCost.toStringAsFixed(0)} — tap + to restock'
+            : 'Tap + to add this material to the restock',
+        style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 10),
       ),
     );
   }

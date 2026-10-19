@@ -12,6 +12,7 @@ class AddSaleItemTile extends StatelessWidget {
   final double discount;
   final bool isWholesale;
   final ValueChanged<int> onQuantityChanged;
+  final ValueChanged<double>? onPriceChanged;
   final VoidCallback onRemove;
   final ValueChanged<double> onDiscountChanged;
 
@@ -24,6 +25,7 @@ class AddSaleItemTile extends StatelessWidget {
     required this.discount,
     required this.isWholesale,
     required this.onQuantityChanged,
+    this.onPriceChanged,
     required this.onRemove,
     required this.onDiscountChanged,
   });
@@ -38,9 +40,10 @@ class AddSaleItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isLowStock = stock <= 5;
+    final priceController = TextEditingController(text: sellingPrice.toStringAsFixed(0));
 
     return Container(
-      padding: const EdgeInsets.all(AppConstants.paddingMD),
+      padding: const EdgeInsets.all(AppConstants.paddingSM),
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(AppConstants.radiusMD),
@@ -58,19 +61,19 @@ class AddSaleItemTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
                   Icons.inventory_2_rounded,
                   color: AppColors.primary,
-                  size: 20,
+                  size: 16,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -80,7 +83,7 @@ class AddSaleItemTile extends StatelessWidget {
                         Expanded(
                           child: Text(
                             name,
-                            style: AppTypography.bodyMedium.copyWith(
+                            style: AppTypography.bodySmall.copyWith(
                               fontWeight: FontWeight.w600,
                               color: AppColors.textPrimary,
                             ),
@@ -90,10 +93,10 @@ class AddSaleItemTile extends StatelessWidget {
                         ),
                         if (isWholesale)
                           Container(
-                            margin: const EdgeInsets.only(left: 6),
+                            margin: const EdgeInsets.only(left: 4),
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
+                              horizontal: 4,
+                              vertical: 1,
                             ),
                             decoration: BoxDecoration(
                               color: AppColors.secondary.withValues(alpha: 0.1),
@@ -104,24 +107,48 @@ class AddSaleItemTile extends StatelessWidget {
                               style: AppTypography.caption.copyWith(
                                 color: AppColors.secondary,
                                 fontWeight: FontWeight.w700,
-                                fontSize: 9,
+                                fontSize: 8,
                               ),
                             ),
                           ),
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      'SP: ${_formatCurrency(sellingPrice)}',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                    Row(
+                      children: [
+                        Text('SP: ', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 9)),
+                        SizedBox(
+                          width: 90,
+                          height: 22,
+                          child: TextField(
+                            controller: priceController,
+                            textAlign: TextAlign.left,
+                            keyboardType: TextInputType.number,
+                            style: AppTypography.caption.copyWith(fontSize: 10),
+                            decoration: InputDecoration(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                              filled: true,
+                              fillColor: AppColors.background,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(4),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                            onChanged: (value) {
+                              if (onPriceChanged != null) {
+                                final p = double.tryParse(value) ?? sellingPrice;
+                                onPriceChanged!(p);
+                              }
+                            },
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
+                        horizontal: 4,
+                        vertical: 1,
                       ),
                       decoration: BoxDecoration(
                         color: isLowStock
@@ -136,7 +163,7 @@ class AddSaleItemTile extends StatelessWidget {
                               ? AppColors.warning
                               : AppColors.success,
                           fontWeight: FontWeight.w600,
-                          fontSize: 10,
+                          fontSize: 8,
                         ),
                       ),
                     ),
@@ -167,24 +194,36 @@ class AddSaleItemTile extends StatelessWidget {
                 icon: Icons.remove_rounded,
                 onTap: quantity > 1 ? () => onQuantityChanged(-1) : null,
               ),
-              const SizedBox(width: 16),
-              Container(
-                width: 44,
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 48,
                 height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '$quantity',
+                child: TextField(
+                  controller: TextEditingController(text: quantity.toString()),
+                  textAlign: TextAlign.center,
+                  keyboardType: TextInputType.number,
                   style: AppTypography.bodyMedium.copyWith(
                     fontWeight: FontWeight.w700,
                     color: AppColors.textPrimary,
                   ),
+                  decoration: InputDecoration(
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    filled: true,
+                    fillColor: AppColors.background,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  onChanged: (value) {
+                    final q = int.tryParse(value) ?? 0;
+                    if (q >= 0 && q <= stock) {
+                      onQuantityChanged(q - quantity);
+                    }
+                  },
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               _buildQuantityButton(
                 icon: Icons.add_rounded,
                 onTap: quantity < stock ? () => onQuantityChanged(1) : null,
@@ -222,12 +261,12 @@ class AddSaleItemTile extends StatelessWidget {
     return GestureDetector(
       onTap: () => _showDiscountDialog(context),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: discount > 0
               ? AppColors.dangerLight.withValues(alpha: 0.5)
               : AppColors.background,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: discount > 0
                 ? AppColors.danger.withValues(alpha: 0.3)
@@ -240,31 +279,20 @@ class AddSaleItemTile extends StatelessWidget {
           children: [
             Icon(
               Icons.discount_rounded,
-              size: 14,
+              size: 12,
               color: discount > 0 ? AppColors.danger : AppColors.textHint,
             ),
             const SizedBox(width: 4),
             Text(
               discount > 0
                   ? 'Discount: ${_formatCurrency(discount)}'
-                  : 'Apply Discount',
+                  : 'Discount',
               style: AppTypography.caption.copyWith(
                 color: discount > 0 ? AppColors.danger : AppColors.textHint,
                 fontWeight: FontWeight.w500,
-                fontSize: 11,
+                fontSize: 9,
               ),
             ),
-            if (discount > 0) ...[
-              const SizedBox(width: 4),
-              GestureDetector(
-                onTap: () => onDiscountChanged(0),
-                child: Icon(
-                  Icons.close_rounded,
-                  size: 12,
-                  color: AppColors.danger.withValues(alpha: 0.7),
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -394,4 +422,5 @@ class AddSaleItemTile extends StatelessWidget {
       ),
     );
   }
+
 }

@@ -390,6 +390,16 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
         padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
         children: [
           SalesActionButton(
+            icon: Icons.add_rounded,
+            label: s.addSale,
+            isHighlighted: true,
+            onTap: () async {
+              await context.push('/sales/add');
+              if (mounted) await _loadSales();
+            },
+          ),
+          const SizedBox(width: 10),
+          SalesActionButton(
             icon: Icons.shopping_cart_rounded,
             label: 'Order',
             onTap: () => context.push('/sales/orders'),
@@ -417,16 +427,6 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
             icon: Icons.file_download_done_rounded,
             label: s.download,
             onTap: () => context.push('/sales/reports'),
-          ),
-          const SizedBox(width: 10),
-          SalesActionButton(
-            icon: Icons.add_rounded,
-            label: s.addSale,
-            isHighlighted: true,
-            onTap: () async {
-              await context.push('/sales/add');
-              if (mounted) await _loadSales();
-            },
           ),
         ],
       ),

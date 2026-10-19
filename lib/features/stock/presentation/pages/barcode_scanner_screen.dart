@@ -6,8 +6,9 @@ import 'package:dukaapp/app/typography.dart';
 class BarcodeScannerScreen extends StatefulWidget {
   const BarcodeScannerScreen({super.key});
 
-  static void open(BuildContext context) {
-    Navigator.of(context).push(
+  /// Opens the scanner and returns the raw barcode string (or null if cancelled).
+  static Future<String?> open(BuildContext context) {
+    return Navigator.of(context).push<String>(
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => const BarcodeScannerScreen(),
@@ -20,27 +21,25 @@ class BarcodeScannerScreen extends StatefulWidget {
 }
 
 class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
-  MobileScannerController? _controller;
+  // The MobileScanner widget owns the camera start/stop lifecycle (autoStart).
+  // We must NOT call start() manually — doing so races the widget's own start
+  // and freezes/crashes the native camera.
+  late final MobileScannerController _controller;
   bool _isProcessing = false;
 
   @override
   void initState() {
     super.initState();
-    _initCamera();
-  }
-
-  void _initCamera() {
     _controller = MobileScannerController(
-      detectionSpeed: DetectionSpeed.normal,
+      detectionSpeed: DetectionSpeed.noDuplicates,
       facing: CameraFacing.back,
       torchEnabled: false,
     );
-    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -48,10 +47,13 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     if (_isProcessing) return;
 
     final barcode = capture.barcodes.firstOrNull;
-    if (barcode == null || barcode.rawValue == null) return;
+    final value = barcode?.rawValue;
+    if (value == null || value.isEmpty) return;
 
-    setState(() => _isProcessing = true);
-    Navigator.of(context).pop(barcode.rawValue);
+    _isProcessing = true;
+    // Popping while a detection frame is in-flight is safe; the widget is
+    // disposed right after, which stops the camera via autoStart.
+    Navigator.of(context).pop(value);
   }
 
   @override
@@ -74,29 +76,109 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
           style: AppTypography.h6.copyWith(color: Colors.white),
         ),
         centerTitle: true,
+        actions: [
+          ValueListenableBuilder<MobileScannerState>(
+            valueListenable: _controller,
+            builder: (context, state, _) {
+              final torchOn = state.torchState == TorchState.on;
+              return IconButton(
+                onPressed: () => _controller.toggleTorch(),
+                icon: Icon(
+                  torchOn ? Icons.flashlight_on_rounded : Icons.flashlight_off_rounded,
+                  color: torchOn ? Colors.amber : Colors.white,
+                  size: 24,
+                ),
+              );
+            },
+          ),
+          IconButton(
+            onPressed: () => _controller.switchCamera(),
+            icon: const Icon(
+              Icons.cameraswitch_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
+          ),
+        ],
       ),
-      body: _buildScannerView(),
+      body: Stack(
+        children: [
+          MobileScanner(
+            controller: _controller,
+            onDetect: _onBarcodeDetected,
+            errorBuilder: (context, error) {
+              return Center(
+                child: _buildMessage(
+                  icon: error.errorCode == MobileScannerErrorCode.permissionDenied
+                      ? Icons.no_photography_rounded
+                      : Icons.error_outline_rounded,
+                  title: error.errorCode == MobileScannerErrorCode.permissionDenied
+                      ? 'Camera permission denied'
+                      : 'Camera unavailable',
+                  message: error.errorCode == MobileScannerErrorCode.permissionDenied
+                      ? 'Please allow camera access in app settings to scan barcodes.'
+                      : error.errorCode.message,
+                  onRetry: () => _controller.start(),
+                ),
+              );
+            },
+            placeholderBuilder: (context) {
+              return const Center(
+                child: CircularProgressIndicator(
+                  color: AppColors.primary,
+                  strokeWidth: 2.5,
+                ),
+              );
+            },
+          ),
+          _buildScanOverlay(),
+          _buildBottomHint(),
+        ],
+      ),
     );
   }
 
-  Widget _buildScannerView() {
-    return Stack(
-      children: [
-        if (_controller != null)
-          MobileScanner(
-            controller: _controller!,
-            onDetect: _onBarcodeDetected,
-          )
-        else
-          const Center(
-            child: CircularProgressIndicator(
-              color: AppColors.primary,
-              strokeWidth: 2.5,
+  Widget _buildMessage({
+    required IconData icon,
+    required String title,
+    required String message,
+    VoidCallback? onRetry,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 48),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: AppTypography.h6.copyWith(color: Colors.white),
+              textAlign: TextAlign.center,
             ),
-          ),
-        _buildScanOverlay(),
-        _buildBottomHint(),
-      ],
+            const SizedBox(height: 8),
+            Text(
+              message,
+              style: AppTypography.bodyMedium.copyWith(
+                color: Colors.white.withAlpha(200),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: onRetry,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Try Again'),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
