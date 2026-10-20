@@ -6,13 +6,10 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/core/providers.dart';
-import 'package:dukaapp/core/models/shop_config.dart';
 import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/features/customers/presentation/pages/add_customer_page.dart';
-import 'package:dukaapp/features/sales/data/repositories/sales_repository.dart';
 import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
-import 'package:dukaapp/features/sales/presentation/widgets/add_sale_item_tile.dart';
-import 'package:dukaapp/features/sales/presentation/widgets/item_picker_content.dart';
+import 'package:dukaapp/features/sales/presentation/widgets/sale_product_catalog.dart';
 import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 
@@ -54,30 +51,40 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
       final products = await ds.fetchStock();
       if (!mounted) return;
       setState(() {
-        _cachedAllProducts = products.map((p) => {
-          'product_id': p.productId,
-          'stock_id': p.stockId,
-          'name': p.name,
-          'sellingPrice': p.sellingPrice,
-          'wholesalePrice': p.wholesalePrice,
-          'stock': p.type == 'service' ? 9999 : p.available.toInt(),
-          'type': p.type ?? 'product',
-        }).toList();
+        _cachedAllProducts = products
+            .map(
+              (p) => {
+                'product_id': p.productId,
+                'stock_id': p.stockId,
+                'name': p.name,
+                'sellingPrice': p.sellingPrice,
+                'wholesalePrice': p.wholesalePrice,
+                'stock': p.type == 'service' ? 9999 : p.available.toInt(),
+                'type': p.type ?? 'product',
+                'unit': p.unit ?? '',
+                'barcode': p.barcode ?? '',
+              },
+            )
+            .toList();
       });
     } catch (_) {
       // Fallback: use whatever stockProvider already has
       final current = ref.read(stockProvider);
       if (current is AsyncData && mounted) {
         setState(() {
-          _cachedAllProducts = current.value!.products.map((p) => {
-            'product_id': p.productId,
-            'stock_id': p.stockId,
-            'name': p.name,
-            'sellingPrice': p.sellingPrice,
-            'wholesalePrice': p.wholesalePrice,
-            'stock': p.type == 'service' ? 9999 : p.available.toInt(),
-            'type': p.type ?? 'product',
-          }).toList();
+          _cachedAllProducts = current.value!.products
+              .map(
+                (p) => {
+                  'product_id': p.productId,
+                  'stock_id': p.stockId,
+                  'name': p.name,
+                  'sellingPrice': p.sellingPrice,
+                  'wholesalePrice': p.wholesalePrice,
+                  'stock': p.type == 'service' ? 9999 : p.available.toInt(),
+                  'type': p.type ?? 'product',
+                },
+              )
+              .toList();
         });
       }
     }
@@ -103,10 +110,12 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
         _customers = [
           {'id': null, 'name': 'Walk-in'},
           ...list.map<Map<String, dynamic>>((c) {
-            final id = c['customer_id']?.toString() ??
+            final id =
+                c['customer_id']?.toString() ??
                 c['id']?.toString() ??
                 c['customerId']?.toString();
-            final name = c['customer_name']?.toString() ??
+            final name =
+                c['customer_name']?.toString() ??
                 c['name']?.toString() ??
                 c['fullname']?.toString() ??
                 'Unknown';
@@ -115,7 +124,12 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
         ];
       });
     } catch (_) {
-      if (mounted) setState(() => _customers = [{'id': null, 'name': 'Walk-in'}]);
+      if (mounted)
+        setState(
+          () => _customers = [
+            {'id': null, 'name': 'Walk-in'},
+          ],
+        );
     }
   }
 
@@ -126,7 +140,9 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
 
   double get _totalAmount => _items.fold(0.0, (sum, item) {
     final price = _isWholesale
-        ? (item['wholesalePrice'] as double? ?? item['sellingPrice'] as double? ?? 0.0)
+        ? (item['wholesalePrice'] as double? ??
+              item['sellingPrice'] as double? ??
+              0.0)
         : (item['sellingPrice'] as double? ?? 0.0);
     final qty = (item['quantity'] as num?)?.toInt() ?? 1;
     final disc = item['discount'] as double? ?? 0.0;
@@ -145,38 +161,22 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
     if (picked != null) setState(() => _selectedDate = picked);
   }
 
-  void _addProduct(Map<String, dynamic> product) {
-    final existing = _items.indexWhere(
-      (i) => i['product_id'].toString() == product['product_id'].toString(),
-    );
-    if (existing >= 0) {
-      setState(() {
-        final qty = (_items[existing]['quantity'] as num?)?.toInt() ?? 1;
-        _items[existing]['quantity'] = qty + 1;
-      });
-    } else {
-      setState(() {
-        _items.add({
-          'product_id': product['product_id'],
-          'stock_id': product['stock_id'],
-          'name': product['name'],
-          'sellingPrice': product['sellingPrice'],
-          'wholesalePrice': product['wholesalePrice'],
-          'quantity': 1,
-          'stock': product['stock'],
-          'discount': 0.0,
-          'type': product['type'] ?? 'product',
-        });
-      });
-    }
-    _searchController.clear();
+  /// Products matching the search (name or barcode).
+  List<Map<String, dynamic>> get _filteredProducts {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) return _cachedAllProducts;
+    return _cachedAllProducts.where((p) {
+      final name = (p['name']?.toString() ?? '').toLowerCase();
+      final barcode = (p['barcode']?.toString() ?? '').toLowerCase();
+      return name.contains(query) || barcode.contains(query);
+    }).toList();
   }
 
   Future<void> _saveOrder() async {
     if (_items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least one item')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Add at least one item')));
       return;
     }
     if (_isSaving) return;
@@ -187,7 +187,9 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
         final stockId = item['stock_id'] ?? '';
         final qty = item['quantity'] ?? 1;
         final price = _isWholesale
-            ? (item['wholesalePrice'] as double? ?? item['sellingPrice'] as double? ?? 0.0)
+            ? (item['wholesalePrice'] as double? ??
+                  item['sellingPrice'] as double? ??
+                  0.0)
             : (item['sellingPrice'] as double? ?? 0.0);
         final discount = item['discount'] ?? 0.0;
         final subtotal = price * qty;
@@ -196,7 +198,8 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
       }).toList();
 
       final body = <String, dynamic>{
-        for (int i = 0; i < itemStrings.length; i++) 'items[$i]': itemStrings[i],
+        for (int i = 0; i < itemStrings.length; i++)
+          'items[$i]': itemStrings[i],
         'payment_mode': 'credit',
         'customer_id': _selectedCustomerId ?? '',
         'total_amount': _finalAmount,
@@ -208,17 +211,22 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
 
       final repo = ref.read(salesRepositoryProvider);
       final res = await repo.addSale(body);
-      final ok = res['status']?.toString() == '1' ||
+      final ok =
+          res['status']?.toString() == '1' ||
           res['status'] == true ||
           res['status']?.toString() == 'success';
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ok
-            ? 'Order saved successfully'
-            : (res['message']?.toString() ?? 'Failed to save order')),
-        backgroundColor: ok ? AppColors.success : AppColors.danger,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? 'Order saved successfully'
+                : (res['message']?.toString() ?? 'Failed to save order'),
+          ),
+          backgroundColor: ok ? AppColors.success : AppColors.danger,
+        ),
+      );
       if (ok) {
         ref.read(salesProvider.notifier).refresh();
         ref.read(stockProvider.notifier).refresh();
@@ -226,10 +234,9 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Error: $e'),
-        backgroundColor: AppColors.danger,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger),
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -242,30 +249,29 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
     // _loadProducts() fetches the full unfiltered list; only fall back to the
     // (possibly date-filtered) stockProvider while that is still empty.
     if (_cachedAllProducts.isEmpty) {
-      _cachedAllProducts = ref.watch(stockProvider).maybeWhen(
+      _cachedAllProducts = ref
+          .watch(stockProvider)
+          .maybeWhen(
             data: (state) => state.products
-                .map((p) => {
-                      'product_id': p.productId,
-                      'stock_id': p.stockId,
-                      'name': p.name,
-                      'sellingPrice': p.sellingPrice,
-                      'wholesalePrice': p.wholesalePrice,
-                      'stock': p.type == 'service' ? 9999 : p.available.toInt(),
-                      'type': p.type ?? 'product',
-                    })
+                .map(
+                  (p) => {
+                    'product_id': p.productId,
+                    'stock_id': p.stockId,
+                    'name': p.name,
+                    'sellingPrice': p.sellingPrice,
+                    'wholesalePrice': p.wholesalePrice,
+                    'stock': p.type == 'service' ? 9999 : p.available.toInt(),
+                    'type': p.type ?? 'product',
+                    'unit': p.unit ?? '',
+                    'barcode': p.barcode ?? '',
+                  },
+                )
                 .toList(),
             orElse: () => _cachedAllProducts,
           );
     }
 
-    final query = _searchController.text.toLowerCase().trim();
-    final filtered = query.isEmpty
-        ? <Map<String, dynamic>>[]
-        : _cachedAllProducts
-            .where((p) => p['name'].toString().toLowerCase().contains(query))
-            .take(10)
-            .toList();
-
+    // Same layout as Add Sale: products listed inline, totals pinned below.
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: _buildAppBar(),
@@ -274,34 +280,46 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
         child: Column(
           children: [
             Expanded(
-              child: SingleChildScrollView(
+              child: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppConstants.paddingLG,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 16),
-                    _buildDateField(),
-                    const SizedBox(height: 16),
-                    _buildCustomerDropdown(),
-                    const SizedBox(height: 16),
-                    _buildSearchBar(filtered),
-                    const SizedBox(height: 16),
-                    _buildItemsHeader(),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: _buildDateField()),
+                        const SizedBox(width: 10),
+                        Expanded(child: _buildCustomerDropdown()),
+                      ],
+                    ),
                     const SizedBox(height: 8),
-                    if (_items.isNotEmpty) ...[
-                      _buildItemsList(),
-                      const SizedBox(height: 16),
-                      _buildSummarySection(),
-                      const SizedBox(height: 24),
-                    ],
-                    SizedBox(height: 24 + bottomPadding),
+                    _buildSearchBar(),
+                    const SizedBox(height: 12),
+                    _buildItemsHeader(),
+                    const SizedBox(height: 6),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            SaleProductCatalog(
+                              products: _filteredProducts,
+                              items: _items,
+                              isWholesale: _isWholesale,
+                              onChanged: () => setState(() {}),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
-            _buildBottomBar(),
+            _buildBottomBar(bottomPadding),
           ],
         ),
       ),
@@ -321,7 +339,11 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
           ),
           child: IconButton(
             onPressed: () => context.pop(),
-            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary, size: 20),
+            icon: const Icon(
+              Icons.arrow_back_rounded,
+              color: AppColors.textPrimary,
+              size: 20,
+            ),
           ),
         ),
       ),
@@ -330,11 +352,17 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
         children: [
           Text(
             'New Order',
-            style: AppTypography.h6.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w700),
+            style: AppTypography.h6.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           Text(
             ref.watch(authProvider).activeShop?.shopName ?? 'My Shop',
-            style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 10),
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textSecondary,
+              fontSize: 10,
+            ),
           ),
         ],
       ),
@@ -348,7 +376,9 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
               Text(
                 'Wholesale',
                 style: AppTypography.caption.copyWith(
-                  color: _isWholesale ? AppColors.primary : AppColors.textSecondary,
+                  color: _isWholesale
+                      ? AppColors.primary
+                      : AppColors.textSecondary,
                   fontWeight: FontWeight.w600,
                   fontSize: 11,
                 ),
@@ -376,7 +406,10 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
     return GestureDetector(
       onTap: _pickDate,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMD, vertical: 14),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppConstants.paddingMD,
+          vertical: 14,
+        ),
         decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
@@ -384,14 +417,27 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.calendar_today_rounded, color: AppColors.primary, size: 20),
-            const SizedBox(width: 12),
-            Text(
-              DateFormat('EEE, dd MMM yyyy').format(_selectedDate),
-              style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
+            const Icon(
+              Icons.calendar_today_rounded,
+              color: AppColors.primary,
+              size: 20,
             ),
-            const Spacer(),
-            const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textHint, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                DateFormat('MMM dd, yyyy').format(_selectedDate),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: AppColors.textHint,
+              size: 20,
+            ),
           ],
         ),
       ),
@@ -400,7 +446,9 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
 
   Widget _buildCustomerDropdown() {
     final dropdownValue = _selectedCustomerId;
-    final validValue = _customers.any((c) => c['id'] == dropdownValue) ? dropdownValue : null;
+    final validValue = _customers.any((c) => c['id'] == dropdownValue)
+        ? dropdownValue
+        : null;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMD),
@@ -413,20 +461,37 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
         child: DropdownButton<String>(
           value: validValue,
           isExpanded: true,
-          hint: Text('Select Customer (required)', style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint)),
+          hint: Text(
+            'Select Customer (required)',
+            style: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
+          ),
           items: [
-            ..._customers.map((c) => DropdownMenuItem<String>(
-                  value: c['id']?.toString(),
-                  child: Text(c['name'] as String, style: AppTypography.bodyMedium),
-                )),
+            ..._customers.map(
+              (c) => DropdownMenuItem<String>(
+                value: c['id']?.toString(),
+                child: Text(
+                  c['name'] as String,
+                  style: AppTypography.bodyMedium,
+                ),
+              ),
+            ),
             DropdownMenuItem<String>(
               value: _addNewCustomerValue,
               child: Row(
                 children: [
-                  const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary, size: 18),
+                  const Icon(
+                    Icons.add_circle_outline_rounded,
+                    color: AppColors.primary,
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
-                  Text('Add New Customer',
-                      style: AppTypography.bodyMedium.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                  Text(
+                    'Add New Customer',
+                    style: AppTypography.bodyMedium.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -446,7 +511,7 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
     );
   }
 
-  Widget _buildSearchBar(List<Map<String, dynamic>> filtered) {
+  Widget _buildSearchBar() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -462,17 +527,33 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
             style: AppTypography.bodyMedium,
             decoration: InputDecoration(
               hintText: 'Search product or scan barcode',
-              hintStyle: AppTypography.bodyMedium.copyWith(color: AppColors.textHint),
-              prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textHint, size: 20),
+              hintStyle: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textHint,
+              ),
+              prefixIcon: const Icon(
+                Icons.search_rounded,
+                color: AppColors.textHint,
+                size: 20,
+              ),
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
-                      onPressed: () { _searchController.clear(); setState(() {}); },
-                      icon: const Icon(Icons.close_rounded, color: AppColors.textHint, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {});
+                      },
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: AppColors.textHint,
+                        size: 18,
+                      ),
                     )
                   : InkWell(
                       onTap: () async {
                         final result = await Navigator.of(context).push<String>(
-                          MaterialPageRoute(fullscreenDialog: true, builder: (_) => const BarcodeScannerScreen()),
+                          MaterialPageRoute(
+                            fullscreenDialog: true,
+                            builder: (_) => const BarcodeScannerScreen(),
+                          ),
                         );
                         if (result != null && result.isNotEmpty) {
                           _searchController.text = result;
@@ -487,159 +568,129 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
                           color: AppColors.primary.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.barcode_reader, color: AppColors.primary, size: 18),
+                        child: const Icon(
+                          Icons.barcode_reader,
+                          color: AppColors.primary,
+                          size: 18,
+                        ),
                       ),
                     ),
               filled: true,
               fillColor: AppColors.card,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+                borderRadius: BorderRadius.circular(
+                  AppConstants.textFieldRadius,
+                ),
                 borderSide: BorderSide.none,
               ),
             ),
           ),
         ),
-        if (filtered.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Material(
-            // ListTiles paint on the nearest Material, so give the dropdown its own.
-            color: AppColors.card,
-            elevation: 2,
-            shadowColor: Colors.black.withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(12),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: filtered.map((p) {
-                final stock = p['stock'] as int;
-                return ListTile(
-                  dense: true,
-                  title: Text(p['name'] as String, style: AppTypography.bodyMedium),
-                  subtitle: Text('Stock: $stock', style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
-                  trailing: Text(
-                    NumberFormat('#,###').format(p['sellingPrice']),
-                    style: AppTypography.bodyMedium.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
-                  ),
-                  onTap: () => _addProduct(p),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
       ],
     );
-  }
-
-  // Same "Add Item" picker as Add Sale.
-  void _openItemPicker() {
-    final cfg = ref.read(shopConfigProvider).valueOrNull ?? ShopConfig.defaults;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (context, scrollController) => ItemPickerContent(
-          allProducts: _cachedAllProducts,
-          formatCurrency: (v) => 'Tsh ${NumberFormat('#,###').format(v)}',
-          onAddItem: _addProduct,
-          onScanBarcode: _scanBarcode,
-          enableBarcodeScanner: cfg.enableBarcodeScanner,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _scanBarcode() async {
-    final result = await Navigator.of(context).push<String>(
-      MaterialPageRoute(fullscreenDialog: true, builder: (_) => const BarcodeScannerScreen()),
-    );
-    if (result != null && result.isNotEmpty && mounted) {
-      _searchController.text = result;
-      setState(() {});
-    }
   }
 
   Widget _buildItemsHeader() {
-    final s = ref.read(stringsProvider);
     return Row(
       children: [
-        Text('Order Items', style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
+        Text(
+          'Products',
+          style: AppTypography.h6.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(width: 8),
-        Text('${_items.length} item${_items.length == 1 ? '' : 's'}',
-            style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
-        const Spacer(),
-        GestureDetector(
-          onTap: _openItemPicker,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+          ),
+          child: Text(
+            '${_filteredProducts.length}',
+            style: AppTypography.captionBold.copyWith(
               color: AppColors.primary,
-              borderRadius: BorderRadius.circular(AppConstants.radiusSM),
+              fontSize: 11,
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.add_rounded, color: Colors.white, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  s.addItem,
-                  style: AppTypography.buttonSmall.copyWith(fontSize: 11),
-                ),
-              ],
+          ),
+        ),
+        const Spacer(),
+        if (_items.isNotEmpty)
+          Text(
+            '${_items.length} item${_items.length == 1 ? '' : 's'} selected',
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textSecondary,
+              fontSize: 10,
             ),
+          ),
+      ],
+    );
+  }
+
+  Widget _summaryRow(String label, String value, {bool bold = false}) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.bodyMedium.copyWith(
+              color: bold ? AppColors.textPrimary : AppColors.textSecondary,
+              fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          value,
+          style: AppTypography.bodyMedium.copyWith(
+            color: bold ? AppColors.primary : AppColors.textPrimary,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildItemsList() {
-    return Column(
-      children: _items.asMap().entries.map<Widget>((entry) {
-        final index = entry.key;
-        final item = entry.value;
-        final price = _isWholesale
-            ? (item['wholesalePrice'] as double? ?? item['sellingPrice'] as double? ?? 0.0)
-            : (item['sellingPrice'] as double? ?? 0.0);
-        return AddSaleItemTile(
-          name: item['name'] as String,
-          sellingPrice: price,
-          quantity: (item['quantity'] as num?)?.toInt() ?? 1,
-          stock: (item['stock'] as num?)?.toInt() ?? 9999,
-          discount: item['discount'] as double? ?? 0.0,
-          isWholesale: _isWholesale,
-          onQuantityChanged: (v) => setState(() => _items[index]['quantity'] = v),
-          onDiscountChanged: (v) => setState(() => _items[index]['discount'] = v),
-          onRemove: () => setState(() => _items.removeAt(index)),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildSummarySection() {
+  Widget _buildBottomBar(double bottomPadding) {
     final fmt = NumberFormat('#,###');
     return Container(
-      padding: const EdgeInsets.all(AppConstants.paddingMD),
+      padding: EdgeInsets.fromLTRB(
+        AppConstants.paddingLG,
+        8,
+        AppConstants.paddingLG,
+        8 + bottomPadding,
+      ),
       decoration: BoxDecoration(
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, -4),
+          ),
+        ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _summaryRow('Subtotal', fmt.format(_totalAmount)),
-          const SizedBox(height: 8),
           Row(
             children: [
-              Text('Discount', style: AppTypography.bodyMedium.copyWith(color: AppColors.textSecondary)),
+              Text(
+                'Discount',
+                style: AppTypography.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
               const Spacer(),
               SizedBox(
-                width: 100,
+                width: 120,
                 child: TextField(
                   controller: _discountController,
                   keyboardType: TextInputType.number,
@@ -648,77 +699,90 @@ class _AddOrderPageState extends ConsumerState<AddOrderPage> {
                   style: AppTypography.bodyMedium,
                   decoration: InputDecoration(
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.border)),
+                    prefixText: 'Tsh ',
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppColors.border),
+                    ),
                   ),
                 ),
               ),
             ],
           ),
-          const Divider(height: 20),
-          _summaryRow('Total', fmt.format(_finalAmount), bold: true),
-        ],
-      ),
-    );
-  }
-
-  Widget _summaryRow(String label, String value, {bool bold = false}) {
-    return Row(
-      children: [
-        Text(label,
-            style: AppTypography.bodyMedium.copyWith(
-              color: bold ? AppColors.textPrimary : AppColors.textSecondary,
-              fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
-            )),
-        const Spacer(),
-        Text(value,
-            style: AppTypography.bodyMedium.copyWith(
-              color: bold ? AppColors.primary : AppColors.textPrimary,
-              fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-            )),
-      ],
-    );
-  }
-
-  Widget _buildBottomBar() {
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-    return Container(
-      padding: EdgeInsets.fromLTRB(AppConstants.paddingLG, 12, AppConstants.paddingLG, 12 + bottomPadding),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, -4))],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: OutlinedButton(
-              onPressed: () => context.pop(),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.textSecondary,
-                side: const BorderSide(color: AppColors.border, width: 1.5),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusLG)),
-                minimumSize: Size(double.infinity, AppConstants.buttonHeight),
-              ),
-              child: Text('Cancel', style: AppTypography.buttonLarge.copyWith(color: AppColors.textSecondary)),
-            ),
+          const SizedBox(height: 6),
+          _summaryRow(
+            'Total (${_items.length} items)',
+            'Tsh ${fmt.format(_finalAmount)}',
+            bold: true,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 2,
-            child: ElevatedButton(
-              onPressed: (_items.isNotEmpty && !_isSaving) ? _saveOrder : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.textWhite,
-                disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.5),
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusLG)),
-                minimumSize: Size(double.infinity, AppConstants.buttonHeight),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => context.pop(),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    side: const BorderSide(color: AppColors.border, width: 1.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radiusLG,
+                      ),
+                    ),
+                    minimumSize: Size(
+                      double.infinity,
+                      AppConstants.buttonHeight,
+                    ),
+                  ),
+                  child: Text(
+                    'Cancel',
+                    style: AppTypography.buttonLarge.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
               ),
-              child: _isSaving
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : Text('Save Order', style: AppTypography.buttonLarge),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  onPressed: (_items.isNotEmpty && !_isSaving)
+                      ? _saveOrder
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: AppColors.textWhite,
+                    disabledBackgroundColor: AppColors.primary.withValues(
+                      alpha: 0.5,
+                    ),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radiusLG,
+                      ),
+                    ),
+                    minimumSize: Size(
+                      double.infinity,
+                      AppConstants.buttonHeight,
+                    ),
+                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text('Save Order', style: AppTypography.buttonLarge),
+                ),
+              ),
+            ],
           ),
         ],
       ),

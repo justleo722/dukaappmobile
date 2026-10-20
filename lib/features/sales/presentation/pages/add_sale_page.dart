@@ -1442,7 +1442,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
                             const SizedBox(width: 4),
                             Text(
                               (existing.isNotEmpty ? _lineDiscount(existing) : 0) > 0
-                                  ? '-${_formatAmount(_lineDiscount(existing))}'
+                                  ? _formatAmount(_lineDiscount(existing))
                                   : 'Discount',
                               style: AppTypography.caption.copyWith(
                                 fontSize: 9,

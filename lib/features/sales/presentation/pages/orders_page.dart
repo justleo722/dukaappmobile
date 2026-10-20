@@ -889,7 +889,8 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
   ) {
     final s = ref.read(stringsProvider);
     final isExpanded = _expandedOrderIndex == orderIndex;
-    final isPending = order['status'] == 'PENDING';
+    // Unpaid orders get Pay / Update Status (_loadOrders sets status to UNPAID or PAID).
+    final isPending = order['status'] == 'UNPAID';
     return AnimatedSize(
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeInOut,

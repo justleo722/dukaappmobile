@@ -8,7 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
-import 'package:dukaapp/features/sales/presentation/widgets/add_sale_item_tile.dart';
+import 'package:dukaapp/features/sales/presentation/widgets/sale_product_catalog.dart';
 import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 import 'package:dukaapp/features/customers/presentation/pages/add_customer_page.dart';
 import 'package:dukaapp/core/providers.dart';
@@ -102,6 +102,9 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
           'name': p.name,
           'sellingPrice': p.sellingPrice,
           'stock': p.isService ? 9999 : p.available.toInt(),
+          'type': p.type ?? 'product',
+          'unit': p.unit ?? '',
+          'barcode': p.barcode ?? '',
         }).toList();
       });
     } catch (e) {
@@ -250,76 +253,15 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
     }
   }
 
-  void _addItem() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.7,
-          minChildSize: 0.5,
-          maxChildSize: 0.9,
-          expand: false,
-          builder: (context, scrollController) {
-            return _buildItemPickerSheet(scrollController);
-          },
-        );
-      },
-    );
-  }
-
-  void _addSelectedItem(Map<String, dynamic> product) {
-    final existingIndex = _items.indexWhere(
-      (item) => item['name'] == product['name'],
-    );
-    if (existingIndex >= 0) {
-      final currentQty = _items[existingIndex]['quantity'] as int;
-      final maxStock = _items[existingIndex]['stock'] as int;
-      if (currentQty < maxStock) {
-        setState(() {
-          _items[existingIndex]['quantity'] = currentQty + 1;
-        });
-      }
-    } else {
-      setState(() {
-        _items.add({
-          'product_id': product['product_id'],
-          'stock_id': product['stock_id'],
-          'name': product['name'],
-          'sellingPrice': product['sellingPrice'],
-          'quantity': 1,
-          'stock': product['stock'],
-          'discount': 0.0,
-        });
-      });
-    }
-    Navigator.pop(context);
-  }
-
-  void _updateItemQuantity(int index, int delta) {
-    setState(() {
-      final currentQty = _items[index]['quantity'] as int;
-      final maxStock = _items[index]['stock'] as int;
-      final newQty = currentQty + delta;
-      if (newQty > 0 && newQty <= maxStock) {
-        _items[index]['quantity'] = newQty;
-      }
-    });
-  }
-
-  void _updateItemDiscount(int index, double value) {
-    setState(() {
-      _items[index]['discount'] = value;
-    });
-  }
-
-  void _removeItem(int index) {
-    setState(() {
-      _items.removeAt(index);
-    });
+  /// Products matching the search (name or barcode).
+  List<Map<String, dynamic>> get _filteredProducts {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) return _allProducts;
+    return _allProducts.where((p) {
+      final name = (p['name']?.toString() ?? '').toLowerCase();
+      final barcode = (p['barcode']?.toString() ?? '').toLowerCase();
+      return name.contains(query) || barcode.contains(query);
+    }).toList();
   }
 
   void _showAddNewCustomerSheet() async {
@@ -546,6 +488,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
+    // Same layout as Add Sale: products listed inline, totals pinned below.
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: _buildAppBar(),
@@ -554,32 +497,71 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
         child: Column(
           children: [
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppConstants.paddingLG,
-                ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     _buildDateFields(),
-                    const SizedBox(height: 16),
-                    _buildCustomerDropdown(),
-                    const SizedBox(height: 16),
-                    _buildSearchBar(),
-                    const SizedBox(height: 16),
-                    _buildItemsHeader(),
                     const SizedBox(height: 8),
-                    _buildItemsList(),
-                    const SizedBox(height: 16),
-                    _buildPaymentTypeDropdown(),
-                    const SizedBox(height: 16),
-                    _buildSummarySection(),
-                    const SizedBox(height: 24),
-                    _buildActionButtons(),
-                    SizedBox(height: 24 + bottomPadding),
+                    _buildCustomerDropdown(),
+                    const SizedBox(height: 8),
+                    _buildSearchBar(),
+                    const SizedBox(height: 12),
+                    _buildItemsHeader(),
+                    const SizedBox(height: 6),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            SaleProductCatalog(
+                              products: _filteredProducts,
+                              items: _items,
+                              // Invoices don't deduct stock.
+                              limitToStock: false,
+                              onChanged: () => setState(() {}),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
+              ),
+            ),
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.fromLTRB(AppConstants.paddingLG, 6, AppConstants.paddingLG, 6 + bottomPadding),
+              decoration: const BoxDecoration(
+                color: AppColors.card,
+                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2))],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(flex: 3, child: _buildPaymentTypeDropdown()),
+                      const SizedBox(width: 10),
+                      Expanded(flex: 2, child: _buildDiscountField()),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  if (_totalItemDiscount > 0)
+                    _buildSummaryRow('Item Discounts', _formatCurrency(_totalItemDiscount),
+                        valueColor: AppColors.danger),
+                  _buildSummaryRow(
+                    'Total (${_items.length} items, $_totalQuantity qty)',
+                    _formatCurrency(_finalAmount),
+                    isBold: true,
+                    valueColor: AppColors.primary,
+                  ),
+                  const SizedBox(height: 6),
+                  _buildActionButtons(),
+                ],
               ),
             ),
           ],
@@ -853,6 +835,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
             child: TextField(
               controller: _searchController,
               style: AppTypography.bodyMedium,
+              onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 hintText: 'Search Items / Scan Barcode',
                 hintStyle: AppTypography.bodyMedium.copyWith(
@@ -887,7 +870,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
     return Row(
       children: [
         Text(
-          'Items',
+          'Products',
           style: AppTypography.h6.copyWith(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
@@ -901,7 +884,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
             borderRadius: BorderRadius.circular(AppConstants.radiusFull),
           ),
           child: Text(
-            '${_items.length}',
+            '${_filteredProducts.length}',
             style: AppTypography.captionBold.copyWith(
               color: AppColors.primary,
               fontSize: 11,
@@ -909,89 +892,12 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
           ),
         ),
         const Spacer(),
-        GestureDetector(
-          onTap: _addItem,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(AppConstants.radiusSM),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.add_rounded, color: Colors.white, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  'Add Item',
-                  style: AppTypography.buttonSmall.copyWith(fontSize: 11),
-                ),
-              ],
-            ),
+        if (_items.isNotEmpty)
+          Text(
+            '${_items.length} selected',
+            style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 10),
           ),
-        ),
       ],
-    );
-  }
-
-  Widget _buildItemsList() {
-    if (_items.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(AppConstants.radiusMD),
-          border: Border.all(
-            color: AppColors.border,
-            width: 1.5,
-            strokeAlign: BorderSide.strokeAlignInside,
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(
-              Icons.shopping_cart_outlined,
-              size: 40,
-              color: AppColors.textHint.withValues(alpha: 0.5),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'No items added yet',
-              style: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textHint,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Tap "Add Item" to start adding products',
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textHint,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      children: List.generate(_items.length, (index) {
-        final item = _items[index];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: AddSaleItemTile(
-            name: item['name'],
-            sellingPrice: item['sellingPrice'],
-            quantity: item['quantity'],
-            stock: item['stock'],
-            discount: item['discount'],
-            isWholesale: false,
-            onQuantityChanged: (delta) => _updateItemQuantity(index, delta),
-            onRemove: () => _removeItem(index),
-            onDiscountChanged: (value) => _updateItemDiscount(index, value),
-          ),
-        );
-      }),
     );
   }
 
@@ -1087,56 +993,6 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
     );
   }
 
-  Widget _buildSummarySection() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppConstants.paddingMD),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppConstants.radiusMD),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Summary',
-            style: AppTypography.label.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _buildSummaryRow('Entries', '${_items.length}'),
-          _buildSummaryRow('Total Quantity', '$_totalQuantity'),
-          _buildSummaryRow('Total Amount', _formatCurrency(_totalAmount)),
-          if (_totalItemDiscount > 0) ...[
-            _buildSummaryRow(
-              'Item Discounts',
-              _formatCurrency(_totalItemDiscount),
-              valueColor: AppColors.danger,
-            ),
-          ],
-          const Divider(height: 20, color: AppColors.border),
-          _buildDiscountField(),
-          const Divider(height: 20, color: AppColors.border),
-          _buildSummaryRow(
-            'Final Amount',
-            _formatCurrency(_finalAmount),
-            isBold: true,
-            valueColor: AppColors.primary,
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSummaryRow(String label, String value,
       {bool isBold = false, Color? valueColor}) {
     return Padding(
@@ -1144,13 +1000,18 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: AppTypography.bodyMedium.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: isBold ? FontWeight.w600 : FontWeight.w400,
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: isBold ? FontWeight.w600 : FontWeight.w400,
+              ),
             ),
           ),
+          const SizedBox(width: 8),
           Text(
             value,
             style: AppTypography.bodyMedium.copyWith(
@@ -1164,57 +1025,32 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
   }
 
   Widget _buildDiscountField() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          'Discount',
-          style: AppTypography.bodyMedium.copyWith(
-            color: AppColors.textSecondary,
-          ),
-        ),
-        SizedBox(
-          width: 120,
-          child: TextField(
-            controller: _discountController,
-            keyboardType: TextInputType.number,
-            textAlign: TextAlign.right,
-            style: AppTypography.bodyMedium.copyWith(
-              fontWeight: FontWeight.w600,
+        Text('Discount', style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _discountController,
+          keyboardType: TextInputType.number,
+          style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+          decoration: InputDecoration(
+            hintText: '0',
+            prefixText: 'Tsh ',
+            filled: true,
+            fillColor: AppColors.card,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+              borderSide: const BorderSide(color: AppColors.inputBorder),
             ),
-            decoration: InputDecoration(
-              hintText: 'Tsh 0',
-              hintStyle: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textHint,
-              ),
-              prefixText: 'Tsh ',
-              prefixStyle: AppTypography.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
-              ),
-              filled: true,
-              fillColor: AppColors.background,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(
-                  color: AppColors.inputFocusBorder,
-                  width: 1.5,
-                ),
-              ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+              borderSide: const BorderSide(color: AppColors.inputBorder),
             ),
-            onChanged: (_) => setState(() {}),
           ),
+          onChanged: (_) => setState(() {}),
         ),
       ],
     );
@@ -1263,256 +1099,6 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildItemPickerSheet(ScrollController scrollController) {
-    return _ItemPickerContent(
-      allProducts: _allProducts,
-      formatCurrency: _formatCurrency,
-      onAddItem: _addSelectedItem,
-      onScanBarcode: _openBarcodeScanner,
-    );
-  }
-}
-
-class _ItemPickerContent extends StatefulWidget {
-  final List<Map<String, dynamic>> allProducts;
-  final String Function(double) formatCurrency;
-  final void Function(Map<String, dynamic>) onAddItem;
-  final VoidCallback onScanBarcode;
-
-  const _ItemPickerContent({
-    required this.allProducts,
-    required this.formatCurrency,
-    required this.onAddItem,
-    required this.onScanBarcode,
-  });
-
-  @override
-  State<_ItemPickerContent> createState() => _ItemPickerContentState();
-}
-
-class _ItemPickerContentState extends State<_ItemPickerContent> {
-  final TextEditingController _sheetSearchController = TextEditingController();
-  String _searchQuery = '';
-
-  @override
-  void dispose() {
-    _sheetSearchController.dispose();
-    super.dispose();
-  }
-
-  List<Map<String, dynamic>> get _filteredProducts {
-    if (_searchQuery.isEmpty) return widget.allProducts;
-    return widget.allProducts
-        .where(
-          (p) => p['name'].toString().toLowerCase().contains(
-                _searchQuery.toLowerCase(),
-              ),
-        )
-        .toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(top: 12),
-            decoration: BoxDecoration(
-              color: AppColors.border,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppConstants.paddingLG,
-              16,
-              AppConstants.paddingLG,
-              12,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Select Product',
-                    style: AppTypography.h6.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pop(context);
-                    widget.onScanBarcode();
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.qr_code_scanner_rounded,
-                          color: AppColors.primary,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Scan',
-                          style: AppTypography.captionBold.copyWith(
-                            color: AppColors.primary,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppConstants.paddingLG,
-            ),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 4,
-              ),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.search_rounded,
-                    color: AppColors.textHint,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _sheetSearchController,
-                      style: AppTypography.bodyMedium,
-                      decoration: InputDecoration(
-                        hintText: 'Search products...',
-                        hintStyle: AppTypography.bodyMedium.copyWith(
-                          color: AppColors.textHint,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 10,
-                        ),
-                      ),
-                      onChanged: (value) {
-                        setState(() => _searchQuery = value);
-                      },
-                    ),
-                  ),
-                  if (_searchQuery.isNotEmpty)
-                    GestureDetector(
-                      onTap: () {
-                        _sheetSearchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                      child: const Icon(
-                        Icons.close_rounded,
-                        color: AppColors.textHint,
-                        size: 18,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Divider(height: 1, color: AppColors.border),
-          Expanded(
-            child: _filteredProducts.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.search_off_rounded,
-                          size: 40,
-                          color: AppColors.textHint.withValues(alpha: 0.5),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'No products found',
-                          style: AppTypography.bodyMedium.copyWith(
-                            color: AppColors.textHint,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.paddingLG,
-                      vertical: AppConstants.paddingSM,
-                    ),
-                    itemCount: _filteredProducts.length,
-                    separatorBuilder: (_, _) => const Divider(
-                      height: 1,
-                      color: AppColors.borderLight,
-                    ),
-                    itemBuilder: (context, index) {
-                      final product = _filteredProducts[index];
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 4,
-                        ),
-                        title: Text(
-                          product['name'],
-                          style: AppTypography.bodyMedium.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        subtitle: Text(
-                          '${widget.formatCurrency(product['sellingPrice'])} - ${product['stock']} in stock',
-                          style: AppTypography.caption.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        trailing: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.add_rounded,
-                            color: AppColors.primary,
-                            size: 20,
-                          ),
-                        ),
-                        onTap: () => widget.onAddItem(product),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
     );
   }
 }

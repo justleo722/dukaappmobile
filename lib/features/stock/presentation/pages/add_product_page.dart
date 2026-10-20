@@ -98,6 +98,10 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
       _barcodeController.text = (p['barcode'] ?? '').toString();
       _selectedUnit = p['unit']?.toString();
       _selectedCategory = p['category'];
+      _selectedType = (p['type']?.toString().toLowerCase() == 'service') ? 'Service' : 'Product';
+    } else {
+      // New product: Product by default (category defaults to Uncategorized once loaded).
+      _selectedType = 'Product';
     }
     // Load categories from cached stock state, and suppliers from API
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -156,6 +160,16 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
         // Only clear if categories loaded AND category genuinely not in list
         if (_categories.isNotEmpty && _selectedCategory != null && !_categories.contains(_selectedCategory)) {
           _selectedCategory = null;
+        }
+        // New product: default to the shop's Uncategorized category (every shop
+        // has one, see createUncategorizedCategoryIfNotExist on the server).
+        if (!_isEditing && _selectedCategory == null) {
+          for (final name in _categories) {
+            if (name.toLowerCase() == 'uncategorized') {
+              _selectedCategory = name;
+              break;
+            }
+          }
         }
       });
     });
