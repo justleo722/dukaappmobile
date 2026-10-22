@@ -5,7 +5,8 @@ import 'package:dukaapp/app/typography.dart';
 class SalesSummaryCard extends StatelessWidget {
   final String totalSales;
   final String totalCredits;
-  final int totalOrders;
+  /// Value of the open orders, formatted (e.g. "Tsh 45,000").
+  final String totalOrders;
   final String profit;
 
   const SalesSummaryCard({
@@ -45,7 +46,7 @@ class SalesSummaryCard extends StatelessWidget {
             iconColor: AppColors.success,
             iconBg: AppColors.success.withValues(alpha: 0.1),
             label: 'Total Orders',
-            value: '$totalOrders',
+            value: totalOrders,
           ),
           const SizedBox(width: 12),
           _SummaryItem(

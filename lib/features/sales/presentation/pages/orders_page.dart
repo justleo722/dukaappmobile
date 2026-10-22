@@ -1,8 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:dukaapp/features/sales/presentation/widgets/receipt_pdf.dart';
 import 'package:dukaapp/features/sales/presentation/widgets/payment_accounts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:dukaapp/app/app.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
@@ -938,7 +943,7 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                   ),
                   const SizedBox(height: 12),
                   SalesBottomActions(
-                    onDownload: () {},
+                    onDownload: () => _downloadOrderReceipt(order),
                     onBackdate: () => _showBackdateDialog(orderIndex),
                     onPrint: () => _showReceiptPreview(order),
                     onPreview: () => _showReceiptPreview(order),
@@ -1150,8 +1155,19 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
     }
   }
 
+  bool _payDialogOpening = false;
+
   Future<void> _showPayDialog(int orderIndex) async {
-    final accounts = await loadPaymentAccounts(ref);
+    // Loading accounts takes a moment; a second tap meanwhile would stack a second
+    // dialog that stays open after the payment closes the first one.
+    if (_payDialogOpening) return;
+    _payDialogOpening = true;
+    final List<PaymentAccount> accounts;
+    try {
+      accounts = await loadPaymentAccounts(ref);
+    } finally {
+      _payDialogOpening = false;
+    }
     if (!mounted) return;
     final s = ref.read(stringsProvider);
     final order = _orders[orderIndex];
@@ -1324,8 +1340,15 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () async {
-                      final amount = double.tryParse(amountController.text) ?? 0;
-                      if (amount > 0) {
+                      // Accept "5,000" as typed; say so instead of doing nothing on a bad amount.
+                      final amount = double.tryParse(
+                            amountController.text.replaceAll(RegExp(r'[^0-9.]'), ''),
+                          ) ?? 0;
+                      if (amount <= 0) {
+                        showAppToast('Enter an amount greater than zero', isError: true);
+                        return;
+                      }
+                      {
                         final saleId = _orders[orderIndex]['sale_id']?.toString() ?? '';
                         final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
                         Navigator.pop(dialogContext);
@@ -1616,6 +1639,49 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
         child,
       ],
     );
+  }
+
+  /// Same PDF as Manage Sales' download, titled and numbered like the order preview.
+  Future<void> _downloadOrderReceipt(Map<String, dynamic> order) async {
+    try {
+      final s = ref.read(stringsProvider);
+      final cfg = ref.read(shopConfigProvider).valueOrNull;
+      double d(dynamic v) => v is num ? v.toDouble() : double.tryParse(v?.toString() ?? '') ?? 0.0;
+      final products = List<Map<String, dynamic>>.from(order['products'] ?? const []);
+      final total = d(order['total']);
+      final discount = d(order['discount']);
+      final dateParts = (order['date'] ?? '').toString().split(' ');
+      final receiptNo = 'ORD-${order['sale_id'] ?? ''}';
+      final bytes = await buildReceiptPdf(
+        shopName: ref.read(authProvider).activeShop?.shopName ?? 'My Shop',
+        shopAddress: cfg?.shopAddress ?? '',
+        shopPhone: cfg?.shopPhone ?? '',
+        shopTin: cfg?.shopTin ?? '',
+        title: s.salesOrderReceipt,
+        receiptNumber: receiptNo,
+        date: dateParts.length > 3 ? dateParts.take(3).join(' ') : dateParts.join(' '),
+        time: dateParts.isNotEmpty ? dateParts.last : '',
+        customerName: order['customer']?.toString(),
+        cashier: (order['createdBy'] ?? order['soldBy'] ?? '').toString(),
+        paymentMode: (order['paymentMethod'] ?? '').toString(),
+        items: products,
+        subtotal: total + discount,
+        discount: discount,
+        totalPaid: d(order['paid']),
+        amountReceived: d(order['paid']),
+        message: cfg?.receiptMessage ?? '',
+      );
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/receipt_$receiptNo.pdf');
+      await file.writeAsBytes(bytes);
+      await OpenFile.open(file.path);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Download failed: $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
   }
 
   void _showReceiptPreview(Map<String, dynamic> order) {

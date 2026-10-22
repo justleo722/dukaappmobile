@@ -9,6 +9,7 @@ import 'package:dukaapp/features/sales/data/models/sales_models.dart';
 import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:dukaapp/app/app.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
@@ -306,8 +307,19 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
     );
   }
 
+  bool _payDialogOpening = false;
+
   Future<void> _showPayDialog(int invoiceIndex) async {
-    final accounts = await loadPaymentAccounts(ref);
+    // Loading accounts takes a moment; a second tap meanwhile would stack a second
+    // dialog that stays open after the payment closes the first one.
+    if (_payDialogOpening) return;
+    _payDialogOpening = true;
+    final List<PaymentAccount> accounts;
+    try {
+      accounts = await loadPaymentAccounts(ref);
+    } finally {
+      _payDialogOpening = false;
+    }
     if (!mounted) return;
     final s = ref.read(stringsProvider);
     final invoice = _invoices[invoiceIndex];
@@ -480,8 +492,15 @@ class _InvoicesPageState extends ConsumerState<InvoicesPage> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () async {
-                      final amount = double.tryParse(amountController.text) ?? 0;
-                      if (amount > 0) {
+                      // Accept "5,000" as typed; say so instead of doing nothing on a bad amount.
+                      final amount = double.tryParse(
+                            amountController.text.replaceAll(RegExp(r'[^0-9.]'), ''),
+                          ) ?? 0;
+                      if (amount <= 0) {
+                        showAppToast('Enter an amount greater than zero', isError: true);
+                        return;
+                      }
+                      {
                         final saleId = _invoices[invoiceIndex]['sale_id']?.toString() ?? '';
                         final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
                         Navigator.pop(dialogContext);

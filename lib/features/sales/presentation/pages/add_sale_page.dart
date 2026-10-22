@@ -10,6 +10,7 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 import 'package:dukaapp/core/providers.dart';
 import 'package:dukaapp/core/models/shop_config.dart';
+import 'package:dukaapp/features/sales/presentation/widgets/sale_product_catalog.dart';
 import 'package:dukaapp/features/stock/presentation/pages/barcode_scanner_screen.dart';
 import 'package:dukaapp/features/customers/presentation/pages/add_customer_page.dart';
 
@@ -105,10 +106,42 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
       // Ensure stock is loaded so the product picker has data even when the
       // user navigates to AddSalePage without visiting the stock page first.
       ref.read(stockProvider);
+      _loadAllProducts();
       _loadCustomers();
       _loadPaymentModes();
     });
   }
+
+  /// Every product with its current stock. stockProvider follows the date
+  /// filter (e.g. "today"), which drops products and counts only that period's
+  /// movements — so selling and scanning use this full list instead.
+  Future<void> _loadAllProducts() async {
+    try {
+      final products = await ref.read(stockRemoteDatasourceProvider).fetchStock();
+      if (!mounted) return;
+      setState(() => _allProducts = products.map(_catalogEntry).toList());
+    } catch (_) {
+      // Keep the stockProvider list.
+    }
+  }
+
+  Map<String, dynamic> _catalogEntry(dynamic p) => {
+        'product_id': p.productId,
+        'stock_id': p.stockId,
+        'name': p.name,
+        'sellingPrice': p.sellingPrice,
+        'wholesalePrice': p.wholesalePrice,
+        // Services have available=0 in DB but are always sellable.
+        'stock': p.type == 'service' ? 9999 : p.available.toInt(),
+        'type': p.type ?? 'product',
+        'barcode': p.barcode ?? '',
+        'unit': p.unit ?? '',
+      };
+
+  List<Map<String, dynamic>> _allProducts = [];
+
+  // Scanned products, newest last; they are listed first so they're visible.
+  final List<String> _pinnedIds = [];
 
   Future<void> _loadCustomers() async {
     try {
@@ -429,6 +462,13 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
         return;
       }
       _addToCart(product);
+      final id = catalogProductId(product);
+      setState(() {
+        _searchController.clear();
+        _pinnedIds
+          ..remove(id)
+          ..add(id);
+      });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Added ${product['name']}'),
         backgroundColor: AppColors.success,
@@ -733,23 +773,12 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
 
     // Watch stockProvider in the proper build context so Riverpod can rebuild
     // this widget when data arrives, and the picker never sees an empty list.
-    _cachedAllProducts = ref.watch(stockProvider).maybeWhen(
-          data: (state) => state.products
-              .map((p) => {
-                    'product_id': p.productId,
-                    'stock_id': p.stockId,
-                    'name': p.name,
-                    'sellingPrice': p.sellingPrice,
-                    'wholesalePrice': p.wholesalePrice,
-                    // Services have available=0 in DB but are always sellable.
-                    'stock': p.type == 'service' ? 9999 : p.available.toInt(),
-                    'type': p.type ?? 'product',
-                    'barcode': p.barcode ?? '',
-                    'unit': p.unit ?? '',
-                  })
-              .toList(),
+    // Full list once _loadAllProducts() is done; the stockProvider list until then.
+    final providerProducts = ref.watch(stockProvider).maybeWhen(
+          data: (state) => state.products.map(_catalogEntry).toList(),
           orElse: () => _cachedAllProducts, // keep previous list while reloading
         );
+    _cachedAllProducts = _allProducts.isNotEmpty ? _allProducts : providerProducts;
 
     // Keep the total field in sync with the cart. When items/discount change
     // the auto total changes too, which clears any manual override.
@@ -1236,7 +1265,7 @@ class _AddSalePageState extends ConsumerState<AddSalePage> {
   }
 
   Widget _buildItemsList() {
-    final products = _filteredProducts;
+    final products = catalogPinFirst(_filteredProducts, _pinnedIds);
     if (products.isEmpty) {
       return Container(
         width: double.infinity,

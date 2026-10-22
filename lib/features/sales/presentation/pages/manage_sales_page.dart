@@ -49,7 +49,8 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadSales());
   }
 
-  int _ordersCount = 0;
+  // Value of the open orders in the filter period (web dashboard "Orders").
+  double _ordersValue = 0;
   double _profit = 0;
 
   Future<void> _loadSales({String? from, String? to}) async {
@@ -69,7 +70,9 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
       if (!mounted) return;
       setState(() {
         _summary = summary;
-        _ordersCount = orders.length;
+        // Open orders only: paid orders also stay in the Orders list but are
+        // sales now (r.isPaidOrder).
+        _ordersValue = orders.where((r) => r.isOrder).fold<double>(0, (s, r) => s + r.totalRaw);
         _profit = sales.fold<double>(0, (s, r) => s + r.profit);
         _sales = sales.map(_saleRecordToMap).toList();
         _isLoading = false;
@@ -318,7 +321,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
                       // Same cards as the web Manage Sales page.
                       totalSales: _isLoading ? '...' : '${_summary.currency} ${_fmt(_summary.total)}',
                       totalCredits: _isLoading ? '...' : '${_summary.currency} ${_fmt(_summary.unpaid)}',
-                      totalOrders: _isLoading ? 0 : _ordersCount,
+                      totalOrders: _isLoading ? '...' : '${_summary.currency} ${_fmt(_ordersValue)}',
                       profit: _isLoading ? '...' : '${_summary.currency} ${_fmt(_profit)}',
                     ),
                     const SizedBox(height: 16),
@@ -516,8 +519,19 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
   }
 
   /// Payment dialog for credit / unpaid sales.
+  bool _payDialogOpening = false;
+
   Future<void> _showPayDialog(int index) async {
-    final accounts = await loadPaymentAccounts(ref);
+    // Loading accounts takes a moment; a second tap meanwhile would stack a second
+    // dialog that stays open after the payment closes the first one.
+    if (_payDialogOpening) return;
+    _payDialogOpening = true;
+    final List<PaymentAccount> accounts;
+    try {
+      accounts = await loadPaymentAccounts(ref);
+    } finally {
+      _payDialogOpening = false;
+    }
     if (!mounted) return;
     final s = ref.read(stringsProvider);
     final sale = _sales[index];

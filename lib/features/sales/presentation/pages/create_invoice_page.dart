@@ -5,6 +5,7 @@ import 'package:dukaapp/app/colors.dart' show AppColors;
 import 'package:dukaapp/features/sales/presentation/providers/sales_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:dukaapp/app/app.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
@@ -240,17 +241,34 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
     }
   }
 
+  // Scanned products, newest last; they are listed first so they're visible.
+  final List<String> _pinnedIds = [];
+
+  /// Scan: an exact barcode match adds one of that product (or one more) and
+  /// moves it to the top; anything else becomes the search text.
   Future<void> _openBarcodeScanner() async {
     final result = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => const BarcodeScannerScreen(),
-      ),
+      MaterialPageRoute(fullscreenDialog: true, builder: (_) => const BarcodeScannerScreen()),
     );
-    if (result != null && result.isNotEmpty) {
-      _searchController.text = result;
-      setState(() {});
+    final code = result?.trim() ?? '';
+    if (code.isEmpty || !mounted) return;
+    final product = catalogFindByBarcode(_allProducts, code);
+    if (product == null) {
+      setState(() => _searchController.text = code);
+      return;
     }
+    final added = catalogAddToCart(_items, product, limitToStock: false);
+    final id = catalogProductId(product);
+    setState(() {
+      _searchController.clear();
+      _pinnedIds
+        ..remove(id)
+        ..add(id);
+    });
+    showAppToast(
+      added ? 'Added ${product['name']}' : '${product['name']} is out of stock',
+      isError: !added,
+    );
   }
 
   /// Products matching the search (name or barcode).
@@ -516,7 +534,7 @@ class _CreateInvoicePageState extends ConsumerState<CreateInvoicePage> {
                         child: Column(
                           children: [
                             SaleProductCatalog(
-                              products: _filteredProducts,
+                              products: catalogPinFirst(_filteredProducts, _pinnedIds),
                               items: _items,
                               // Invoices don't deduct stock.
                               limitToStock: false,

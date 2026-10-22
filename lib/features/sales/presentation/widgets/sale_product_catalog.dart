@@ -4,6 +4,65 @@ import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/app/constants.dart';
 
+/// Upper bound used when quantity isn't capped by stock (services, invoices).
+const int kCatalogNoLimit = 1 << 30;
+
+String catalogProductId(Map<String, dynamic> m) => (m['product_id'] ?? '').toString();
+
+/// Product whose barcode is exactly [code], or null.
+Map<String, dynamic>? catalogFindByBarcode(List<Map<String, dynamic>> products, String code) {
+  final c = code.trim();
+  if (c.isEmpty) return null;
+  for (final p in products) {
+    if ((p['barcode']?.toString() ?? '').trim() == c) return p;
+  }
+  return null;
+}
+
+/// [products] with the ones in [pinnedIds] first (newest pin on top), e.g. the
+/// products just scanned, so they are visible without scrolling.
+List<Map<String, dynamic>> catalogPinFirst(List<Map<String, dynamic>> products, List<String> pinnedIds) {
+  if (pinnedIds.isEmpty) return products;
+  final byId = {for (final p in products) catalogProductId(p): p};
+  final pinned = [for (final id in pinnedIds.reversed) if (byId[id] != null) byId[id]!];
+  final pinnedSet = pinned.map(catalogProductId).toSet();
+  return [...pinned, ...products.where((p) => !pinnedSet.contains(catalogProductId(p)))];
+}
+
+/// Adds one of [product] to [items] (or one more if it's already there).
+/// Returns false when stock doesn't allow another one.
+bool catalogAddToCart(
+  List<Map<String, dynamic>> items,
+  Map<String, dynamic> product, {
+  bool limitToStock = true,
+}) {
+  final max = (!limitToStock || product['type'] == 'service')
+      ? kCatalogNoLimit
+      : ((product['stock'] as num?)?.toInt() ?? 0);
+  final id = catalogProductId(product);
+  final idx = items.indexWhere((it) => catalogProductId(it) == id);
+  if (idx >= 0) {
+    final qty = (items[idx]['quantity'] as num?)?.toInt() ?? 0;
+    if (qty >= max) return false;
+    items[idx]['quantity'] = qty + 1;
+    return true;
+  }
+  if (max <= 0) return false;
+  final selling = (product['sellingPrice'] as num?)?.toDouble() ?? 0;
+  items.add({
+    'product_id': product['product_id'],
+    'stock_id': product['stock_id'],
+    'name': product['name'],
+    'sellingPrice': selling,
+    'wholesalePrice': (product['wholesalePrice'] as num?)?.toDouble() ?? selling,
+    'quantity': 1,
+    'stock': max,
+    'discount': 0.0,
+    'type': product['type'] ?? 'product',
+  });
+  return true;
+}
+
 /// Every product listed inline with an editable price, `- qty +` and a
 /// per-item discount, as on Add Sale. Used by Create Invoice and Add Order.
 ///
@@ -41,8 +100,6 @@ class _SaleProductCatalogState extends State<SaleProductCatalog> {
   final Map<String, TextEditingController> _priceControllers = {};
   final Map<String, TextEditingController> _qtyControllers = {};
 
-  static const int _noLimit = 1 << 30;
-
   @override
   void didUpdateWidget(covariant SaleProductCatalog oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -74,7 +131,7 @@ class _SaleProductCatalogState extends State<SaleProductCatalog> {
   int _cartIndex(String id) => widget.items.indexWhere((it) => _id(it) == id);
 
   int _maxQty(Map<String, dynamic> product) {
-    if (!widget.limitToStock || product['type'] == 'service') return _noLimit;
+    if (!widget.limitToStock || product['type'] == 'service') return kCatalogNoLimit;
     return (product['stock'] as num?)?.toInt() ?? 0;
   }
 
@@ -157,28 +214,9 @@ class _SaleProductCatalogState extends State<SaleProductCatalog> {
 
   void _add(Map<String, dynamic> product) {
     final id = _id(product);
+    if (!catalogAddToCart(widget.items, product, limitToStock: widget.limitToStock)) return;
     final idx = _cartIndex(id);
-    if (idx >= 0) {
-      final qty = (widget.items[idx]['quantity'] as num?)?.toInt() ?? 0;
-      if (qty < _maxQty(product)) {
-        widget.items[idx]['quantity'] = qty + 1;
-        _clampDiscount(idx);
-      }
-    } else {
-      if (_maxQty(product) <= 0) return;
-      final selling = _num(product['sellingPrice']);
-      widget.items.add({
-        'product_id': product['product_id'],
-        'stock_id': product['stock_id'],
-        'name': product['name'],
-        'sellingPrice': selling,
-        'wholesalePrice': (product['wholesalePrice'] as num?)?.toDouble() ?? selling,
-        'quantity': 1,
-        'stock': _maxQty(product),
-        'discount': 0.0,
-        'type': product['type'] ?? 'product',
-      });
-    }
+    if (idx >= 0) _clampDiscount(idx);
     _syncQty(id);
     _changed();
   }

@@ -1,7 +1,7 @@
 name: dukaapp
 description: "DukaApp - POS"
 publish_to: 'none'
-version: 1.1.79+119
+version: 1.1.80+120
 
 environment:
   sdk: ^3.12.2

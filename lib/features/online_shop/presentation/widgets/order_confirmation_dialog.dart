@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -108,8 +109,9 @@ class _OrderConfirmationDialogState extends State<OrderConfirmationDialog> {
     return DateFormat('dd MMMM yyyy').format(DateTime.now());
   }
 
-  void _copyOrderId() {
-    // Clipboard.setData(ClipboardData(text: widget.orderId));
+  Future<void> _copyOrderId() async {
+    await Clipboard.setData(ClipboardData(text: widget.orderId));
+    if (!mounted) return;
     setState(() => _copied = true);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
