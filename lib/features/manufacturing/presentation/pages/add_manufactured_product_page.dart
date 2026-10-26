@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:dukaapp/app/colors.dart';
@@ -201,6 +202,8 @@ class _AddManufacturedProductPageState extends ConsumerState<AddManufacturedProd
       final status = data['status']?.toString() ?? '';
       if (!mounted) return;
       if (status == 'success') {
+        // Finished goods' stock changed: reload the cached Stock list.
+        ref.invalidate(stockProvider);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
             _isEditMode ? 'Product updated successfully' : 'Product saved successfully',

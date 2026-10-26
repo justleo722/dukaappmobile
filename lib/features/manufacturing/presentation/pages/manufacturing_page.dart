@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
@@ -363,6 +364,8 @@ class _ManufacturingPageState extends ConsumerState<ManufacturingPage> {
               try {
                 final api = ref.read(apiServiceProvider);
                 await api.postMfProductionDelete({'product_id': p['id'] ?? p['product_id'] ?? ''});
+                // Finished goods' stock changed: reload the cached Stock list.
+                ref.invalidate(stockProvider);
                 _loadData();
               } catch (_) {}
             },

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dukaapp/features/stock/presentation/providers/stock_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
@@ -233,6 +234,8 @@ class _TransferProductsPageState extends ConsumerState<TransferProductsPage> {
       if (!mounted) return;
       final status = result['status']?.toString() ?? '';
       if (status == 'success') {
+        // Finished goods' stock changed: reload the cached Stock list.
+        ref.invalidate(stockProvider);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Transfer completed successfully', style: AppTypography.bodyMedium.copyWith(color: AppColors.textWhite)),
           backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
