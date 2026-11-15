@@ -8,6 +8,8 @@ import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/shared/widgets/auth_logo.dart';
 import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/core/services/biometric_service.dart';
+import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/features/dashboard/presentation/widgets/language_selector.dart';
 import 'widgets/login_card.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -148,7 +150,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     child: Column(
                       children: [
                         SizedBox(height: 12.h),
-                        _buildOnlineShopButton(),
+                        Row(
+                          children: [
+                            const LanguageSelector(),
+                            const Spacer(),
+                            _buildOnlineShopButton(),
+                          ],
+                        ),
                         SizedBox(height: 32.h),
                         _buildLogoSection(),
                         SizedBox(height: 32.h),
@@ -298,6 +306,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Widget _buildLoginCard(bool isLoading) {
     return LoginCard(
+      isSwahili: ref.watch(localeProvider) == 'sw',
       userIdController: _userIdController,
       passwordController: _passwordController,
       isPasswordVisible: _isPasswordVisible,

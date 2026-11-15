@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'strings_en.dart';
-import 'strings_sw.dart';
+import 'registry_strings.dart';
+import 'l10n_store.dart';
 
 // ── Locale provider ─────────────────────────────────────────────────────────
 
@@ -29,9 +30,11 @@ class LocaleNotifier extends Notifier<String> {
 
 final localeProvider = NotifierProvider<LocaleNotifier, String>(LocaleNotifier.new);
 
+/// Texts in the chosen language, from the app's local language files
+/// (L10nStore); anything missing falls back to the built-in English.
 final stringsProvider = Provider<AppStrings>((ref) {
   final locale = ref.watch(localeProvider);
-  return locale == 'sw' ? SwStrings() : EnStrings();
+  return RegistryStrings(L10nStore.textsFor(locale), EnStrings());
 });
 
 // ── Base class ───────────────────────────────────────────────────────────────

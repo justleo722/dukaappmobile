@@ -119,6 +119,8 @@ class AuthRemoteDatasource {
     required String shopName,
     required String shopType,
     required dynamic lobId,
+    String dialCode = '255',
+    String language = '',
     bool agreeToTerms = true,
   }) async {
     final payload = {
@@ -132,6 +134,9 @@ class AuthRemoteDatasource {
       'shop_name': shopName,
       'shop_type': shopType,
       'lob_id': lobId.toString(),
+      // Country code chosen with the phone number (East Africa).
+      'dial_code': dialCode,
+      if (language.isNotEmpty) 'language': language,
       'terms': '1',
       'agree_terms': '1',
       'terms_accepted': '1',

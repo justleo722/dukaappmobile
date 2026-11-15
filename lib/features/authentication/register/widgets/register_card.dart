@@ -36,6 +36,20 @@ class RegisterCard extends StatelessWidget {
   final VoidCallback onNext;
   final VoidCallback onBack;
   final VoidCallback? onRegister;
+  /// Country dial code of the phone number (e.g. '255').
+  final String dialCode;
+  final ValueChanged<String>? onDialCodeChanged;
+  /// Fills Region from the phone's location.
+  final VoidCallback? onDetectRegion;
+  final bool isDetectingRegion;
+  final bool isSwahili;
+
+  /// East African countries a shop can register from (Auth helper
+  /// registration_countries() on the server): dial code → ISO.
+  static const Map<String, String> countries = {
+    '255': 'TZ', '254': 'KE', '256': 'UG', '250': 'RW', '257': 'BI',
+    '243': 'CD', '258': 'MZ', '260': 'ZM', '265': 'MW',
+  };
 
   const RegisterCard({
     super.key,
@@ -64,7 +78,58 @@ class RegisterCard extends StatelessWidget {
     required this.onNext,
     required this.onBack,
     required this.onRegister,
+    this.dialCode = '255',
+    this.onDialCodeChanged,
+    this.onDetectRegion,
+    this.isDetectingRegion = false,
+    this.isSwahili = false,
   });
+
+  /// Kiswahili for this card's text, used when the app language is Swahili.
+  static const Map<String, String> _sw = {
+    'Business Details': 'Taarifa za biashara',
+    'Tell us about your business': 'Tueleze kuhusu biashara yako',
+    'Security': 'Usalama',
+    'Secure your account': 'Linda akaunti yako',
+    'Account Info': 'Taarifa za akaunti',
+    'Set up your login credentials': 'Weka taarifa za kuingia',
+    'Username': 'Jina la mtumiaji',
+    'Enter username': 'Andika jina la mtumiaji',
+    'Phone Number': 'Namba ya simu',
+    'Enter phone number': 'Andika namba ya simu',
+    'Email': 'Barua pepe',
+    'Enter email address': 'Andika barua pepe',
+    'Shop Name': 'Jina la duka',
+    'Enter shop name': 'Andika jina la duka',
+    'Shop Type': 'Aina ya duka',
+    'Select shop type': 'Chagua aina ya duka',
+    'Product & Services': 'Bidhaa na huduma',
+    'Manufacturing': 'Uzalishaji',
+    'Online Shop': 'Duka la mtandaoni',
+    'Region': 'Mkoa',
+    'Enter your region': 'Andika mkoa wako',
+    'Password': 'Nenosiri',
+    'Create a password': 'Tengeneza nenosiri',
+    'Confirm Password': 'Thibitisha nenosiri',
+    'Re-enter password': 'Rudia nenosiri',
+    'Referral Code': 'Code ya rufaa',
+    'Enter referral code': 'Andika code ya rufaa',
+    'Remove referral code? ': 'Ondoa code ya rufaa? ',
+    'Have a referral code? ': 'Una code ya rufaa? ',
+    'Enter Code': 'Andika code',
+    'Remove': 'Ondoa',
+    'Next': 'Endelea',
+    'Register': 'Jisajili',
+    'Back': 'Rudi',
+    'I accept the ': 'Nakubali ',
+    'Terms & Conditions': 'Masharti na Vigezo',
+    'Use my location': 'Tumia mahali nilipo',
+    'Detecting location…': 'Inatafuta mahali ulipo…',
+    'Country code': 'Code ya nchi',
+  };
+
+  String t(String english) => isSwahili ? (_sw[english] ?? english) : english;
+
 
   @override
   Widget build(BuildContext context) {
@@ -93,10 +158,10 @@ class RegisterCard extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Account Info', style: AppTypography.h5),
+            Text(t('Account Info'), style: AppTypography.h5),
             SizedBox(height: 4.h),
             Text(
-              'Set up your login credentials',
+              t('Set up your login credentials'),
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -107,10 +172,10 @@ class RegisterCard extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Business Details', style: AppTypography.h5),
+            Text(t('Business Details'), style: AppTypography.h5),
             SizedBox(height: 4.h),
             Text(
-              'Tell us about your business',
+              t('Tell us about your business'),
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -121,10 +186,10 @@ class RegisterCard extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Security', style: AppTypography.h5),
+            Text(t('Security'), style: AppTypography.h5),
             SizedBox(height: 4.h),
             Text(
-              'Secure your account',
+              t('Secure your account'),
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -154,26 +219,49 @@ class RegisterCard extends StatelessWidget {
     return Column(
       children: [
         AppTextField(
-          label: 'Username',
-          hintText: 'Enter username',
+          label: t('Username'),
+          hintText: t('Enter username'),
           controller: usernameController,
           keyboardType: TextInputType.text,
           textInputAction: TextInputAction.next,
           prefixIcon: Icons.person_outline,
         ),
         SizedBox(height: 16.h),
-        AppTextField(
-          label: 'Phone Number',
-          hintText: 'Enter phone number',
-          controller: phoneController,
-          keyboardType: TextInputType.phone,
-          textInputAction: TextInputAction.next,
-          prefixIcon: Icons.phone_outlined,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            SizedBox(
+              width: 112.w,
+              child: _buildDropdown(
+                label: t('Country code'),
+                value: countries.containsKey(dialCode) ? dialCode : '255',
+                hint: '+255',
+                prefixIcon: Icons.flag_outlined,
+                items: countries.entries
+                    .map((e) => DropdownMenuItem(value: e.key, child: Text('${e.value} +${e.key}')))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) onDialCodeChanged?.call(v);
+                },
+              ),
+            ),
+            SizedBox(width: 8.w),
+            Expanded(
+              child: AppTextField(
+                label: t('Phone Number'),
+                hintText: '712 345 678',
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+                prefixIcon: Icons.phone_outlined,
+              ),
+            ),
+          ],
         ),
         SizedBox(height: 16.h),
         AppTextField(
-          label: 'Email',
-          hintText: 'Enter email address',
+          label: t('Email'),
+          hintText: t('Enter email address'),
           controller: emailController,
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.done,
@@ -188,8 +276,8 @@ class RegisterCard extends StatelessWidget {
     return Column(
       children: [
         AppTextField(
-          label: 'Shop Name',
-          hintText: 'Enter shop name',
+          label: t('Shop Name'),
+          hintText: t('Enter shop name'),
           controller: shopNameController,
           keyboardType: TextInputType.text,
           textInputAction: TextInputAction.next,
@@ -197,26 +285,37 @@ class RegisterCard extends StatelessWidget {
         ),
         SizedBox(height: 16.h),
         _buildDropdown(
-          label: 'Shop Type',
+          label: t('Shop Type'),
           value: shopType,
-          hint: 'Select shop type',
+          hint: t('Select shop type'),
           prefixIcon: Icons.category_outlined,
-          items: const [
-            DropdownMenuItem(value: 'product_services', child: Text('Product & Services')),
-            DropdownMenuItem(value: 'manufacturing', child: Text('Manufacturing')),
-            DropdownMenuItem(value: 'onlineshop', child: Text('Online Shop')),
+          items: [
+            DropdownMenuItem(value: 'product_services', child: Text(t('Product & Services'))),
+            DropdownMenuItem(value: 'manufacturing', child: Text(t('Manufacturing'))),
+            DropdownMenuItem(value: 'onlineshop', child: Text(t('Online Shop'))),
           ],
           onChanged: onShopTypeChanged,
         ),
         SizedBox(height: 16.h),
         AppTextField(
-          label: 'Region',
-          hintText: 'Enter your region',
+          label: t('Region'),
+          hintText: t('Enter your region'),
           controller: regionController,
           keyboardType: TextInputType.text,
           textInputAction: TextInputAction.next,
           prefixIcon: Icons.location_on_outlined,
         ),
+        if (onDetectRegion != null)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: isDetectingRegion ? null : onDetectRegion,
+              icon: isDetectingRegion
+                  ? SizedBox(width: 14.w, height: 14.w, child: const CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.my_location_rounded, size: 16),
+              label: Text(isDetectingRegion ? t('Detecting location…') : t('Use my location')),
+            ),
+          ),
       ],
     );
   }
@@ -226,8 +325,8 @@ class RegisterCard extends StatelessWidget {
     return Column(
       children: [
         AppTextField(
-          label: 'Password',
-          hintText: 'Create a password',
+          label: t('Password'),
+          hintText: t('Create a password'),
           controller: passwordController,
           obscureText: !isPasswordVisible,
           textInputAction: TextInputAction.next,
@@ -245,8 +344,8 @@ class RegisterCard extends StatelessWidget {
         ),
         SizedBox(height: 16.h),
         AppTextField(
-          label: 'Confirm Password',
-          hintText: 'Re-enter password',
+          label: t('Confirm Password'),
+          hintText: t('Re-enter password'),
           controller: confirmPasswordController,
           obscureText: !isConfirmPasswordVisible,
           textInputAction: TextInputAction.done,
@@ -265,8 +364,8 @@ class RegisterCard extends StatelessWidget {
         SizedBox(height: 16.h),
         if (showReferralCode) ...[
           AppTextField(
-            label: 'Referral Code',
-            hintText: 'Enter referral code',
+            label: t('Referral Code'),
+            hintText: t('Enter referral code'),
             controller: referralController,
             keyboardType: TextInputType.text,
             textInputAction: TextInputAction.done,
@@ -279,14 +378,14 @@ class RegisterCard extends StatelessWidget {
           child: Text.rich(
             TextSpan(
               text: showReferralCode
-                  ? 'Remove referral code? '
-                  : 'Have a referral code? ',
+                  ? t('Remove referral code? ')
+                  : t('Have a referral code? '),
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.textSecondary,
               ),
               children: [
                 TextSpan(
-                  text: showReferralCode ? 'Remove' : 'Enter Code',
+                  text: showReferralCode ? t('Remove') : t('Enter Code'),
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w600,
@@ -309,19 +408,19 @@ class RegisterCard extends StatelessWidget {
       children: [
         if (!isLastStep)
           PrimaryButton(
-            text: 'Next',
+            text: t('Next'),
             onPressed: onNext,
           ),
         if (isLastStep)
           PrimaryButton(
-            text: 'Register',
+            text: t('Register'),
             isLoading: isLoading,
             onPressed: onRegister,
           ),
         if (currentStep > 0) ...[
           SizedBox(height: 12.h),
           OutlinedAppButton(
-            text: 'Back',
+            text: t('Back'),
             onPressed: onBack,
           ),
         ],
@@ -405,13 +504,13 @@ class RegisterCard extends StatelessWidget {
         Expanded(
           child: Text.rich(
             TextSpan(
-              text: 'I accept the ',
+              text: t('I accept the '),
               style: AppTypography.caption.copyWith(
                 color: AppColors.textSecondary,
               ),
               children: [
                 TextSpan(
-                  text: 'Terms & Conditions',
+                  text: t('Terms & Conditions'),
                   style: AppTypography.caption.copyWith(
                     color: AppColors.primary,
                     fontWeight: FontWeight.w600,

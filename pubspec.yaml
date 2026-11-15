@@ -1,7 +1,7 @@
 name: dukaapp
 description: "DukaApp - POS"
 publish_to: 'none'
-version: 1.1.80+120
+version: 1.1.81+121
 
 environment:
   sdk: ^3.12.2
@@ -71,6 +71,8 @@ dependencies:
 
   # PDF Preview & Printing
   printing: ^5.13.4
+  geolocator: ^14.0.1
+  geocoding: ^5.0.1
 
 
 dev_dependencies:
@@ -100,3 +102,4 @@ flutter:
     - assets/images/
     - assets/logos/
     - assets/animations/
+    - assets/l10n/

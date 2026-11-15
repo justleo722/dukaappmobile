@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dukaapp/shared/widgets/idle_logout.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:dukaapp/app/theme.dart';
@@ -42,6 +43,8 @@ class DukaApp extends ConsumerWidget {
           theme: AppTheme.light,
           routerConfig: router,
           scaffoldMessengerKey: scaffoldMessengerKey,
+          // 30 minutes without touching the app signs the user out.
+          builder: (context, child) => IdleLogout(child: child ?? const SizedBox.shrink()),
         );
       },
     );

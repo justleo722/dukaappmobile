@@ -77,6 +77,8 @@ class AuthRepository {
     required String shopName,
     required String shopType,
     required dynamic lobId,
+    String dialCode = '255',
+    String language = '',
     bool agreeToTerms = true,
   }) async {
     try {
@@ -92,6 +94,8 @@ class AuthRepository {
         shopType: shopType,
         lobId: lobId,
         agreeToTerms: agreeToTerms,
+        dialCode: dialCode,
+        language: language,
       );
 
       if (response.success && response.data != null) {

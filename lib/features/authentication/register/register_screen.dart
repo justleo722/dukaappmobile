@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/constants.dart';
@@ -9,6 +11,8 @@ import 'package:dukaapp/shared/widgets/auth_logo.dart';
 import 'package:dukaapp/shared/widgets/step_indicator.dart';
 import 'package:dukaapp/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:dukaapp/features/auth/data/models/auth_models.dart';
+import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/features/dashboard/presentation/widgets/language_selector.dart';
 import 'widgets/register_card.dart';
 import 'widgets/terms_and_conditions_screen.dart';
 
@@ -35,15 +39,70 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _showReferralCode = false;
   int _currentStep = 0;
   AuthConstants? _constants;
+  String _dialCode = '255';
+  bool _detectingRegion = false;
 
-  static const _stepLabels = ['Account', 'Business', 'Security'];
+  bool get _isSwahili => ref.watch(localeProvider) == 'sw';
+
+  List<String> get _stepLabels => _isSwahili
+      ? const ['Akaunti', 'Biashara', 'Usalama']
+      : const ['Account', 'Business', 'Security'];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadConstants();
+      _detectRegion(silent: true);
     });
+  }
+
+  /// Region (and country code) from the phone's approximate location, using the
+  /// phone's geocoder (Google on Android). Silent on first open: no message when
+  /// location is off or not allowed; the field stays editable either way.
+  Future<void> _detectRegion({bool silent = false}) async {
+    if (_detectingRegion) return;
+    setState(() => _detectingRegion = true);
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        if (!silent) _showSnackBar(_isSwahili ? 'Washa location kwenye simu.' : 'Please turn on location.');
+        return;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        if (!silent) _showSnackBar(_isSwahili ? 'Ruhusa ya location imekataliwa. Andika mkoa wako.' : 'Location permission denied. Please type your region.');
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.low, timeLimit: Duration(seconds: 15)),
+      );
+      final places = await Geocoding(locale: const Locale('en')).placemarkFromCoordinates(position.latitude, position.longitude);
+      if (!mounted || places.isEmpty) return;
+      final place = places.first;
+      final region = (place.administrativeArea?.isNotEmpty ?? false)
+          ? place.administrativeArea!
+          : (place.locality ?? '');
+      final iso = (place.isoCountryCode ?? '').toUpperCase();
+      final dial = RegisterCard.countries.entries
+          .where((e) => e.value == iso)
+          .map((e) => e.key)
+          .firstOrNull;
+      setState(() {
+        if (region.isNotEmpty && (!silent || _regionController.text.trim().isEmpty)) {
+          _regionController.text = region.replaceAll(RegExp(r' Region$', caseSensitive: false), '');
+        }
+        if (dial != null) _dialCode = dial;
+      });
+    } catch (_) {
+      if (!silent && mounted) {
+        _showSnackBar(_isSwahili ? 'Mkoa haukupatikana. Tafadhali uandike.' : 'Could not find your region. Please type it.');
+      }
+    } finally {
+      if (mounted) setState(() => _detectingRegion = false);
+    }
   }
 
   Future<void> _loadConstants() async {
@@ -142,8 +201,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       email: email,
       phone: phone,
       password: password,
-      country: 'Kenya',
-      iso: '+254',
+      // The server sets country / ISO from the phone's country code.
+      country: '',
+      iso: RegisterCard.countries[_dialCode] ?? 'TZ',
+      dialCode: _dialCode,
+      language: ref.read(localeProvider) == 'sw' ? 'swahili' : 'english',
       region: region,
       shopName: shopName,
       shopType: _shopType!,
@@ -210,7 +272,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
                 child: Column(
                   children: [
-                    SizedBox(height: 24.h),
+                    SizedBox(height: 12.h),
+                    const Align(alignment: Alignment.centerRight, child: LanguageSelector()),
+                    SizedBox(height: 12.h),
                     _buildHeader(),
                     SizedBox(height: 20.h),
                     Padding(
@@ -270,6 +334,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       onNext: _nextStep,
                       onBack: _previousStep,
                       onRegister: _agreeToTerms ? _handleRegister : null,
+                      dialCode: _dialCode,
+                      onDialCodeChanged: (v) => setState(() => _dialCode = v),
+                      onDetectRegion: () => _detectRegion(),
+                      isDetectingRegion: _detectingRegion,
+                      isSwahili: _isSwahili,
                     ),
                     SizedBox(height: 24.h),
                     _buildLoginLink(),
@@ -309,7 +378,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         ),
         SizedBox(height: 6.h),
         Text(
-          'Create your business account',
+          _isSwahili ? 'Fungua akaunti ya biashara yako' : 'Create your business account',
           style: AppTypography.bodyMedium.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -324,7 +393,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          'Already have an account? ',
+          _isSwahili ? 'Una akaunti tayari? ' : 'Already have an account? ',
           style: AppTypography.bodyMedium.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -332,7 +401,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         GestureDetector(
           onTap: () => context.pushNamed('login'),
           child: Text(
-            'Login',
+            _isSwahili ? 'Ingia' : 'Login',
             style: AppTypography.bodyMedium.copyWith(
               color: AppColors.secondary,
               fontWeight: FontWeight.w600,

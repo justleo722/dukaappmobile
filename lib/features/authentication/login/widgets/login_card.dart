@@ -7,6 +7,21 @@ import 'package:dukaapp/shared/textfields/app_text_field.dart';
 import 'package:dukaapp/shared/buttons/primary_button.dart';
 
 class LoginCard extends StatelessWidget {
+  final bool isSwahili;
+
+  /// Kiswahili for this card's text, used when the app language is Swahili.
+  static const Map<String, String> _sw = {
+    'Login': 'Ingia',
+    'User ID, Email, Phone, or Attendant ID': 'User ID, Barua pepe, Simu, au Attendant ID',
+    'Enter user ID, email, phone, or attendant ID': 'Andika user ID, barua pepe, simu au attendant ID',
+    'Password': 'Nenosiri',
+    'Enter your password': 'Andika nenosiri lako',
+    'Reset Password': 'Badilisha nenosiri',
+    'Register': 'Jisajili',
+  };
+
+  String t(String english) => isSwahili ? (_sw[english] ?? english) : english;
+
   final TextEditingController userIdController;
   final TextEditingController passwordController;
   final bool isPasswordVisible;
@@ -17,6 +32,7 @@ class LoginCard extends StatelessWidget {
   final VoidCallback onResetPassword;
 
   const LoginCard({
+    this.isSwahili = false,
     super.key,
     required this.userIdController,
     required this.passwordController,
@@ -47,7 +63,7 @@ class LoginCard extends StatelessWidget {
           _buildResetPasswordLink(),
           SizedBox(height: 24.h),
           PrimaryButton(
-            text: 'Login',
+            text: t('Login'),
             isLoading: isLoading,
             onPressed: onLogin,
           ),
@@ -60,8 +76,8 @@ class LoginCard extends StatelessWidget {
 
   Widget _buildUserIdField() {
     return AppTextField(
-      label: 'User ID, Email, Phone, or Attendant ID',
-      hintText: 'Enter user ID, email, phone, or attendant ID',
+      label: t('User ID, Email, Phone, or Attendant ID'),
+      hintText: t('Enter user ID, email, phone, or attendant ID'),
       controller: userIdController,
       keyboardType: TextInputType.text,
       textInputAction: TextInputAction.next,
@@ -71,8 +87,8 @@ class LoginCard extends StatelessWidget {
 
   Widget _buildPasswordField() {
     return AppTextField(
-      label: 'Password',
-      hintText: 'Enter your password',
+      label: t('Password'),
+      hintText: t('Enter your password'),
       controller: passwordController,
       obscureText: !isPasswordVisible,
       textInputAction: TextInputAction.done,
@@ -96,7 +112,7 @@ class LoginCard extends StatelessWidget {
       child: GestureDetector(
         onTap: onResetPassword,
         child: Text(
-          'Reset Password',
+          t('Reset Password'),
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.primary,
             fontWeight: FontWeight.w600,
@@ -118,7 +134,7 @@ class LoginCard extends StatelessWidget {
             ),
             children: [
               TextSpan(
-                text: 'Register',
+                text: t('Register'),
                 style: AppTypography.bodySmall.copyWith(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w600,

@@ -160,6 +160,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String shopName,
     required String shopType,
     required dynamic lobId,
+    String dialCode = '255',
+    String language = '',
   }) async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
 
@@ -175,6 +177,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       shopType: shopType,
       lobId: lobId,
       agreeToTerms: true,
+      dialCode: dialCode,
+      language: language,
     );
 
     if (result.success) {

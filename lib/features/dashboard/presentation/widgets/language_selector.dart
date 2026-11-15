@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dukaapp/app/colors.dart';
 import 'package:dukaapp/app/typography.dart';
 import 'package:dukaapp/core/providers.dart';
+import 'package:dukaapp/core/l10n/l10n_store.dart';
 
 class LanguageSelector extends ConsumerWidget {
   const LanguageSelector({super.key});
@@ -22,7 +23,7 @@ class LanguageSelector extends ConsumerWidget {
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<String>(
-            value: locale,
+            value: L10nStore.languages.containsKey(locale) ? locale : 'en',
             isDense: true,
             isExpanded: false,
             icon: const Icon(
@@ -35,10 +36,7 @@ class LanguageSelector extends ConsumerWidget {
               fontWeight: FontWeight.w500,
               fontSize: 12,
             ),
-            selectedItemBuilder: (context) => [
-              _label('en'),
-              _label('sw'),
-            ].map((lang) => Align(
+            selectedItemBuilder: (context) => L10nStore.languages.values.map((lang) => Align(
               alignment: Alignment.centerLeft,
               child: Text(
                 lang,
@@ -51,10 +49,10 @@ class LanguageSelector extends ConsumerWidget {
                 ),
               ),
             )).toList(),
-            items: const [
-              DropdownMenuItem(value: 'en', child: Text('English')),
-              DropdownMenuItem(value: 'sw', child: Text('Kiswahili')),
-            ],
+            // Every language shipped in assets/l10n.
+            items: L10nStore.languages.entries
+                .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                .toList(),
             onChanged: (value) {
               if (value != null) {
                 ref.read(localeProvider.notifier).setLocale(value);
@@ -65,7 +63,5 @@ class LanguageSelector extends ConsumerWidget {
       ),
     );
   }
-
-  String _label(String locale) => locale == 'sw' ? 'Kiswahili' : 'English';
 }
 
