@@ -75,8 +75,16 @@ class SalesRemoteDatasource {
   Future<Map<String, dynamic>> deleteRecord(Map<String, dynamic> body) =>
       _api.postSalesDeleteRecord(body);
 
-  Future<Map<String, dynamic>> backdate(Map<String, dynamic> body) =>
-      _api.postSalesBackdate(body);
+  /// Sales::backdate reads sale_ids (comma-separated) and record_date
+  /// (YYYY-MM-DD). Pages that send sale_id / date (with a time) are mapped here.
+  Future<Map<String, dynamic>> backdate(Map<String, dynamic> body) {
+    final b = Map<String, dynamic>.from(body);
+    final date = (b['record_date'] ?? b.remove('date'))?.toString() ?? '';
+    if (date.length >= 10) b['record_date'] = date.substring(0, 10);
+    final id = b['sale_id']?.toString() ?? '';
+    if ((b['sale_ids']?.toString() ?? '').isEmpty && id.isNotEmpty) b['sale_ids'] = id;
+    return _api.postSalesBackdate(b);
+  }
 
   Future<Map<String, dynamic>> bulkDelete(Map<String, dynamic> body) =>
       _api.postSalesBulkDelete(body);

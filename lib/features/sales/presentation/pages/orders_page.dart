@@ -1141,15 +1141,25 @@ class _OrdersPageState extends ConsumerState<OrdersPage> {
     );
 
     if (picked != null && mounted) {
-      final formatted = DateFormat('MMM dd, yyyy HH:mm').format(
-        DateTime(picked.year, picked.month, picked.day, parsedDate.hour, parsedDate.minute),
-      );
-      setState(() {
-        _orders[orderIndex]['date'] = formatted;
-      });
-      if (mounted) {
+      // Save it on the server (this used to change the date on screen only).
+      final saleId = _orders[orderIndex]['sale_id']?.toString() ?? '';
+      if (saleId.isEmpty) return;
+      try {
+        final res = await ref.read(salesRepositoryProvider).backdate({
+          'sale_ids': saleId,
+          'record_date': DateFormat('yyyy-MM-dd').format(picked),
+        });
+        if (!mounted) return;
+        final ok = res['status']?.toString() == 'success';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(ok ? s.saleDateUpdated : (res['message']?.toString() ?? 'Backdate failed')),
+          backgroundColor: ok ? AppColors.success : AppColors.danger,
+        ));
+        if (ok) await _loadOrders();
+      } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(s.saleDateUpdated)),
+          SnackBar(content: Text('Backdate failed: $e'), backgroundColor: AppColors.danger),
         );
       }
     }

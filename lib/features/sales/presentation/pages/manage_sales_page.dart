@@ -497,7 +497,7 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
             discount: sale['discount'],
             balance: sale['balance'],
             onDownload: () => _downloadReceiptPdf(sale),
-            onBackdate: () => _showBackdateDialog(index),
+            onBackdate: () => _showBackdateDialog([index]),
             onPrint: () => _showReceiptPreview(sale),
             onPreview: () => _showReceiptPreview(sale),
             onEdit: () async {
@@ -651,7 +651,47 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
               fontWeight: FontWeight.w600,
             ),
           ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => setState(() {
+              final all = _selectedSales.length == _sales.length;
+              _selectedSales
+                ..clear()
+                ..addAll(all ? <int>[] : List<int>.generate(_sales.length, (i) => i));
+            }),
+            child: Text(
+              _selectedSales.length == _sales.length ? 'Clear' : 'Select all',
+              style: AppTypography.caption.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w600,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
           const Spacer(),
+          GestureDetector(
+            onTap: () => _showBackdateDialog(_selectedSales.toList()..sort()),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.warning.withValues(alpha: 0.3), width: 1),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.date_range_rounded, color: AppColors.warning, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Backdate',
+                    style: AppTypography.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           GestureDetector(
             onTap: _deleteSelected,
             child: Container(
@@ -736,9 +776,12 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
     );
   }
 
-  void _showBackdateDialog(int orderIndex) async {
+  /// Backdates one sale or all the selected ones (Sales::backdate takes sale_ids).
+  void _showBackdateDialog(List<int> indexes) async {
     final s = ref.read(stringsProvider);
-    final sale = _sales[orderIndex];
+    indexes = indexes.where((i) => i >= 0 && i < _sales.length).toList();
+    if (indexes.isEmpty) return;
+    final sale = _sales[indexes.first];
     final dateStr = sale['date'] as String;
     final parts = dateStr.split(' ');
     DateTime parsedDate;
@@ -879,23 +922,32 @@ class _ManageSalesPageState extends ConsumerState<ManageSalesPage> {
     );
 
     if (picked != null && mounted) {
-      final saleId = orderIndex < _sales.length
-          ? _sales[orderIndex]['sale_id']?.toString()
-          : null;
-      if (saleId != null && saleId.isNotEmpty) {
+      final ids = indexes
+          .map((i) => _sales[i]['sale_id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+      if (ids.isNotEmpty) {
         try {
           final repo = ref.read(salesRepositoryProvider);
+          // Sales::backdate reads sale_ids (comma-separated) and record_date.
           final res = await repo.backdate({
-            'sale_id': saleId,
-            'date': DateFormat('yyyy-MM-dd').format(picked),
+            'sale_ids': ids.join(','),
+            'record_date': DateFormat('yyyy-MM-dd').format(picked),
           });
-          final ok = res['status']?.toString() == '1' || res['status'] == true;
+          final ok = res['status']?.toString() == 'success' ||
+              res['status']?.toString() == '1' ||
+              res['status'] == true;
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(ok ? s.saleDateUpdated : (res['message']?.toString() ?? 'Backdate failed')),
+              content: Text(ok
+                  ? (ids.length > 1 ? '${ids.length} sales backdated' : s.saleDateUpdated)
+                  : (res['message']?.toString() ?? 'Backdate failed')),
               backgroundColor: ok ? AppColors.success : AppColors.danger,
             ));
-            if (ok) await _loadSales();
+            if (ok) {
+              setState(() => _selectedSales.clear());
+              await _loadSales();
+            }
           }
         } catch (e) {
           if (mounted) {
