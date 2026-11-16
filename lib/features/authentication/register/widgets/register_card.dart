@@ -1,3 +1,4 @@
+import 'package:dukaapp/core/l10n/countries.dart';
 import 'package:dukaapp/core/l10n/l10n_store.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -38,19 +39,14 @@ class RegisterCard extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback? onRegister;
   /// Country dial code of the phone number (e.g. '255').
-  final String dialCode;
-  final ValueChanged<String>? onDialCodeChanged;
+  /// ISO code of the chosen country (its dial code goes before the phone number).
+  final String countryIso;
+  final ValueChanged<String>? onCountryChanged;
   /// Fills Region from the phone's location.
   final VoidCallback? onDetectRegion;
   final bool isDetectingRegion;
   final bool isSwahili;
 
-  /// East African countries a shop can register from (Auth helper
-  /// registration_countries() on the server): dial code → ISO.
-  static const Map<String, String> countries = {
-    '255': 'TZ', '254': 'KE', '256': 'UG', '250': 'RW', '257': 'BI',
-    '243': 'CD', '258': 'MZ', '260': 'ZM', '265': 'MW',
-  };
 
   const RegisterCard({
     super.key,
@@ -79,8 +75,8 @@ class RegisterCard extends StatelessWidget {
     required this.onNext,
     required this.onBack,
     required this.onRegister,
-    this.dialCode = '255',
-    this.onDialCodeChanged,
+    this.countryIso = 'TZ',
+    this.onCountryChanged,
     this.onDetectRegion,
     this.isDetectingRegion = false,
     this.isSwahili = false,
@@ -127,6 +123,7 @@ class RegisterCard extends StatelessWidget {
     'Use my location': 'Tumia mahali nilipo',
     'Detecting location…': 'Inatafuta mahali ulipo…',
     'Country code': 'Code ya nchi',
+    'Country': 'Nchi',
   };
 
   // Kiswahili from this card's map, other languages from the registry.
@@ -146,7 +143,7 @@ class RegisterCard extends StatelessWidget {
         children: [
           _buildStepTitle(),
           SizedBox(height: 24.h),
-          _buildStepContent(),
+          _buildStepContent(context),
           SizedBox(height: 24.h),
           _buildButtons(),
         ],
@@ -203,10 +200,10 @@ class RegisterCard extends StatelessWidget {
     }
   }
 
-  Widget _buildStepContent() {
+  Widget _buildStepContent(BuildContext context) {
     switch (currentStep) {
       case 0:
-        return _buildStep1();
+        return _buildStep1(context);
       case 1:
         return _buildStep2();
       case 2:
@@ -217,7 +214,7 @@ class RegisterCard extends StatelessWidget {
   }
 
   // Step 1: Account
-  Widget _buildStep1() {
+  Widget _buildStep1(BuildContext context) {
     return Column(
       children: [
         AppTextField(
@@ -229,22 +226,23 @@ class RegisterCard extends StatelessWidget {
           prefixIcon: Icons.person_outline,
         ),
         SizedBox(height: 16.h),
+        _buildCountryField(context),
+        SizedBox(height: 16.h),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            SizedBox(
-              width: 112.w,
-              child: _buildDropdown(
-                label: t('Country code'),
-                value: countries.containsKey(dialCode) ? dialCode : '255',
-                hint: '+255',
-                prefixIcon: Icons.flag_outlined,
-                items: countries.entries
-                    .map((e) => DropdownMenuItem(value: e.key, child: Text('${e.value} +${e.key}')))
-                    .toList(),
-                onChanged: (v) {
-                  if (v != null) onDialCodeChanged?.call(v);
-                },
+            Container(
+              height: AppConstants.buttonHeight.h,
+              padding: EdgeInsets.symmetric(horizontal: 12.w),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.inputFill,
+                borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+                border: Border.all(color: AppColors.inputBorder),
+              ),
+              child: Text(
+                '+${_country.dial}',
+                style: AppTypography.bodyMedium.copyWith(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
               ),
             ),
             SizedBox(width: 8.w),
@@ -430,6 +428,56 @@ class RegisterCard extends StatelessWidget {
     );
   }
 
+  Country get _country => Country.byIso(countryIso) ?? Country.tanzania;
+
+  /// Country field: tap to pick from every country (searchable).
+  Widget _buildCountryField(BuildContext context) {
+    final c = _country;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(t('Country'), style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
+        SizedBox(height: 8.h),
+        InkWell(
+          borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+          onTap: () => _pickCountry(context),
+          child: Container(
+            width: double.infinity,
+            height: AppConstants.buttonHeight.h,
+            padding: EdgeInsets.symmetric(horizontal: 14.w),
+            decoration: BoxDecoration(
+              color: AppColors.inputFill,
+              borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+              border: Border.all(color: AppColors.inputBorder),
+            ),
+            child: Row(children: [
+              Text(c.flag, style: const TextStyle(fontSize: 18)),
+              SizedBox(width: 10.w),
+              Expanded(
+                child: Text('${c.name} (+${c.dial})',
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary)),
+              ),
+              const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textHint),
+            ]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickCountry(BuildContext context) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => _CountryPicker(selected: countryIso, searchHint: t('Search...')),
+    );
+    if (picked != null) onCountryChanged?.call(picked);
+  }
+
   Widget _buildDropdown({
     required String label,
     required String? value,
@@ -525,6 +573,68 @@ class RegisterCard extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+
+/// Bottom sheet with every country and a search box.
+class _CountryPicker extends StatefulWidget {
+  final String selected;
+  final String searchHint;
+  const _CountryPicker({required this.selected, required this.searchHint});
+
+  @override
+  State<_CountryPicker> createState() => _CountryPickerState();
+}
+
+class _CountryPickerState extends State<_CountryPicker> {
+  String _q = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final q = _q.toLowerCase().replaceAll('+', '').trim();
+    final list = Country.all
+        .where((c) => q.isEmpty || c.name.toLowerCase().contains(q) || c.dial.startsWith(q) || c.iso.toLowerCase() == q)
+        .toList();
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.75,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: Column(children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: TextField(
+                autofocus: false,
+                onChanged: (v) => setState(() => _q = v),
+                decoration: InputDecoration(
+                  hintText: widget.searchHint,
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  isDense: true,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                itemCount: list.length,
+                itemBuilder: (_, i) {
+                  final c = list[i];
+                  final sel = c.iso == widget.selected;
+                  return ListTile(
+                    leading: Text(c.flag, style: const TextStyle(fontSize: 22)),
+                    title: Text(c.name, style: TextStyle(fontWeight: sel ? FontWeight.w700 : FontWeight.normal)),
+                    trailing: Text('+${c.dial}', style: const TextStyle(color: AppColors.textSecondary)),
+                    selected: sel,
+                    onTap: () => Navigator.of(context).pop(c.iso),
+                  );
+                },
+              ),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }

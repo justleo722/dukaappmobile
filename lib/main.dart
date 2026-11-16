@@ -1,3 +1,4 @@
+import 'package:dukaapp/core/l10n/countries.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +11,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Local language files (assets/l10n), before the first screen is built.
   await L10nStore.load();
+  await Country.load();
   // Desktop (Linux/Windows/macOS) needs FFI factory; mobile initialises itself.
   if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.linux ||
       defaultTargetPlatform == TargetPlatform.windows ||

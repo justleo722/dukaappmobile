@@ -50,6 +50,14 @@ def main():
 
     write_registry_strings()
 
+    # Country list of the register form (same file the backend validates with).
+    countries_src = os.path.join(os.path.dirname(os.path.dirname(registry_path)), 'data', 'countries.json')
+    if os.path.exists(countries_src):
+        with open(countries_src, encoding='utf-8') as f:
+            countries = json.load(f)
+        with open(os.path.join(out_dir, 'countries.json'), 'w', encoding='utf-8') as f:
+            json.dump(countries, f, ensure_ascii=False)
+
     # Keys AppStrings uses that the registry doesn't have yet (they show English).
     src = read_app_strings()
     used = set(re.findall(r'^\s*String (?:get )?(\w+)', src[src.index('abstract class AppStrings'):], re.M))

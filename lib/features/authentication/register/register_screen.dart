@@ -1,3 +1,6 @@
+import 'package:dukaapp/core/l10n/countries.dart';
+import 'package:dio/dio.dart';
+import 'dart:async';
 import 'package:dukaapp/core/l10n/l10n_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,7 +43,29 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _showReferralCode = false;
   int _currentStep = 0;
   AuthConstants? _constants;
-  String _dialCode = '255';
+  // Chosen country (ISO). Guessed from the phone's region setting, then from
+  // its location or network; the user can still change it.
+  String _countryIso = Country.byIso(WidgetsBinding.instance.platformDispatcher.locale.countryCode)?.iso ?? 'TZ';
+  bool _countryPicked = false;
+
+  void _setDetectedCountry(String? iso) {
+    final c = Country.byIso(iso);
+    if (c != null && !_countryPicked && mounted) setState(() => _countryIso = c.iso);
+  }
+
+  /// Without GPS: country and region from the network (approximate).
+  Future<void> _detectFromNetwork() async {
+    try {
+      final res = await Dio().get('https://ipwho.is/', queryParameters: {'fields': 'success,country_code,region'});
+      final data = res.data;
+      if (data is! Map || data['success'] == false || !mounted) return;
+      _setDetectedCountry(data['country_code']?.toString());
+      final region = (data['region'] ?? '').toString();
+      if (region.isNotEmpty && _regionController.text.trim().isEmpty) {
+        setState(() => _regionController.text = region.replaceAll(RegExp(r' Region$', caseSensitive: false), ''));
+      }
+    } catch (_) {}
+  }
   bool _detectingRegion = false;
 
   bool get _isSwahili => ref.watch(localeProvider) == 'sw';
@@ -66,6 +91,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     setState(() => _detectingRegion = true);
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
+        unawaited(_detectFromNetwork());
         if (!silent) _showSnackBar(_isSwahili ? 'Washa location kwenye simu.' : L10nStore.fromEnglish('Please turn on location.'));
         return;
       }
@@ -74,6 +100,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        unawaited(_detectFromNetwork());
         if (!silent) _showSnackBar(_isSwahili ? 'Ruhusa ya location imekataliwa. Andika mkoa wako.' : L10nStore.fromEnglish('Location permission denied. Please type your region.'));
         return;
       }
@@ -86,18 +113,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       final region = (place.administrativeArea?.isNotEmpty ?? false)
           ? place.administrativeArea!
           : (place.locality ?? '');
-      final iso = (place.isoCountryCode ?? '').toUpperCase();
-      final dial = RegisterCard.countries.entries
-          .where((e) => e.value == iso)
-          .map((e) => e.key)
-          .firstOrNull;
+      _setDetectedCountry(place.isoCountryCode);
       setState(() {
         if (region.isNotEmpty && (!silent || _regionController.text.trim().isEmpty)) {
           _regionController.text = region.replaceAll(RegExp(r' Region$', caseSensitive: false), '');
         }
-        if (dial != null) _dialCode = dial;
       });
     } catch (_) {
+      unawaited(_detectFromNetwork());
       if (!silent && mounted) {
         _showSnackBar(_isSwahili ? 'Mkoa haukupatikana. Tafadhali uandike.' : L10nStore.fromEnglish('Could not find your region. Please type it.'));
       }
@@ -202,10 +225,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       email: email,
       phone: phone,
       password: password,
-      // The server sets country / ISO from the phone's country code.
-      country: '',
-      iso: RegisterCard.countries[_dialCode] ?? 'TZ',
-      dialCode: _dialCode,
+      country: (Country.byIso(_countryIso) ?? Country.tanzania).name,
+      iso: _countryIso,
+      dialCode: (Country.byIso(_countryIso) ?? Country.tanzania).dial,
       language: const {'sw': 'swahili', 'zh': 'chinese', 'fr': 'french'}[ref.read(localeProvider)] ?? 'english',
       region: region,
       shopName: shopName,
@@ -335,8 +357,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       onNext: _nextStep,
                       onBack: _previousStep,
                       onRegister: _agreeToTerms ? _handleRegister : null,
-                      dialCode: _dialCode,
-                      onDialCodeChanged: (v) => setState(() => _dialCode = v),
+                      countryIso: _countryIso,
+                      onCountryChanged: (v) => setState(() {
+                        _countryIso = v;
+                        _countryPicked = true;
+                      }),
                       onDetectRegion: () => _detectRegion(),
                       isDetectingRegion: _detectingRegion,
                       isSwahili: _isSwahili,

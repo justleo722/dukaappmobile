@@ -74,6 +74,7 @@
  "auth_business": "业务",
  "auth_confirm_password": "确认密码",
  "auth_could_not_find_your_region_please_type_it": "无法找到您的地区，请手动输入。",
+ "auth_country": "国家",
  "auth_create_a_password": "设置密码",
  "auth_create_your_business_account": "创建您的企业账户",
  "auth_detecting_location": "正在获取位置…",

@@ -74,6 +74,7 @@
  "auth_business": "Business",
  "auth_confirm_password": "Confirm Password",
  "auth_could_not_find_your_region_please_type_it": "Could not find your region. Please type it.",
+ "auth_country": "Country",
  "auth_create_a_password": "Create a password",
  "auth_create_your_business_account": "Create your business account",
  "auth_detecting_location": "Detecting location…",
