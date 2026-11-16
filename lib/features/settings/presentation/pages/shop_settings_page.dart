@@ -1,3 +1,4 @@
+import 'package:dukaapp/core/l10n/l10n_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -41,9 +42,15 @@ class ShopSettingsPage extends ConsumerWidget {
       'color': Color(0xFF9333EA),
     },
     {
+      'icon': Icons.checklist_rounded,
+      'title': 'Payment Modes & Categories',
+      'description': 'Add, rename or remove payment modes, expense and product categories.',
+      'color': Color(0xFF2563EB),
+    },
+    {
       'icon': Icons.language_rounded,
       'title': 'Language',
-      'description': 'Switch app language between English and Kiswahili.',
+      'description': 'Switch the app language.',
       'color': Color(0xFF0EA5E9),
     },
     {
@@ -77,8 +84,7 @@ class ShopSettingsPage extends ConsumerWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusMD)),
         title: const Text('Language / Lugha'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          _langTile(ctx, ref, 'en', 'English', current),
-          _langTile(ctx, ref, 'sw', 'Kiswahili', current),
+          for (final e in L10nStore.languages.entries) _langTile(ctx, ref, e.key, e.value, current),
         ]),
       ),
     );
@@ -100,6 +106,9 @@ class ShopSettingsPage extends ConsumerWidget {
         break;
       case 'Storage':
         context.push('/shop-settings/storage');
+        break;
+      case 'Payment Modes & Categories':
+        context.push('/shop-settings/lists');
         break;
       case 'Delete Shop':
         _showDeleteShopDialog(context);

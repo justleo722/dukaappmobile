@@ -64,6 +64,8 @@ class _ImportStockPageState extends ConsumerState<ImportStockPage> {
           _selectedFileName = file.name;
           _fileBytes = bytes;
         });
+        // Open the preview straight away; the button stays for re-opening it.
+        if (bytes != null && mounted) await _onPreviewFile();
       }
     } catch (e) {
       if (mounted) {

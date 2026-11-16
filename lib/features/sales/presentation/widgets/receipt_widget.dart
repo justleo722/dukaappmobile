@@ -384,7 +384,7 @@ class ReceiptWidget extends ConsumerWidget {
           _buildTotalRow('Discount:', _formatCurrency(discount), color: AppColors.success),
         ],
         const SizedBox(height: 8),
-        _buildTotalRow('Total Paid:', _formatCurrency(totalPaid)),
+        _buildTotalRow('Total:', _formatCurrency(totalPaid)),
         const SizedBox(height: 8),
         _buildTotalRow(
           'Amount Received:',

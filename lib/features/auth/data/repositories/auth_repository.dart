@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:dukaapp/core/services/push_service.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'package:dukaapp/features/auth/data/datasources/auth_remote_datasource.dart';
 import 'package:dukaapp/features/auth/data/models/auth_models.dart';
@@ -38,6 +40,7 @@ class AuthRepository {
 
         if (result.token != null) {
           await _secureStorage.saveToken(result.token!);
+          unawaited(PushService.instance.registerDevice());
         }
 
         if (result.user != null) {
@@ -103,6 +106,7 @@ class AuthRepository {
 
         if (result.token != null) {
           await _secureStorage.saveToken(result.token!);
+          unawaited(PushService.instance.registerDevice());
         }
 
         if (result.user != null) {
@@ -141,6 +145,7 @@ class AuthRepository {
   }
 
   Future<void> signOut() async {
+    await PushService.instance.unregisterDevice();
     try {
       await _remoteDatasource.signOut();
     } catch (_) {}
@@ -169,6 +174,8 @@ class AuthRepository {
 
       if (response.success && response.data != null) {
         final result = response.data!;
+        // App reopened with a saved session: make sure this device is linked.
+        unawaited(PushService.instance.registerDevice());
 
         if (result.user != null) {
           await _secureStorage.saveUser(result.user!.toJson());
@@ -311,6 +318,7 @@ class AuthRepository {
       throw Exception('Server did not return a session for the new shop.');
     }
     await _secureStorage.saveToken(result.token!);
+          unawaited(PushService.instance.registerDevice());
 
     // Persist the new active shop
     if (result.shop != null) {

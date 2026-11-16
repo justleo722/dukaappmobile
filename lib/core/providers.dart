@@ -1,3 +1,4 @@
+import 'package:dukaapp/core/services/push_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dukaapp/core/l10n/app_strings.dart';
 export 'package:dukaapp/core/l10n/app_strings.dart' show localeProvider, stringsProvider, AppStrings;
@@ -43,6 +44,7 @@ final connectivityServiceProvider = Provider<ConnectivityService>((ref) {
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   final client = ApiClient(secureStorage: ref.watch(secureStorageProvider));
+  PushService.instance.attach(client);
   return client;
 });
 

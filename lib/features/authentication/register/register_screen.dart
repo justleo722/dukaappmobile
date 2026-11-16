@@ -205,7 +205,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       country: '',
       iso: RegisterCard.countries[_dialCode] ?? 'TZ',
       dialCode: _dialCode,
-      language: ref.read(localeProvider) == 'sw' ? 'swahili' : 'english',
+      language: const {'sw': 'swahili', 'zh': 'chinese', 'fr': 'french'}[ref.read(localeProvider)] ?? 'english',
       region: region,
       shopName: shopName,
       shopType: _shopType!,

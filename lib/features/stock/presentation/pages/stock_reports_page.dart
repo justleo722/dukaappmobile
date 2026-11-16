@@ -96,6 +96,13 @@ class StockReportsPage extends StatelessWidget {
       route: '/stock-reports/expired',
     ),
     _ReportData(
+      name: 'Transferred Products',
+      description: 'Products moved between shops, with date and time.',
+      icon: Icons.swap_horiz_rounded,
+      color: AppColors.primary,
+      route: '/stock-reports/transferred-products',
+    ),
+    _ReportData(
       name: 'Import History',
       description: 'View previous stock imports.',
       icon: Icons.history_rounded,

@@ -117,13 +117,6 @@ class SalesReportsPage extends StatelessWidget {
       route: '/sales/reports/staff-sales-by-items',
     ),
     _ReportData(
-      name: 'Individual Team Sales',
-      description: 'View sales per team member.',
-      icon: Icons.group_rounded,
-      color: Color(0xFF9333EA),
-      route: '/sales/reports/individual-team-sales',
-    ),
-    _ReportData(
       name: 'Sales by Customer',
       description: 'View sales grouped by customer.',
       icon: Icons.person_rounded,

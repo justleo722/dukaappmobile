@@ -1399,10 +1399,11 @@ class _PurchaseStockPageState extends ConsumerState<PurchaseStockPage> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      'Stock: $stock',
+                      'Available: $stock',
                       style: AppTypography.caption.copyWith(
-                        color: AppColors.textSecondary,
+                        color: stock > 0 ? AppColors.success : AppColors.danger,
                         fontSize: 10,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],

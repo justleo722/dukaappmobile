@@ -33,6 +33,8 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
   List<String> _headers = [];
   bool _isLoading = true;
   String? _error;
+  // Rows (by 'row' number) the user picked to import; all valid rows by default.
+  final Set<int> _selected = {};
 
   @override
   void initState() {
@@ -59,6 +61,9 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
       }
 
       setState(() {
+        _selected
+          ..clear()
+          ..addAll(_products.where((p) => p['isValid'] == true).map((p) => p['row'] as int));
         _isLoading = false;
       });
     } catch (e) {
@@ -232,12 +237,19 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
   }
 
   int get _readyCount => _products.where((p) => p['isValid'] == true).length;
+  int get _selectedCount => _products.where((p) => p['isValid'] == true && _selected.contains(p['row'])).length;
+  bool get _allSelected => _readyCount > 0 && _selectedCount == _readyCount;
+
+  void _toggleAll(bool on) => setState(() {
+        final ids = _filteredProducts.where((p) => p['isValid'] == true).map((p) => p['row'] as int);
+        on ? _selected.addAll(ids) : _selected.removeAll(ids);
+      });
   int get _invalidCount =>
       _products.where((p) => p['isValid'] == false).length;
-  int get _skippedCount => 0;
+  int get _skippedCount => _readyCount - _selectedCount;
 
   Future<void> _saveImport() async {
-    final readyProducts = _products.where((p) => p['isValid'] == true).toList();
+    final readyProducts = _products.where((p) => p['isValid'] == true && _selected.contains(p['row'])).toList();
     if (readyProducts.isEmpty) return;
     try {
       final repo = ref.read(stockRepositoryProvider);
@@ -324,6 +336,7 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
                   children: [
                     _buildSummaryBar(),
                     _buildSearchField(),
+                    _buildSelectBar(),
                     Expanded(
                       child: _filteredProducts.isEmpty
                           ? _buildEmptyState()
@@ -332,7 +345,7 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
                     StickyImportButtons(
                       onChangeFile: () => context.pop(),
                       onCancel: () => context.pop(),
-                      onSave: _readyCount > 0 ? _saveImport : null,
+                      onSave: _selectedCount > 0 ? _saveImport : null,
                     ),
                   ],
                 ),
@@ -361,6 +374,27 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
           ImportStatusChip(
             type: ImportStatusType.skipped,
             count: _skippedCount,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingLG),
+      child: Row(
+        children: [
+          Checkbox(
+            value: _allSelected,
+            activeColor: AppColors.primary,
+            onChanged: _readyCount == 0 ? null : (v) => _toggleAll(v == true),
+          ),
+          Text('Select all', style: AppTypography.bodyMedium),
+          const Spacer(),
+          Text(
+            '$_selectedCount / $_readyCount selected',
+            style: AppTypography.caption.copyWith(fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -458,6 +492,20 @@ class _ImportPreviewPageState extends ConsumerState<ImportPreviewPage> {
               children: [
                 Row(
                   children: [
+                    SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: Checkbox(
+                        value: _selected.contains(product['row']),
+                        activeColor: AppColors.primary,
+                        onChanged: (product['isValid'] as bool)
+                            ? (v) => setState(() => v == true
+                                ? _selected.add(product['row'] as int)
+                                : _selected.remove(product['row']))
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
                     Container(
                       width: 30,
                       height: 30,

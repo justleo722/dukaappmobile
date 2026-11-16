@@ -659,6 +659,19 @@ class ApiService {
   Future<Map<String, dynamic>> postSettingsAttendantSaveAccess(Map<String, dynamic> body) =>
       _post(ApiEndpoints.postSettingsAttendantSaveAccess, body);
 
+  /// Clear one kind of shop data (products, sales, expenses, cashflow,
+  /// purchases, customers, suppliers, manufacturing).
+  Future<Map<String, dynamic>> postSettingsClearData(String type) =>
+      _post(ApiEndpoints.postSettingsClearData, {'type': type});
+
+  /// Settings lists: kind = payment_modes | expense_categories | product_categories.
+  Future<Map<String, dynamic>> postSettingsList(String kind) =>
+      _post(ApiEndpoints.postSettingsList, {'kind': kind});
+  Future<Map<String, dynamic>> postSettingsListSave(Map<String, dynamic> body) =>
+      _post(ApiEndpoints.postSettingsListSave, body);
+  Future<Map<String, dynamic>> postSettingsListDelete(String kind, String id) =>
+      _post(ApiEndpoints.postSettingsListDelete, {'kind': kind, 'id': id});
+
   /// Track data usage (analytics ping).
   Future<Map<String, dynamic>> postSettingsDataUsageTrack(Map<String, dynamic> body) =>
       _post(ApiEndpoints.postSettingsDataUsageTrack, body);

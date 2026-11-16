@@ -484,6 +484,10 @@ abstract final class ApiEndpoints {
   static final postSettingsBackupCreate        = _p('settings/backup/create');
   static final postSettingsPreferencesSave     = _p('settings/preferences/save');
   static final postSettingsAttendantSaveAccess = _p('settings/attendant/save-access');
+  static final postSettingsClearData = _p('settings/clear-data');
+  static final postSettingsList = _p('settings/list');
+  static final postSettingsListSave = _p('settings/list/save');
+  static final postSettingsListDelete = _p('settings/list/delete');
   static final postSettingsDataUsageTrack      = _p('settings/data-usage/track');
   static final postSettingsLastSeenPing        = _p('settings/lastseen/ping');
 

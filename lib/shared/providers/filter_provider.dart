@@ -29,12 +29,21 @@ class FilterState {
   final String from;  // 'yyyy-MM-dd'
   final String to;    // 'yyyy-MM-dd'
   final String label; // Human-readable: 'Today', 'This Week', …
+  /// Custom range time of day ('HH:mm'), empty = whole day. Sales use it.
+  final String fromTime;
+  final String toTime;
+
+  /// Times of the active filter, read by the API client (no ref there) to add
+  /// from_time / to_time to requests that carry this filter's from/to.
+  static String activeFrom = '', activeTo = '', activeFromTime = '', activeToTime = '';
 
   const FilterState({
     required this.key,
     required this.from,
     required this.to,
     required this.label,
+    this.fromTime = '',
+    this.toTime = '',
   });
 
   /// Default: Today
@@ -49,10 +58,12 @@ class FilterState {
       other is FilterState &&
           key == other.key &&
           from == other.from &&
-          to == other.to;
+          to == other.to &&
+          fromTime == other.fromTime &&
+          toTime == other.toTime;
 
   @override
-  int get hashCode => Object.hash(key, from, to);
+  int get hashCode => Object.hash(key, from, to, fromTime, toTime);
 }
 
 // ── Notifier ──────────────────────────────────────────────────────────────────
@@ -61,18 +72,31 @@ class FilterNotifier extends Notifier<FilterState> {
   @override
   FilterState build() => FilterState.defaultFilter;
 
+  @override
+  set state(FilterState value) {
+    super.state = value;
+    FilterState.activeFrom = value.from;
+    FilterState.activeTo = value.to;
+    FilterState.activeFromTime = value.fromTime;
+    FilterState.activeToTime = value.toTime;
+  }
+
   /// Apply a named preset filter key.
   void applyPreset(String key) {
     state = _fromKey(key);
   }
 
   /// Apply a custom date range.
-  void applyCustom(DateTime from, DateTime to) {
+  /// [fromTime]/[toTime] are 'HH:mm' or empty for the whole day.
+  void applyCustom(DateTime from, DateTime to, {String fromTime = '', String toTime = ''}) {
+    String part(String d, String t) => t.isEmpty ? d : '$d $t';
     state = FilterState(
       key: 'custom',
       from: _fmt(from),
       to: _fmt(to),
-      label: '${_fmt(from)} → ${_fmt(to)}',
+      fromTime: fromTime,
+      toTime: toTime,
+      label: '${part(_fmt(from), fromTime)} → ${part(_fmt(to), toTime)}',
     );
   }
 

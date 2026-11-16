@@ -1,3 +1,4 @@
+import 'package:dukaapp/shared/providers/filter_provider.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
@@ -211,6 +212,15 @@ class _AuthInterceptor extends Interceptor {
     final isPublicEndpoint = publicPaths.any(
       (path) => options.path.contains(path),
     );
+
+    // Custom filter with time: send it along with that filter's dates.
+    final q = options.queryParameters;
+    if (FilterState.activeFromTime.isNotEmpty || FilterState.activeToTime.isNotEmpty) {
+      if (q['from'] == FilterState.activeFrom && q['to'] == FilterState.activeTo) {
+        if (FilterState.activeFromTime.isNotEmpty) q['from_time'] = FilterState.activeFromTime;
+        if (FilterState.activeToTime.isNotEmpty) q['to_time'] = FilterState.activeToTime;
+      }
+    }
 
     if (!isPublicEndpoint) {
       final token = await _secureStorage.getToken();

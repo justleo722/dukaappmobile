@@ -13,6 +13,7 @@ import 'package:dukaapp/features/settings/presentation/pages/shop_details_page.d
 import 'package:dukaapp/features/settings/presentation/pages/custom_features_page.dart';
 import 'package:dukaapp/features/settings/presentation/pages/data_backup_page.dart';
 import 'package:dukaapp/features/settings/presentation/pages/storage_page.dart';
+import 'package:dukaapp/features/settings/presentation/pages/setting_lists_page.dart';
 import 'package:dukaapp/features/settings/presentation/pages/system_logs_page.dart';
 import 'package:dukaapp/features/renew/presentation/pages/renew_page.dart';
 import 'package:dukaapp/features/profile/presentation/pages/edit_profile_page.dart';
@@ -35,6 +36,7 @@ import 'package:dukaapp/features/stock/presentation/pages/stock_reports/lost_sto
 import 'package:dukaapp/features/stock/presentation/pages/stock_reports/about_to_expire_report_page.dart';
 import 'package:dukaapp/features/stock/presentation/pages/stock_reports/expired_report_page.dart';
 import 'package:dukaapp/features/stock/presentation/pages/stock_reports/import_history_report_page.dart';
+import 'package:dukaapp/features/stock/presentation/pages/stock_reports/transferred_products_report_page.dart';
 import 'package:dukaapp/features/stock/presentation/pages/stock_reports/generate_barcode_report_page.dart';
 import 'package:dukaapp/features/sales/presentation/pages/manage_sales_page.dart';
 import 'package:dukaapp/features/sales/presentation/pages/add_sale_page.dart';
@@ -175,6 +177,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const DataBackupPage(),
       ),
       GoRoute(
+        path: '/shop-settings/lists',
+        name: 'shop-settings-lists',
+        builder: (context, state) => const SettingListsPage(),
+      ),
+      GoRoute(
         path: '/shop-settings/storage',
         name: 'shop-settings-storage',
         builder: (context, state) => const StoragePage(),
@@ -281,6 +288,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/stock-reports/expired',
         name: 'expired-report',
         builder: (context, state) => const ExpiredReportPage(),
+      ),
+      GoRoute(
+        path: '/stock-reports/transferred-products',
+        name: 'transferred-products-report',
+        builder: (context, state) => const TransferredProductsReportPage(),
       ),
       GoRoute(
         path: '/stock-reports/import-history',

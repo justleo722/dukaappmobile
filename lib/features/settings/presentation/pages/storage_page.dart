@@ -24,6 +24,7 @@ class _StoragePageState extends ConsumerState<StoragePage> {
   int _purchases = 0;
   int _customers = 0;
   int _suppliers = 0;
+  int _manufacturing = 0;
 
   // Attendants from storage_summary API
   List<Map<String, dynamic>> _attendants = [];
@@ -55,6 +56,7 @@ class _StoragePageState extends ConsumerState<StoragePage> {
         _purchases = _toInt(usage['purchases']);
         _customers = _toInt(usage['customers']);
         _suppliers = _toInt(usage['suppliers']);
+        _manufacturing = _toInt(usage['manufacturing']);
       }
     } catch (e) {
       debugPrint('[Storage] storage usage failed: $e');
@@ -95,8 +97,21 @@ class _StoragePageState extends ConsumerState<StoragePage> {
     {'title': 'Purchases Records', 'records': _purchases, 'icon': Icons.shopping_cart_rounded,        'color': const Color(0xFF06B6D4)},
     {'title': 'Cashflow Records',  'records': _cashflow,  'icon': Icons.account_balance_wallet_rounded,'color': const Color(0xFF14B8A6)},
     {'title': 'Suppliers',         'records': _suppliers, 'icon': Icons.local_shipping_rounded,       'color': const Color(0xFF8B5CF6)},
+    {'title': 'Manufacturing',     'records': _manufacturing, 'icon': Icons.precision_manufacturing_rounded, 'color': const Color(0xFFDB2777)},
     {'title': 'Logs',              'records': 0,          'icon': Icons.article_rounded,              'color': const Color(0xFF64748B)},
   ];
+
+  // Settings::clearShopData types.
+  static const _clearTypes = {
+    'Stock Items': 'products',
+    'Sales': 'sales',
+    'Expenses': 'expenses',
+    'Customers': 'customers',
+    'Purchases Records': 'purchases',
+    'Cashflow Records': 'cashflow',
+    'Suppliers': 'suppliers',
+    'Manufacturing': 'manufacturing',
+  };
 
   void _clearData(String category, int count) {
     showDialog(
@@ -121,11 +136,20 @@ class _StoragePageState extends ConsumerState<StoragePage> {
             )),
             const SizedBox(width: 12),
             Expanded(child: ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$category cleared successfully'), backgroundColor: AppColors.success),
-                );
+                final messenger = ScaffoldMessenger.of(context);
+                try {
+                  final res = await ref.read(apiServiceProvider).postSettingsClearData(_clearTypes[category] ?? '');
+                  final ok = res['status']?.toString() == 'success';
+                  messenger.showSnackBar(SnackBar(
+                    content: Text(res['message']?.toString() ?? (ok ? '$category cleared' : 'Failed to clear $category')),
+                    backgroundColor: ok ? AppColors.success : AppColors.danger,
+                  ));
+                  if (ok) _loadData();
+                } catch (e) {
+                  messenger.showSnackBar(SnackBar(content: Text('Failed to clear $category'), backgroundColor: AppColors.danger));
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.danger, foregroundColor: Colors.white,

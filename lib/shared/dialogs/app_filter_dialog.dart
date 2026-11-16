@@ -66,7 +66,7 @@ class _AppFilterDialogState extends ConsumerState<AppFilterDialog>
   DateTime? _fromDate;
   DateTime? _toDate;
 
-  final DateFormat _dateFormat = DateFormat('MM/dd/yyyy');
+  final DateFormat _dateFormat = DateFormat('MM/dd/yyyy HH:mm');
 
   final List<Map<String, String>> _filterOptions = [
     {'label': 'Today', 'value': 'today'},
@@ -95,8 +95,8 @@ class _AppFilterDialogState extends ConsumerState<AppFilterDialog>
       _isCustomExpanded = true;
       _expandController.value = 1.0;
       try {
-        _fromDate = DateTime.parse(current.from);
-        _toDate = DateTime.parse(current.to);
+        _fromDate = DateTime.parse('${current.from} ${current.fromTime.isEmpty ? '00:00' : current.fromTime}');
+        _toDate = DateTime.parse('${current.to} ${current.toTime.isEmpty ? '23:59' : current.toTime}');
       } catch (_) {}
     }
   }
@@ -156,15 +156,24 @@ class _AppFilterDialogState extends ConsumerState<AppFilterDialog>
       },
     );
 
-    if (picked != null) {
-      setState(() {
-        if (isFrom) {
-          _fromDate = picked;
-        } else {
-          _toDate = picked;
-        }
-      });
-    }
+    if (picked == null || !mounted) return;
+    // Then the time of day (optional: cancel keeps the whole day).
+    final current = isFrom ? _fromDate : _toDate;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: current != null && (current.hour != 0 || current.minute != 0)
+          ? TimeOfDay.fromDateTime(current)
+          : (isFrom ? const TimeOfDay(hour: 0, minute: 0) : const TimeOfDay(hour: 23, minute: 59)),
+    );
+    final t = time ?? (isFrom ? const TimeOfDay(hour: 0, minute: 0) : const TimeOfDay(hour: 23, minute: 59));
+    final value = DateTime(picked.year, picked.month, picked.day, t.hour, t.minute);
+    setState(() {
+      if (isFrom) {
+        _fromDate = value;
+      } else {
+        _toDate = value;
+      }
+    });
   }
 
   void _apply() {
@@ -179,7 +188,14 @@ class _AppFilterDialogState extends ConsumerState<AppFilterDialog>
         return;
       }
       // Update global filter
-      ref.read(filterProvider.notifier).applyCustom(from, to);
+      String hm(DateTime d) => '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+      final ft = hm(from), tt = hm(to);
+      ref.read(filterProvider.notifier).applyCustom(
+        from,
+        to,
+        fromTime: ft == '00:00' ? '' : ft,
+        toTime: tt == '23:59' ? '' : tt,
+      );
       widget.onCustomApply?.call();
     } else {
       // Preset
