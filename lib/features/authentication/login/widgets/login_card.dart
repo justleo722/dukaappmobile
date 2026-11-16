@@ -1,3 +1,4 @@
+import 'package:dukaapp/core/l10n/l10n_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:dukaapp/app/colors.dart';
@@ -20,7 +21,8 @@ class LoginCard extends StatelessWidget {
     'Register': 'Jisajili',
   };
 
-  String t(String english) => isSwahili ? (_sw[english] ?? english) : english;
+  // Kiswahili from this card's map, other languages from the registry.
+  String t(String english) => isSwahili ? (_sw[english] ?? english) : L10nStore.fromEnglish(english);
 
   final TextEditingController userIdController;
   final TextEditingController passwordController;

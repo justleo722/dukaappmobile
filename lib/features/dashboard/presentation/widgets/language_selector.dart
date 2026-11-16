@@ -13,7 +13,7 @@ class LanguageSelector extends ConsumerWidget {
     final locale = ref.watch(localeProvider);
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 120),
+      constraints: const BoxConstraints(maxWidth: 140),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -21,7 +21,10 @@ class LanguageSelector extends ConsumerWidget {
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: AppColors.border, width: 1),
         ),
-        child: DropdownButtonHideUnderline(
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.language_rounded, size: 16, color: AppColors.textSecondary),
+          const SizedBox(width: 6),
+          Flexible(child: DropdownButtonHideUnderline(
           child: DropdownButton<String>(
             value: L10nStore.languages.containsKey(locale) ? locale : 'en',
             isDense: true,
@@ -59,7 +62,8 @@ class LanguageSelector extends ConsumerWidget {
               }
             },
           ),
-        ),
+        )),
+        ]),
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'package:dukaapp/core/l10n/l10n_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -46,7 +47,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   List<String> get _stepLabels => _isSwahili
       ? const ['Akaunti', 'Biashara', 'Usalama']
-      : const ['Account', 'Business', 'Security'];
+      : ['Account', 'Business', 'Security'].map(L10nStore.fromEnglish).toList();
 
   @override
   void initState() {
@@ -65,7 +66,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     setState(() => _detectingRegion = true);
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
-        if (!silent) _showSnackBar(_isSwahili ? 'Washa location kwenye simu.' : 'Please turn on location.');
+        if (!silent) _showSnackBar(_isSwahili ? 'Washa location kwenye simu.' : L10nStore.fromEnglish('Please turn on location.'));
         return;
       }
       var permission = await Geolocator.checkPermission();
@@ -73,7 +74,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-        if (!silent) _showSnackBar(_isSwahili ? 'Ruhusa ya location imekataliwa. Andika mkoa wako.' : 'Location permission denied. Please type your region.');
+        if (!silent) _showSnackBar(_isSwahili ? 'Ruhusa ya location imekataliwa. Andika mkoa wako.' : L10nStore.fromEnglish('Location permission denied. Please type your region.'));
         return;
       }
       final position = await Geolocator.getCurrentPosition(
@@ -98,7 +99,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       });
     } catch (_) {
       if (!silent && mounted) {
-        _showSnackBar(_isSwahili ? 'Mkoa haukupatikana. Tafadhali uandike.' : 'Could not find your region. Please type it.');
+        _showSnackBar(_isSwahili ? 'Mkoa haukupatikana. Tafadhali uandike.' : L10nStore.fromEnglish('Could not find your region. Please type it.'));
       }
     } finally {
       if (mounted) setState(() => _detectingRegion = false);
@@ -378,7 +379,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         ),
         SizedBox(height: 6.h),
         Text(
-          _isSwahili ? 'Fungua akaunti ya biashara yako' : 'Create your business account',
+          _isSwahili ? 'Fungua akaunti ya biashara yako' : L10nStore.fromEnglish('Create your business account'),
           style: AppTypography.bodyMedium.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -393,7 +394,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          _isSwahili ? 'Una akaunti tayari? ' : 'Already have an account? ',
+          _isSwahili ? 'Una akaunti tayari? ' : L10nStore.fromEnglish('Already have an account? '),
           style: AppTypography.bodyMedium.copyWith(
             color: AppColors.textSecondary,
           ),
@@ -401,7 +402,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         GestureDetector(
           onTap: () => context.pushNamed('login'),
           child: Text(
-            _isSwahili ? 'Ingia' : 'Login',
+            _isSwahili ? 'Ingia' : L10nStore.fromEnglish('Login'),
             style: AppTypography.bodyMedium.copyWith(
               color: AppColors.secondary,
               fontWeight: FontWeight.w600,

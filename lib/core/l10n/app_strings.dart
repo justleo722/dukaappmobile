@@ -15,6 +15,12 @@ class LocaleNotifier extends Notifier<String> {
     return 'en';
   }
 
+  @override
+  set state(String value) {
+    L10nStore.current = value;
+    super.state = value;
+  }
+
   Future<void> _loadSaved() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString(_key);

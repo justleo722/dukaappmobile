@@ -31,6 +31,29 @@ class L10nStore {
     }
   }
 
+  /// Current app language, kept in sync by LocaleNotifier.
+  static String current = 'en';
+
+  static final Map<String, Map<String, String>> _fromEnglish = {};
+
+  /// An English registry text in [code] (default: the current language);
+  /// unchanged when the registry doesn't have it.
+  static String fromEnglish(String english, [String? code]) {
+    final lang = code ?? current;
+    if (lang == 'en') return english;
+    final map = _fromEnglish.putIfAbsent(lang, () {
+      final en = _texts['en'] ?? const {};
+      final to = _texts[lang] ?? const {};
+      final out = <String, String>{};
+      en.forEach((key, text) {
+        final t = to[key];
+        if (t != null && t.isNotEmpty) out.putIfAbsent(text, () => t);
+      });
+      return out;
+    });
+    return map[english] ?? english;
+  }
+
   /// key → text for [code] (empty when not loaded: callers fall back to English).
   static Map<String, String> textsFor(String code) => _texts[code] ?? const {};
 }

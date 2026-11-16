@@ -1,3 +1,4 @@
+import 'package:dukaapp/core/l10n/l10n_store.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -128,7 +129,8 @@ class RegisterCard extends StatelessWidget {
     'Country code': 'Code ya nchi',
   };
 
-  String t(String english) => isSwahili ? (_sw[english] ?? english) : english;
+  // Kiswahili from this card's map, other languages from the registry.
+  String t(String english) => isSwahili ? (_sw[english] ?? english) : L10nStore.fromEnglish(english);
 
 
   @override
