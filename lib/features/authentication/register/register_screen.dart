@@ -60,7 +60,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       final data = res.data;
       if (data is! Map || data['success'] == false || !mounted) return;
       _setDetectedCountry(data['country_code']?.toString());
-      final region = (data['region'] ?? '').toString();
+      final raw = (data['region'] ?? '').toString();
+      final region = RegExp(r' Zone$', caseSensitive: false).hasMatch(raw) ? '' : raw;
       if (region.isNotEmpty && _regionController.text.trim().isEmpty) {
         setState(() => _regionController.text = region.replaceAll(RegExp(r' Region$', caseSensitive: false), ''));
       }
@@ -110,9 +111,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       final places = await Geocoding(locale: const Locale('en')).placemarkFromCoordinates(position.latitude, position.longitude);
       if (!mounted || places.isEmpty) return;
       final place = places.first;
-      final region = (place.administrativeArea?.isNotEmpty ?? false)
-          ? place.administrativeArea!
-          : (place.locality ?? '');
+      // Mkoa (administrative area); never a zone like "Coastal Zone".
+      bool ok(String? v) => (v ?? '').trim().isNotEmpty && !RegExp(r' Zone$', caseSensitive: false).hasMatch(v!.trim());
+      final region = ok(place.administrativeArea)
+          ? place.administrativeArea!.trim()
+          : (ok(place.locality) ? place.locality!.trim() : (ok(place.subAdministrativeArea) ? place.subAdministrativeArea!.trim() : ''));
       _setDetectedCountry(place.isoCountryCode);
       setState(() {
         if (region.isNotEmpty && (!silent || _regionController.text.trim().isEmpty)) {
