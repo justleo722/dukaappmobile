@@ -763,6 +763,14 @@ class ApiService {
   Future<Map<String, dynamic>> postMfProductionUpdate(Map<String, dynamic> body) =>
       _post(ApiEndpoints.postMfProductionUpdate, body);
 
+  /// Manufactured product: 'quantity' (kept in stock) or 'on_sale' (made when sold).
+  Future<Map<String, dynamic>> postMfProductionStockMode(String productId, String mode, {String? recipeId}) =>
+      _post(ApiEndpoints.postMfProductionStockMode, {
+        'product_id': productId,
+        'stock_mode': mode,
+        if (recipeId != null && recipeId.isNotEmpty) 'recipe_id': recipeId,
+      });
+
   Future<Map<String, dynamic>> postMfProductionDelete(Map<String, dynamic> body) =>
       _post(ApiEndpoints.postMfProductionDelete, body);
 

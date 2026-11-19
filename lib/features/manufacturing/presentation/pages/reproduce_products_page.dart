@@ -76,7 +76,7 @@ class _ReproduceProductsPageState extends ConsumerState<ReproduceProductsPage> {
         final data = body['data'] ?? body['products'] ?? [];
         if (data is List) rawList = data;
       }
-      products = rawList.map((e) {
+      products = rawList.where((e) => e is Map && e['made_to_order'] != true).map((e) {
         final m = Map<String, dynamic>.from(e as Map);
         return {
           'product_id': (m['product_id'] ?? m['id'] ?? '').toString(),

@@ -422,6 +422,7 @@ abstract final class ApiEndpoints {
   static final postMfProductionAdjust    = _p('manufacturing/production/adjust');
   static final postMfProductionUpdate    = _p('manufacturing/production/update');
   static final postMfProductionDelete    = _p('manufacturing/production/delete');
+  static final postMfProductionStockMode = _p('manufacturing/production/stock-mode');
 
   // ── Microfinance ──────────────────────────────────────────────────────
   static final postMicrofinanceLoanProductCreate = _p('microfinance/loan-product/create');

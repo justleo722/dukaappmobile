@@ -34,6 +34,11 @@ class AddManufacturedProductPage extends ConsumerStatefulWidget {
 class _AddManufacturedProductPageState extends ConsumerState<AddManufacturedProductPage> {
   final _nameController = TextEditingController();
   final _quantityController = TextEditingController(text: '1');
+
+  /// 'quantity' = produced now and kept in stock; 'on_sale' = no quantity, sold
+  /// like a service and each sale uses the recipe's raw materials.
+  String _stockMode = 'quantity';
+  bool get _onSale => _stockMode == 'on_sale';
   final _alertLevelController = TextEditingController(text: '10');
   final _sellingPriceController = TextEditingController();
   final _wholesalePriceController = TextEditingController();
@@ -191,7 +196,8 @@ class _AddManufacturedProductPageState extends ConsumerState<AddManufacturedProd
       final body = {
         'recipe_id': _selectedRecipeId!,
         'product_name': name,
-        'quantity': quantity.isEmpty ? '1' : quantity,
+        'stock_mode': _stockMode,
+        'quantity': _onSale ? '0' : (quantity.isEmpty ? '1' : quantity),
         'selling_price': sellingPrice.isEmpty ? '0' : sellingPrice,
         'wholesale_price': wholesalePrice.isEmpty ? '0' : wholesalePrice,
         'production_date': DateFormat('yyyy-MM-dd').format(_productionDate),
@@ -306,11 +312,17 @@ class _AddManufacturedProductPageState extends ConsumerState<AddManufacturedProd
         const SizedBox(height: 14),
         _buildReadOnlyField('Yield per Recipe', '$_yieldPerRecipe units'),
         const SizedBox(height: 14),
-        _buildTextField('Quantity', _quantityController, '0', TextInputType.number),
+        _buildStockModeDropdown(),
         const SizedBox(height: 14),
+        if (!_onSale) ...[
+          _buildTextField('Quantity', _quantityController, '0', TextInputType.number),
+          const SizedBox(height: 14),
+        ],
         _buildTextField('Alert Level', _alertLevelController, '10', TextInputType.number),
-        const SizedBox(height: 14),
-        _buildDateField('Expiry Date', _expiryDate, _pickExpiryDate),
+        if (!_onSale) ...[
+          const SizedBox(height: 14),
+          _buildDateField('Expiry Date', _expiryDate, _pickExpiryDate),
+        ],
       ],
     );
   }
@@ -466,6 +478,40 @@ class _AddManufacturedProductPageState extends ConsumerState<AddManufacturedProd
         ...children,
       ]),
     );
+  }
+
+  Widget _buildStockModeDropdown() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Stock', style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F7FB), borderRadius: BorderRadius.circular(AppConstants.textFieldRadius),
+          border: Border.all(color: AppColors.inputBorder),
+        ),
+        child: DropdownButton<String>(
+          value: _stockMode,
+          isExpanded: true,
+          underline: const SizedBox(),
+          style: AppTypography.bodyMedium.copyWith(color: AppColors.textPrimary),
+          items: const [
+            DropdownMenuItem(value: 'quantity', child: Text('Enter quantity (kept in stock)')),
+            DropdownMenuItem(value: 'on_sale', child: Text('No quantity (made when sold)')),
+          ],
+          onChanged: (v) {
+            if (v != null) setState(() => _stockMode = v);
+          },
+        ),
+      ),
+      if (_onSale) ...[
+        const SizedBox(height: 6),
+        Text(
+          'Sold like a service: every sale uses this recipe\'s raw materials.',
+          style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11),
+        ),
+      ],
+    ]);
   }
 
   Widget _buildRecipeDropdown() {

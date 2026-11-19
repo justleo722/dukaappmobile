@@ -75,6 +75,10 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
   bool get _isService => _selectedType == 'Service';
   bool get _isEditing => widget.product != null;
 
+  /// Opened from Manufacturing: its "Stock" choice ('quantity' / 'on_sale').
+  String? get _mfOriginalMode => widget.product?['mf_stock_mode']?.toString();
+  String? _mfStockMode;
+
   // Photos the product already has (shown while editing until new ones are picked).
   List<String> get _existingPhotoUrls {
     if (!_isEditing) return const [];
@@ -99,6 +103,7 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
       _selectedUnit = p['unit']?.toString();
       _selectedCategory = p['category'];
       _selectedType = (p['type']?.toString().toLowerCase() == 'service') ? 'Service' : 'Product';
+      _mfStockMode = _mfOriginalMode;
     } else {
       // New product: Product by default (category defaults to Uncategorized once loaded).
       _selectedType = 'Product';
@@ -243,12 +248,25 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
       if (!mounted) return;
 
       if (status == 'success') {
+        var shown = message;
+        var ok = true;
+        // Manufacturing: apply a changed Stock choice after the product is saved.
+        if (_mfStockMode != null && _mfStockMode != _mfOriginalMode) {
+          final res = await ref.read(apiServiceProvider).postMfProductionStockMode(
+            widget.product!['product_id']?.toString() ?? '',
+            _mfStockMode!,
+            recipeId: widget.product!['mf_recipe_id']?.toString(),
+          );
+          ok = res['status']?.toString() == 'success';
+          shown = res['message']?.toString() ?? shown;
+        }
         // Refresh stock list in background
         ref.read(stockProvider.notifier).refresh();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: AppColors.success),
+          SnackBar(content: Text(shown), backgroundColor: ok ? AppColors.success : AppColors.danger),
         );
-        context.pop();
+        context.pop(true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(message), backgroundColor: AppColors.danger),
@@ -369,6 +387,10 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 20),
+                if (_mfOriginalMode != null) ...[
+                  _buildMfStockModeDropdown(),
+                  const SizedBox(height: 16),
+                ],
                 _buildRow([
                   _buildTypeDropdown(),
                   const SizedBox(width: 12),
@@ -736,6 +758,25 @@ class _AddProductPageState extends ConsumerState<AddProductPage> {
         ),
       ],
     );
+  }
+
+  Widget _buildMfStockModeDropdown() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Stock (manufacturing)', style: AppTypography.label.copyWith(color: AppColors.textPrimary)),
+      const SizedBox(height: 8),
+      DropdownButtonFormField<String>(
+        initialValue: _mfStockMode,
+        isExpanded: true,
+        items: const [
+          DropdownMenuItem(value: 'quantity', child: Text('Enter quantity (kept in stock)')),
+          DropdownMenuItem(value: 'on_sale', child: Text('No quantity (made when sold)')),
+        ],
+        onChanged: (v) => setState(() => _mfStockMode = v),
+      ),
+      const SizedBox(height: 4),
+      Text('Switching to "No quantity" needs the stock to be 0 first.',
+          style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 11)),
+    ]);
   }
 
   Widget _buildTypeDropdown() {

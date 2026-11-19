@@ -223,6 +223,44 @@ class _ManufacturingPageState extends ConsumerState<ManufacturingPage> {
     );
   }
 
+  /// Edit opens Stock's Add / Edit Product page (name, category, prices,
+  /// barcode, photos…); the manufacturing edit page is only a fallback.
+  Future<void> _editProduct(Map<String, dynamic> p) async {
+    final id = (p['product_id'] ?? '').toString();
+    var stock = ref.read(stockProvider).valueOrNull;
+    if (stock == null || !stock.products.any((x) => x.productId?.toString() == id)) {
+      await ref.read(stockProvider.notifier).refresh();
+      stock = ref.read(stockProvider).valueOrNull;
+    }
+    final product = stock?.products.where((x) => x.productId?.toString() == id).firstOrNull;
+    if (!mounted) return;
+    Object? result;
+    if (product != null) {
+      result = await context.push('/stock/manage/add', extra: {
+        'product_id': product.productId,
+        'stock_id': product.stockId,
+        'name': product.name,
+        'category': product.category,
+        'buyingPrice': product.buyingPrice,
+        'sellingPrice': product.sellingPrice,
+        'wholesalePrice': product.wholesalePrice,
+        'stock': product.available,
+        'reorderLevel': product.reorderLevel,
+        'barcode': product.barcode,
+        'unit': product.unit,
+        'imageUrl': product.imageUrl,
+        'photoUrls': product.photoUrls,
+        'type': product.type,
+        'mf_stock_mode': p['made_to_order'] == true ? 'on_sale' : 'quantity',
+        'mf_recipe_id': (p['recipe_id'] ?? '').toString(),
+      });
+    } else {
+      result = await context.push('/manufacturing/edit-product', extra: Map<String, dynamic>.from(p));
+    }
+    if (mounted) _loadData();
+    if (result == true) ref.invalidate(stockProvider);
+  }
+
   Widget _buildProductCard(Map<String, dynamic> p) {
     final name = p['product_name'] ?? p['name'] ?? 'Unknown';
     final recipe = p['recipe_name'] ?? p['recipe'] ?? '—';
@@ -258,17 +296,14 @@ class _ManufacturingPageState extends ConsumerState<ManufacturingPage> {
         ]),
         const Divider(height: 20),
         Row(children: [
-          _infoChip('Qty', qty.toString()),
+          _infoChip('Qty', p['made_to_order'] == true ? 'Made when sold' : qty.toString()),
           const SizedBox(width: 8),
           _infoChip('Unit Cost', _fmt(unitCost.toDouble())),
           const SizedBox(width: 8),
           _infoChip('Selling', _fmt(sellingPrice.toDouble())),
           const Spacer(),
           GestureDetector(
-            onTap: () async {
-              final result = await context.push('/manufacturing/edit-product', extra: Map<String, dynamic>.from(p));
-              if (result == true && mounted) _loadData();
-            },
+            onTap: () => _editProduct(p),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),

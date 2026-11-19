@@ -643,7 +643,7 @@ class _RestockRawMaterialsPageState extends ConsumerState<RestockRawMaterialsPag
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      'Stock: $stock',
+                      'Available: $stock',
                       style: AppTypography.caption.copyWith(color: AppColors.textSecondary, fontSize: 10),
                     ),
                   ],
